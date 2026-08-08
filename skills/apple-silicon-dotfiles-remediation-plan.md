@@ -1,12 +1,28 @@
 # Apple Silicon Dotfiles 整改、迁移与 Intel Homebrew 退役实施计划
 
-> 状态：已确认的实施级规格（尚未实施）  
-> 版本：1.0  
-> 日期：2026-08-08  
-> 适用目标：由 Intel Mac 迁移到 Apple Silicon 的当前 macOS 用户环境  
-> 文档用途：交给实施 Agent 或人工维护者，按本文分阶段建立仓库、整改配置、迁移工具链并退役 Intel Homebrew。
+> 状态：已确认的实施级规格（尚未实施；当前交付重点是前置阶段 0 与顶层阶段 1）<br>
+> 版本：1.3<br>
+> 日期：2026-08-08<br>
+> 适用目标：先建设可复用的 dotfiles 公开仓库与公司层文件契约，再由每个 Apple Silicon macOS 用户独立完成本地配置和 Intel Homebrew 退役<br>
+> 文档用途：交给实施 Agent 或人工维护者，先完成独立前置阶段 0，再严格按“仓库能力 → 本地应用 → 不可逆退役”三个顶层阶段执行。
 
 ## 1. 执行摘要
+
+本项目有一个独立前置阶段 0，以及三个顶层实施阶段；顺序不得颠倒：
+
+```text
+前置阶段 0：盘点当前机器，分类并生成待人工审查的候选文件
+  → 顶层阶段 1：根据审查结论建设并 commit 可复用仓库能力（当前主目标）
+    → 顶层阶段 2：每个用户/每台机器应用本地配置
+      → 顶层阶段 3：每台机器单独预览并退役 Intel Homebrew
+```
+
+- **前置阶段 0 是仓库生产的输入阶段，不计入三个顶层实施阶段。** 它结合 [Zsh 配置诊断与优化指南](./zshrc-diagnostics-guide.md) 读取当前机器，将 `.zshrc`、Brewfile/已安装项与其他目标文件拆分、注释、分类，检查原文件和候选文件是否符合最佳实践，并生成不得直接 commit 的候选文件集与审查报告。
+- **顶层阶段 1 是当前主交付目标。** 它以前置阶段 0 产物的人工审查结论为输入，在本仓库中建成通用公开层、`install.sh`、`bin/dotfiles`、测试、文档、安全保护，并在获批的公司仓库中更新需同步文件；只有此阶段可以 stage/commit 已审查文件。
+- **顶层阶段 2 是单机操作。** 用户 clone 或更新顶层阶段 1 的仓库后，从该仓库运行 `./install.sh`，完成只读盘点、本地计划、备份、symlink、配置分层、ARM 替代工具和验证；此阶段不允许卸载 Intel Homebrew。
+- **顶层阶段 3 是独立的不可逆单机操作。** 只有顶层阶段 2 验证通过并生成完整退役账本后，用户才能显式发起预览和正式退役。
+
+前置阶段 0 和顶层阶段 1 是仓库维护者执行的生产流程；顶层阶段 1 产出一次建设、多人复用的产品能力。顶层阶段 2 和 3 由每个人在自己的机器上分别执行，其 inventory、plan、manifest、backup 和 retired record 不得回传到公开仓库。`install.sh` 是从已交付仓库能力进入顶层阶段 2 和 3 的统一入口，不负责执行前置阶段 0；顶层阶段 2/3 必须使用不同的显式命令，不得在一次 `apply` 中串联。
 
 本项目最终建立三个配置层，并固定覆盖关系：
 
@@ -14,11 +30,11 @@
 公开候选仓库（public） < 公司私有仓库（company，可选） < 本机私有配置（local）
 ```
 
-- 公开候选仓库先创建为私有仓库；完成整改、全历史密钥扫描和人工发布审查后，再由用户手工改为公开并采用 MIT License。
+- 公开候选仓库先创建为私有仓库；顶层阶段 1 的仓库能力、隔离测试、全历史密钥扫描和人工发布审查完成后，再由用户手工改为公开并采用 MIT License；不等待任何用户先完成顶层阶段 2/3。
 - 公司配置必须存放在公司批准的私有 Git 服务或组织中；不得默认推送到个人 GitHub，也不得保存密钥。
 - 本机私有配置统一存放在 `~/.config/dotfiles/local/`，不进入 Git、不进入云同步，并拥有最高优先级。
 - `~/.zprofile` 只承担登录环境职责；`~/.zshrc` 只承担交互体验职责；不管理 `~/.zshenv`，也不设置 `ZDOTDIR`。
-- Homebrew 只使用 Apple Silicon 原生前缀 `/opt/homebrew`。Intel Homebrew 迁移完成后当天退役，不设置观察期。
+- Homebrew 只使用 Apple Silicon 原生前缀 `/opt/homebrew`。顶层阶段 2 完成后不自动退役；用户一旦显式进入顶层阶段 3 且最终预览通过，Intel Homebrew 当天退役，不设置观察期。
 - Homebrew、mise、Bun、Node、pnpm、Go、uv 的职责互斥；移除 NVM、pyenv、旧 autojump 和重复初始化。
 - API key 默认保存在 macOS Keychain，仅由命令 wrapper 临时注入；仓库不实现自定义密钥管理 CLI，只提供经过验证的 `security` 命令示例。
 - 所有可逆变更先计划、备份并记录 manifest；Intel Homebrew 正式卸载、密钥轮换和明文密钥清除属于明确的不可逆边界。
@@ -33,22 +49,29 @@
 - **公开层**：未来可公开的个人 dotfiles 仓库；初期仍为私有。
 - **公司层**：公司批准的私有配置仓库，可在没有访问权限的机器上跳过。
 - **本地层**：只存在于当前机器、无 Git/云同步的私有覆盖。
+- **候选文件**：前置阶段 0 从当前机器现状生成的建议版配置；它必须先经人工审查，不是已批准仓库内容。
+- **同行注释**：在目标格式安全支持注释时，紧跟配置项的结构化说明；至少包含功能、最佳实践结论、推荐/替代方案和建议归属。
+- **仓库能力**：顶层阶段 1 交付的公开层代码、公司层契约、命令入口、测试、文档和安全规则；它不包含任何用户的本机执行结果。
+- **本地应用**：顶层阶段 2，只在当前机器建立配置、symlink、ARM 替代项和可回滚状态，不卸载 Intel Homebrew。
 - **退役**：已记录替代或明确淘汰后，卸载 Intel Homebrew，并按 reviewed manifest 处理其已确认程序文件；不等于递归删除 `/usr/local`。
 
 ## 3. 目标、非目标与成功状态
 
 ### 3.1 目标
 
-1. 当前交互 shell、Homebrew、常用 CLI 和语言工具链全部以 `arm64` 原生方式运行。
-2. 最终活动 PATH 不包含 Intel Homebrew 路径；公开运行时配置不提供 `/usr/local` 回退。
-3. Zsh 启动文件边界清楚、模块化、幂等、可诊断，并且只有一次补全初始化。
-4. 公开、公司、本地三层能独立安装、按固定顺序覆盖，并能诊断同名覆盖来源。
-5. 新机器可通过 README 和 `install.sh` 安全地计划、应用、验证和回滚。
-6. Brewfile 是人工维护的“期望状态”，不是未经审查的 `brew bundle dump` 快照。
-7. mise 与 uv 使用明确版本，不使用 `latest`；项目配置可以覆盖全局默认。
-8. 密钥不进入仓库、Git 历史、诊断输出或长期普通备份；旧 shell 历史中的疑似密钥完成轮换和定向清理。
-9. Intel Homebrew 的公式、cask、服务和数据目录全部有明确处置状态，可用一条受保护命令正式退役，并能查询退役记录。
-10. 公开前同时完成人工审查、本地/CI Gitleaks 全历史扫描和托管平台安全检查。
+1. **先完成前置阶段 0。** 依据诊断指南盘点当前 `.zshrc/.zprofile/.zshenv`、source 链、Brewfile/已安装项、插件、工具管理器和其他顶层阶段 1 目标文件；逐项说明功能、最佳实践结论、替代方案与 public/company/local-only/retire/unresolved 建议归属。
+2. 前置阶段 0 生成与顶层阶段 1 目标树同构的未提交公开/公司候选文件，以及仓库外的 local-only/退役/未决项清单；所有候选文件必须经人工审查，不得由生成器直接 stage、commit 或 push。
+3. **再完成顶层阶段 1。** 人工对前置阶段 0 的每项结论做 accept/revise/reject/defer 决策，根据结果更新本仓库和获批公司仓库的最终文件，再经测试与安全检查后 commit。
+4. 顶层阶段 1 的 README、`install.sh`、`bin/dotfiles`、schema、fixture 和 CI 形成自闭环：新用户只需取得该仓库，即可规划、应用、验证和回滚顶层阶段 2，并单独预览和执行顶层阶段 3。
+5. Zsh 启动文件边界清楚、模块化、幂等、可诊断，公开、公司、本地三层按固定顺序覆盖，并且只有一次补全初始化。
+6. 顶层阶段 2 在每台机器上完成本地收敛：`./install.sh apply` 只做备份、symlink、配置分层和已计划的 ARM 替代安装；配置变更可回滚，新增软件只提供 cleanup 预览；密钥轮换/明文清除等不可逆安全操作必须分别确认；本阶段不自动进入 Homebrew 退役。
+7. 顶层阶段 3 仅处理 Intel Homebrew 的最终退役；它必须消费顶层阶段 2 的已验证 manifest 和退役账本，不得重新猜测机器状态。
+8. 每个用户都能使用同一份顶层阶段 1 产物，在自己的本地环境独立执行顶层阶段 2 和 3，互不共享本机状态、密钥、备份或退役记录。
+9. 当前交互 shell、Homebrew、常用 CLI 和语言工具链最终全部以 `arm64` 原生方式运行，最终活动 PATH 不包含 Intel Homebrew 路径。
+10. Brewfile 是人工维护的“期望状态”；mise 与 uv 使用明确版本，不使用 `latest`。
+11. 密钥不进入仓库、Git 历史、诊断输出或长期普通备份；旧 shell 历史中的疑似密钥完成轮换和定向清理。
+12. Intel Homebrew 的 formula、cask、服务和数据目录全部有明确处置状态，可用一条受保护命令正式退役，并能查询退役记录。
+13. 公开前同时完成人工审查、本地/CI Gitleaks 全历史扫描和托管平台安全检查。
 
 ### 3.2 首期非目标
 
@@ -61,6 +84,15 @@
 - 不把公司仓库或本地层纳入 MIT License。
 
 ### 3.3 完成后的可观察状态
+
+前置阶段 0 和三个顶层阶段各自有独立的完成条件：
+
+| 阶段 | 完成标志 |
+|---|---|
+| 0. 现状盘点与候选文件 | 当前配置和安装项已脱敏盘点；原文件与候选文件均完成最佳实践评估；每项有功能、推荐/替代、归属和验证信息；公开/公司候选文件已生成但未 stage/commit；local-only/retire/unresolved 仍在仓库外；人工审查结论已记录 |
+| 1. 仓库能力 | 本仓库的公开文件、公司同步契约、安装/诊断/回滚/退役命令、隔离 HOME fixture、CI、中英 README 和密钥扫描全部通过；无需修改真实 HOME 或卸载软件即可验收 |
+| 2. 本地应用 | 本机 symlink、三层加载、ARM 替代工具、密钥边界、备份与 manifest 验证通过；状态明确标记“本地配置完成，Intel Homebrew 未退役” |
+| 3. Intel Homebrew 退役 | 本机所有 Intel 项目已归类、替代已验证、退役成功，且可查询 retired record；本机达到下方最终 ARM 状态 |
 
 ```text
 arch                         -> arm64
@@ -77,17 +109,23 @@ dotfiles homebrew retired    -> 能查询本次退役清单、替代关系和结
 
 ## 4. 不可破坏的安全约束
 
-1. `install.sh` 无参数运行只允许收集配置并生成计划，不得应用修改。
-2. `./install.sh apply` 必须在实际变更前展示计划标识和 manifest；计划发生变化后必须重新确认。
-3. `apply` 与 Intel 退役必须在原生 `arm64` 会话运行。Rosetta/x86_64 日常 shell 只警告，不加载 Intel 回退。
-4. Intel 退役必须在真实 TTY 中展示清单，并由用户亲自输入精确确认短语；Agent、CI、管道输入和普通 `--yes` 都不得代替。
-5. 任何 Git 更新只允许 `fetch` 和显式的 `pull --ff-only`；禁止自动 `reset`、`stash`、force checkout 或覆盖未提交修改。
-6. 所有远程 URL 必须拒绝内嵌用户名、token 或密码；认证交给 SSH agent、Keychain 或托管平台 credential helper。
-7. 公司仓库默认只提供声明式内容。任何公司 hook 都必须进入计划、显示路径与摘要并单独获批。
-8. 日志、报告和 CI artifact 不得包含密钥值、Keychain 输出、完整环境变量或未脱敏的 shell 历史。
-9. 本地明文密钥例外文件必须是 `0600`，父目录必须是 `0700`；公司仓库不得保存任何密钥。
-10. 未归类的 Intel 程序、运行中服务、cask 或服务数据会阻止退役。
-11. 性能数据只给建议，不作为强制门槛；语法、加载、架构、密钥、权限、备份和 manifest 正确性才是阻断项。
+1. 前置阶段 0 对真实 HOME 和已安装软件只读；只能写受控本地状态目录、本公开仓库的未提交工作树，以及用户明确授权的公司仓库 checkout；不得建立 symlink、安装/卸载软件、轮换密钥或清理历史。
+2. 前置阶段 0 开始前必须检查公开/公司工作区；对已存在的未提交修改不得覆盖。如果候选文件与现有修改冲突，只能在受控 staging 目录中生成候选副本和差异报告。
+3. 前置阶段 0 在任何内容进入公开工作树前必须先脱敏并完成归属分类；company、local-only、retire、unresolved 内容和原始诊断输出不得写入公开候选文件。
+4. 前置阶段 0 不得运行 `git add`、`git commit`、`git push` 或修改仓库可见性。每个候选文件及其审查结论都必须经人工 accept/revise/reject/defer；只有顶层阶段 1 可以根据结论 stage/commit。
+5. 顶层阶段 1 的构建和 CI 只能操作仓库工作树、临时目录和隔离 HOME；不得修改开发者的真实 shell 入口或包管理器。
+6. `install.sh` 无参数运行只允许为顶层阶段 2 收集配置并生成计划，不得应用修改，也不执行前置阶段 0。
+7. `./install.sh apply` 只允许应用顶层阶段 2 的本地配置与已计划 ARM 替代项，必须在变更前展示计划标识和 manifest；可回滚配置与只提供 cleanup 预览的软件新增项必须分开记录；它不得调用任何 Intel Homebrew 卸载路径。
+8. 顶层阶段 2 的 `apply` 与顶层阶段 3 的 Intel 退役都必须在原生 `arm64` 会话运行。Rosetta/x86_64 日常 shell 只警告，不加载 Intel 回退。
+9. 顶层阶段 3 必须由单独的 retire 命令显式发起，并且只接受同一台机器上顶层阶段 2 产生且已验证的 manifest/退役账本。
+10. Intel 退役必须在真实 TTY 中展示清单，并由用户亲自输入精确确认短语；Agent、CI、管道输入和普通 `--yes` 都不得代替。
+11. 任何 Git 更新只允许 `fetch` 和显式的 `pull --ff-only`；禁止自动 `reset`、`stash`、force checkout 或覆盖未提交修改。
+12. 所有远程 URL 必须拒绝内嵌用户名、token 或密码；认证交给 SSH agent、Keychain 或托管平台 credential helper。
+13. 公司仓库默认只提供声明式内容。任何公司 hook 都必须进入计划、显示路径与摘要并单独获批。
+14. 日志、报告和 CI artifact 不得包含密钥值、Keychain 输出、完整环境变量或未脱敏的 shell 历史。
+15. 本地明文密钥例外文件必须是 `0600`，父目录必须是 `0700`；公司仓库不得保存任何密钥。
+16. 未归类的 Intel 程序、运行中服务、cask 或服务数据会阻止退役。
+17. 性能数据只给建议，不作为强制门槛；语法、加载、架构、密钥、权限、备份和 manifest 正确性才是阻断项。
 
 ## 5. 仓库与本机目录模型
 
@@ -156,6 +194,12 @@ path = "/Users/USER/.local/share/dotfiles/company"
     └── inventory/                     # 本地参考清单，不含密钥
 
 ~/.local/state/dotfiles/
+├── stage0/<run-id>/
+│   ├── source-inventory/               # 脱敏现状清单与来源定位
+│   ├── staging/                        # 工作树冲突时使用的候选副本
+│   ├── local-only/                     # 不进入任何 Git 的本机候选文件
+│   ├── reports/                        # 最佳实践、归属、建议与人审结论
+│   └── manifest/                       # 生成文件、哈希、目标仓库与处置状态
 ├── backups/<run-id>/
 ├── manifests/<run-id>/
 ├── reports/<run-id>/
@@ -167,6 +211,161 @@ path = "/Users/USER/.local/share/dotfiles/company"
 ```
 
 状态目录不得由安装器自动清理；只提供 `list` 和带预览、带确认的 `prune`。
+
+前置阶段 0 的存储边界：
+
+- 原始且可能含敏感信息的诊断中间结果不得保存；`source-inventory/` 只保存脱敏后的文件、行号/项目标识和不可逆指纹。
+- public 候选文件只有在脱敏与归属检查通过且不会覆盖现有用户修改时，才可写入本仓库未提交工作树；否则写入 `stage0/<run-id>/staging/public/`。
+- company 候选文件只可写入用户明确授权的公司仓库 checkout；没有 checkout、工作区冲突或权限不足时，写入 `stage0/<run-id>/staging/company/` 并标记“待同步”。
+- local-only 候选文件只可写入 `stage0/<run-id>/local-only/`，不得写入公开/公司仓库或任何云同步目录。
+- retire 和 unresolved 项只写入仓库外报告；未决项会阻止顶层阶段 1 将对应配置落库。
+
+### 5.4 前置阶段 0 的注释、最佳实践与人审契约
+
+前置阶段 0 必须对“当前源文件”和“拟生成候选文件”分别做评估，不得因为配置在当前机器可以运行，就认定它适合进入仓库。最佳实践检查以诊断指南为基线，至少覆盖：
+
+- Zsh 语法、启动文件职责、login/interactive 边界和防御式加载。
+- `PATH`/`fpath` 顺序、唯一性、幂等性、架构和命令实际来源。
+- 补全/插件所有权、`compinit` 次数、插件顺序、固定 revision 和供应链风险。
+- 环境变量作用域、密钥暴露、用户/公司/机器路径、文件权限与可公开性。
+- Homebrew formula/cask/tap/service 的用途、当前架构、重复职责、维护状态、替代方案和是否应进入 Brewfile。
+- mise、uv、Bun、Node、pnpm、Go 等工具的安装/版本/激活所有权，以及是否使用明确版本。
+- alias/function/wrapper 的参数边界、副作用、错误处理、命名、可移植性和破坏性确认。
+- 候选文件的分层、模块边界、重复内容、加载顺序、注释正确性和可测试性。
+
+目标格式安全支持行尾注释时，每个可独立决策的安装项或配置项必须使用下列固定字段：
+
+```text
+# 功能=<为什么存在>；最佳实践=<pass|rewrite|replace|remove|review>；建议=<保留/改写/替代项及理由>；归属=<public|company|local-only|retire|unresolved>；验证=<不含敏感值的检查方式>
+```
+
+示例：
+
+```ruby
+brew "zoxide" # 功能=智能目录跳转；最佳实践=replace；建议=替代 autojump 并先导入数据；归属=public；验证=command -v zoxide
+```
+
+```zsh
+plugins=(git) # 功能=Git alias 与补全；最佳实践=pass；建议=保留 OMZ 内置插件；归属=public；验证=补全与常用 alias 可用
+```
+
+注释规则：
+
+- 候选 `.zsh` 和 Brewfile 必须保留上述同行注释；顶层阶段 1 人审可以修正结论，但除非格式或可读性明确不允许，最终落库文件仍应保留结构化注释。
+- 对 JSON、签名文件、上游生成文件或其他不安全支持注释的格式，不得硬塞注释；在 `reports/file-decisions.tsv` 中用文件+字段/对象路径记录同样信息。
+- 功能和建议必须可验证，不得使用“常用工具”“优化体验”之类无法审查的空泛说法。
+- public 注释本身也必须可公开，不得因为二进制或密钥已移除就在注释中留下公司名、内部域名、账号或机器路径。
+
+人工审查必须为每个候选文件和每个 `review/unresolved` 项记录一个决策：
+
+| 决策 | 含义 | 顶层阶段 1 动作 |
+|---|---|---|
+| `accept` | 同意候选内容、注释与归属 | 按候选文件更新目标仓库 |
+| `revise` | 方向同意，但内容、注释、归属或替代方案需修改 | 先按审查意见改写，重新验证后落库 |
+| `reject` | 不应进入目标仓库 | 不落库；按审查结论改归 local-only/retire 或删除候选副本 |
+| `defer` | 证据或用户决策不足 | 保持仓库外，列入 unresolved；不得先 commit 后补审 |
+
+前置阶段 0 产物与顶层阶段 1 提交建立可追溯关系：每个最终落库文件必须能指向候选文件哈希、人审决策和顶层阶段 1 中的修改/验证结果；追溯报告不得包含原始密钥或未脱敏内容。
+
+### 5.5 前置阶段 0 到顶层阶段 1 的候选文件格式契约
+
+前置阶段 0 的生成方式可以是工具原生 dump、只读命令组合、现有文件拆分，或 Agent 根据本机安装和实际命令来源生成；但生成方式不能决定最终格式。所有交给顶层阶段 1 的候选文件必须遵循本节 `stage0-candidate/v1` 契约：
+
+```text
+本机文件/安装状态
+  → 原始证据（dump、list、source map；仅脱敏后保存在 source-inventory）
+    → 逐项分类与最佳实践判断
+      → 规范化候选文件（路径、格式和内容均与顶层阶段 1 目标一致）
+        → 语法/schema/安全验证
+          → 人工 accept/revise/reject/defer
+```
+
+原始 dump 不是候选文件。即使工具能直接 dump，也必须经过以下规范化步骤：删除传递依赖和机器偶然状态、分离 public/company/local-only/retire/unresolved、固定版本或 revision、改成目标文件的稳定排序与语法、补全结构化注释，并执行目标格式验证。无法可靠转换的项目进入 `unresolved`，不得用猜测值或占位符生成看似完整的候选文件。
+
+候选目录必须镜像顶层阶段 1 的相对路径：
+
+```text
+stage0/<run-id>/staging/public/<stage-1-public-relative-path>
+stage0/<run-id>/staging/company/<stage-1-company-relative-path>
+```
+
+如果安全检查和工作区检查允许，也可直接在对应仓库的未提交工作树写入相同相对路径。禁止以 `*.dump`、`*.raw`、`inventory-*` 或工具私有导出格式替代下表中的目标文件。
+
+| 顶层阶段 1 目标文件 | 前置阶段 0 可使用的来源 | 阶段 0 必须产出的候选格式 | 最低验证 |
+|---|---|---|---|
+| `zsh/entrypoints/zprofile`、`zsh/entrypoints/zshrc` | 当前启动文件与完整 source 链、Agent 拆分 | 可被 `source` 的 Zsh 文本；入口只调用受管 loader，不复制业务配置 | `zsh -n`；隔离 HOME 的 login/interactive 场景 |
+| `zsh/lib/*.zsh`、`zsh/profile.d/*.zsh`、`zsh/pre.d/*.zsh`、`zsh/rc.d/*.zsh` | 当前 `.zshrc`、安装器片段、alias/function/补全/插件初始化 | 按第 8 节职责和加载阶段拆分的 UTF-8 Zsh；文件名使用两位顺序前缀；可决策项带同行注释 | `zsh -n`；重复 `source` 幂等；PATH/补全所有权检查 |
+| `macos/Brewfile` | 现有 Brewfile、`brew bundle dump`、`brew leaves`、formula/cask/tap/service 清单、Agent 判断 | Homebrew Bundle Ruby DSL；只保留人工期望状态，按 `tap`/`brew`/`cask` 分组并在组内稳定排序；每项带同行注释 | Brewfile 解析/`brew bundle check --file=...`；重复项、归属与架构检查 |
+| `tooling/mise/10-public.toml`、公司 `mise/50-company.toml` | 现有 mise 配置、已安装运行时和实际命令来源、Agent 判断 | mise TOML 的 `[tools]` 等受支持字段；只写明确版本或明确的无默认策略，不写 `latest`，public/company 分层 | TOML 解析；mise 配置检查；工具所有权冲突检查 |
+| `tooling/uv/uv.toml` | 现有 uv 配置、uv/Python 安装状态、Agent 判断 | uv 支持的 TOML 配置键；不混入项目级依赖或本机绝对路径 | TOML 解析；固定版本 uv 的配置检查 |
+| `tooling/uv/.python-versions` | uv 管理的 Python 列表、项目与全局需求 | uv 原生多版本文件；每行一个明确 Python 版本，稳定排序；不写 `latest`、系统路径或当前机器缓存路径 | 固定版本 uv 读取；行格式、重复项和 ARM 可用性检查 |
+| `zsh/plugins/catalog.toml`、`zsh/plugins/revisions.toml` | 当前插件目录、OMZ 插件列表、Git remote/revision、Agent 判断 | 第 6 节 schema 对应的 TOML；catalog 记录用途、加载阶段、依赖、风险和默认选择，revisions 只记录固定 commit/tag | TOML/schema；source URL 安全；revision 存在且非浮动引用 |
+| 公司 `plugins/catalog.toml`、`diagnostics/rules.toml` | 公司配置、公司 CLI/补全和脱敏诊断需求 | 公司 schema 对应的 TOML；真实内部值只能进入获授权公司候选目录 | TOML/schema；公司/public 边界和无密钥检查 |
+| `reports/file-decisions.tsv`、`manifest/files.tsv` | 上述全部证据和候选文件 | 本节定义的 UTF-8 TSV 表头与逐项记录；字段内禁止 tab、换行和敏感值 | 表头、枚举、路径、SHA-256 和一一覆盖检查 |
+
+本节是顶层阶段 1 创建正式 schema、fixture 和校验器时必须实现的最低兼容基线。顶层阶段 1 如果需要调整候选格式，必须先版本化契约、把受影响项标记为 `revise` 并重新生成/验证，不得静默解释旧候选。
+
+#### 5.5.1 规范化候选示例
+
+Zsh 候选使用目标模块语法，而不是把整份旧 `.zshrc` 作为字符串或报告保存：
+
+```zsh
+typeset -U path PATH # 功能=保持 PATH 唯一且保留首次出现顺序；最佳实践=rewrite；建议=替代重复字符串拼接；归属=public；验证=重复 source 后 PATH 无重复项
+[[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" "${path[@]}") # 功能=启用用户级命令目录；最佳实践=pass；建议=目录存在时加入；归属=public；验证=目录存在时 whence 能解析其中命令
+export PATH # 功能=把规范化 PATH 传递给子进程；最佳实践=pass；建议=模块末尾统一导出；归属=public；验证=zsh 子进程读取 PATH
+```
+
+Brew dump 必须转换为审阅后的 Brewfile DSL；不能把 dump 时间、完整依赖闭包或本机偶然安装项带入候选：
+
+```ruby
+brew "git" # 功能=提供版本控制 CLI；最佳实践=pass；建议=由 ARM Homebrew 提供统一版本；归属=public；验证=command -v git && file "$(command -v git)"
+brew "zoxide" # 功能=智能目录跳转；最佳实践=replace；建议=替代 autojump 并迁移数据；归属=public；验证=command -v zoxide
+cask "iterm2" # 功能=提供终端应用；最佳实践=review；建议=人审确认是否作为公共默认 GUI 应用；归属=public；验证=brew info --cask iterm2
+```
+
+上例只说明阶段 1 所需的候选语法和同行注释格式，不代表三个项目已获准落库。归属仍为 `unresolved` 的项目只能进入仓库外报告，不能进入 public/company 候选文件；归属为 public/company 但最佳实践结论是 `review` 的项目可以进入待审候选，但必须在 0D 获得 `accept/revise` 才能由顶层阶段 1 落库。
+
+mise 候选必须是可直接被阶段 1 使用的 TOML，并固定实际版本：
+
+```toml
+[tools]
+node = "22.0.0" # 功能=提供 Node.js 运行时；最佳实践=review；建议=以实施时确认的精确版本替换示例值；归属=public；验证=mise exec -- node --version
+go = "1.23.0" # 功能=提供 Go 工具链；最佳实践=review；建议=以实施时确认的精确版本替换示例值；归属=public；验证=mise exec -- go version
+```
+
+示例版本只说明格式，不是本项目默认值。阶段 0 必须从实际需求与安装证据生成可验证的精确版本；证据不足时进入 `unresolved`，不得复制示例值。
+
+uv 候选使用 uv 原生的用户配置语法和多版本文件。`tooling/uv/uv.toml` 示例：
+
+```toml
+python-preference = "only-managed" # 功能=只使用 uv 管理的 Python；最佳实践=pass；建议=避免与系统/pyenv Python 混用；归属=public；验证=uv python find --managed-python
+python-downloads = "manual" # 功能=限制隐式下载；最佳实践=pass；建议=只在阶段 2 明确安装计划中下载 Python；归属=public；验证=缺少版本时普通 uv 命令不自动下载
+```
+
+`tooling/uv/.python-versions` 示例：
+
+```text
+3.12.3
+3.13.1
+```
+
+这些版本同样只说明“每行一个精确版本”的格式，不是默认选择。阶段 0 应从 `uv python list --only-installed` 等只读证据与实际需求形成候选，再由人审决定保留哪些版本。
+
+#### 5.5.2 追溯文件的固定表头
+
+`manifest/files.tsv` 的第一行固定为：
+
+```text
+contract_version\tsource_kind\tsource_locator\tgenerator\traw_evidence_sha256\ttarget_repository\ttarget_path\tformat\tcandidate_sha256\tclassification\tbest_practice\treview_decision\tfinal_path
+```
+
+`reports/file-decisions.tsv` 的第一行固定为：
+
+```text
+target_repository\ttarget_path\titem_locator\tfunction\tbest_practice\trecommendation\tclassification\tverification\treview_decision\treview_note
+```
+
+上述 `\t` 表示一个真实 tab，文件中不得保存为反斜杠加字母 `t`。`generator` 只允许 `dump-normalized`、`agent-derived`、`source-split` 或 `manual`；它用于说明生成方式，不降低目标格式要求。`target_repository` 只允许 `public`、`company`、`local-only` 或 `none`，其中 retire/unresolved 等无候选目标的报告项使用 `none`。`classification` 使用 public/company/local-only/retire/unresolved，`best_practice` 和 `review_decision` 使用第 5.4 节枚举。阶段 0 初次生成时允许 `review_decision` 和 `final_path` 为空；0D 结束时必须填充 `review_decision`，只有顶层阶段 1 实际落库后才填写 `final_path`。
 
 ## 6. 公开候选仓库目标结构
 
@@ -207,13 +406,15 @@ dotfiles/
 │   ├── mise/10-public.toml
 │   └── uv/
 │       ├── uv.toml
-│       └── python-versions.txt
+│       └── .python-versions
 ├── schemas/
 │   ├── sources.example.toml
+│   ├── company-repository.schema.md
 │   ├── plugin-catalog.schema.md
 │   └── manifest.schema.md
 ├── tests/
 │   ├── fixtures/
+│   │   └── company-repo/             # 无敏感值的公司层契约 fixture
 │   ├── syntax.zsh
 │   ├── isolated-home.zsh
 │   ├── idempotence.zsh
@@ -227,9 +428,13 @@ dotfiles/
 
 不创建 `bootstrap.sh`，也不创建 `AGENTS.md`。README 必须完整描述 Agent 协议；`install.sh` 只负责执行。
 
+上述整个目录是顶层阶段 1 的公开仓库最终交付物。前置阶段 0 应当先按相同目标路径生成可从当前机器推导的 `.zsh`/Brewfile/mise/uv/插件/诊断规则等候选文件，并在审查报告中列出 README、`install.sh`、schema、测试和 CI 等无法由本机现状直接推导、仍需顶层阶段 1 实现的目标文件。
+
+顶层阶段 1 不得将前置阶段 0 工作树直接整体 commit；必须消费人审决策，完成必要的 revise/reject/defer、补齐新文件，再在隔离 HOME 和 fixture 中验证顶层阶段 2/3 的命令路径。顶层阶段 1 自身不允许修改真实 `~/.zprofile`、`~/.zshrc` 或 Homebrew。
+
 ## 7. 公司仓库契约
 
-公司仓库建议只允许以下固定入口：
+前置阶段 0 必须先将当前机器中的公司配置与公开/本地内容分离，并仅向已授权公司 checkout 或仓库外 company staging 生成候选文件。顶层阶段 1 根据人审结论更新公司仓库，并同时在公开仓库产出公司仓库需遵循的文件契约、schema 和无敏感值 fixture。公司仓库建议只允许以下固定入口：
 
 ```text
 company-dotfiles/
@@ -244,6 +449,14 @@ company-dotfiles/
 ├── diagnostics/rules.toml            # 不含密钥值
 └── hooks/                             # 默认不执行
 ```
+
+顶层阶段 1 对公司层的交付规则：
+
+- 本仓库保存公司仓库 schema、可公开文档、加载契约和脱敏 fixture，用于保证公开层与公司层兼容。
+- 如果用户在顶层阶段 1 提供了获批的公司仓库 checkout，实施者应在该 checkout 中产出上述声明式文件并运行同一组契约验证；未获明确授权不得 push。
+- 如果公司仓库为 `skip` 或当前不可访问，顶层阶段 1 仍必须完成 schema 和 fixture，但交付报告只能标记“公司同步文件已定义、实际公司仓库待同步”，不得声称公司仓库已完成。
+- 通用 loader、安全接口和命令实现只存在于公开仓库；公司仓库只同步公司覆盖和契约所需的声明式文件，不复制一份公开运行时，避免两套实现漂移。
+- 任何公司名、域名、账号、内部路径和真实公司插件来源只能写入公司私有仓库，不得反向同步到本仓库。
 
 - 公司仓库缺失、未启用或暂时不可访问时，公开层和本地层仍必须可用。
 - 已存在且此前验证过的公司 checkout 可继续加载；更新失败只警告，不阻塞公开层更新。
@@ -448,7 +661,7 @@ conflicts、security_notes、performance_notes、uninstall_steps
 ### 12.2 uv
 
 - uv 是唯一 Python 管理器，移除 pyenv 和重复的 pipx/virtualenv 管理层。
-- `tooling/uv/python-versions.txt` 写明确版本；实施时用 `uv python install <exact-version>`。
+- `tooling/uv/.python-versions` 使用 uv 原生多版本格式并逐行写明确版本；实施时用 `uv python install <exact-version>`。
 - 项目使用 `pyproject.toml`、`requires-python`、`.python-version` 和 `uv.lock` 覆盖全局默认。
 - Python CLI 用 `uv tool install` 管理，并记录工具与 Python 版本。
 - 不使用未经确认的自动“最新版本”升级；升级是显式维护任务。
@@ -496,16 +709,22 @@ company/macos/Brewfile        # 可选
 
 ### 14.2 `install.sh`
 
+`install.sh` 是顶层阶段 1 落库后提供给每台机器的使用者入口，不是前置阶段 0 的仓库生产工具。前置阶段 0 依据诊断指南与本计划的人审契约执行；不得为了复用 `install.sh` 而把未审查的本机结论写入仓库。
+
 ```text
-./install.sh                    # 交互配置 + 诊断 + 生成 plan；绝不 apply
-./install.sh configure          # 重新配置来源和插件选择
-./install.sh plan               # 重新生成计划
-./install.sh apply              # 分阶段应用；退役前暂停并要求用户确认
-./install.sh verify             # 正确性/安全性检查 + 性能建议
-./install.sh rollback <run-id>  # 回滚可逆配置变更
+./install.sh                         # 顶层阶段 2：交互配置 + 只读诊断 + 生成 plan；绝不 apply
+./install.sh configure               # 顶层阶段 2：重新配置来源和插件选择
+./install.sh plan                    # 顶层阶段 2：重新生成本地应用计划
+./install.sh apply                   # 顶层阶段 2：应用本地配置与已计划 ARM 替代项；绝不退役 Intel Homebrew
+./install.sh verify                  # 顶层阶段 2：正确性/安全检查 + 性能建议 + 退役准备度
+./install.sh rollback <run-id>       # 顶层阶段 2：回滚可逆配置变更
+./install.sh retire-intel            # 顶层阶段 3：只生成/刷新退役预览
+./install.sh retire-intel --apply    # 顶层阶段 3：显式进入不可逆退役，仍需真实 TTY 精确确认
 ```
 
-`apply` 内部调用与独立命令相同的 Intel 退役逻辑；如果用户在退役确认处拒绝，前面已完成且验证通过的 ARM 配置保留，manifest 标记为“迁移完成、Intel 未退役”，可稍后单独重试。
+`./install.sh apply` 成功后必须停在顶层阶段 2，manifest 明确标记“本地配置完成、Intel Homebrew 未退役”。代码中不得存在从 `apply` 自动 fall through 到退役的路径。
+
+`./install.sh retire-intel[ --apply]` 只是仓库级统一入口，内部必须委托给与下方独立命令相同的实现，并首先校验顶层阶段 2 的成功 manifest、机器标识和退役账本。
 
 ### 14.3 `dotfiles`
 
@@ -529,19 +748,37 @@ dotfiles homebrew retired                # 查询已退役项目和替代记录
 
 README 必须同时提供完整中文与完整英文正文，并使用相同章节编号、命令块和安全警告。Agent 流程固定为：
 
-1. 完整阅读 README。
-2. 检查架构、Git 工作区和来源配置。
-3. 运行无参数 `./install.sh` 或 `plan`。
-4. 把变更、风险、不可逆边界和阻断项报告给用户。
-5. 获得用户确认后运行 `./install.sh apply`。
-6. 到 Intel 退役节点必须暂停，让用户亲自在 TTY 输入精确短语。
-7. 运行 `verify`，交付 manifest、报告和后续建议。
+1. 先判断当前任务是“前置阶段 0 现状盘点/候选文件”、“顶层阶段 1 审查后落库”，还是“使用已交付仓库执行单机顶层阶段 2/3”；不得把盘点或仓库建设任务当成修改真实 HOME 的授权，也不得把前置阶段 0 的未审候选文件当作已交付配置。
+2. 完整阅读 README，检查架构、Git 工作区和来源配置。
+3. 顶层阶段 2 只能从无参数 `./install.sh` 或 `./install.sh plan` 开始。
+4. 把顶层阶段 2 的变更、风险、备份、manifest 和阻断项报告给用户；获得确认后运行 `./install.sh apply`。
+5. 运行 `./install.sh verify`，交付顶层阶段 2 的 manifest 和报告，然后停止；不得因为本地应用成功就自动启动顶层阶段 3。
+6. 只有用户单独提出或明确确认进入顶层阶段 3 时，才运行 `./install.sh retire-intel` 生成最终预览。
+7. 正式退役必须再次报告不可逆边界，并让用户亲自在真实 TTY 中通过 `./install.sh retire-intel --apply` 输入精确短语。
+8. 退役后再次运行 `verify`，交付 retired record、最终报告和后续建议。
 
 README 必须明确禁止 Agent 自动创建远程仓库、自动改仓库可见性、自动信任公司 hook、自动 force Git 或代替用户确认不可逆卸载。
 
 ## 15. Manifest、备份与回滚
 
 ### 15.1 每次 run 的产物
+
+前置阶段 0 使用独立产物：
+
+```text
+~/.local/state/dotfiles/stage0/<run-id>/manifest/files.tsv
+~/.local/state/dotfiles/stage0/<run-id>/reports/inventory.md
+~/.local/state/dotfiles/stage0/<run-id>/reports/file-decisions.tsv
+~/.local/state/dotfiles/stage0/<run-id>/reports/best-practices.md
+~/.local/state/dotfiles/stage0/<run-id>/reports/review-decisions.tsv
+~/.local/state/dotfiles/stage0/<run-id>/reports/unresolved.md
+```
+
+`files.tsv` 必须使用第 5.5.2 节固定表头，记录契约版本、来源类别、脱敏来源定位、生成方式、原始证据哈希、候选目标仓库、候选相对路径、格式、候选 SHA-256、归属、最佳实践结论、人审决策和顶层阶段 1 最终提交路径。对于不支持注释的格式，`file-decisions.tsv` 使用第 5.5.2 节固定表头，作为同行注释的 sidecar 替代。
+
+顶层阶段 1 的每个最终提交项必须在 `review-decisions.tsv` 中有 `accept` 或 `revise` 决策；`reject`、`defer` 或缺少决策的项不得落库。
+
+顶层阶段 2/3 使用单机运行产物：
 
 ```text
 ~/.local/state/dotfiles/manifests/<run-id>/metadata.toml
@@ -661,101 +898,180 @@ dotfiles homebrew retired
 
 ## 18. 分阶段实施顺序
 
-### 阶段 0：准备仓库与权限边界
+下文先定义一个独立前置阶段 0，再定义三个顶层实施阶段。数字后的字母是该阶段内部的子阶段，不是新的顶层阶段。
+
+### 前置阶段 0：盘点当前机器并生成待审候选文件
+
+本阶段是仓库生产的前置步骤，由仓库维护者在一台现有机器上执行，不是每个终端用户的安装步骤。它不计入三个顶层实施阶段，不通过 `install.sh` 执行。
+
+#### 0A：只读发现与脱敏现状清单
+
+- 完整阅读诊断指南，检查当前 `.zshenv`、`.zprofile`、`.zshrc`、`.zlogin`、其全部 source 链、权限、symlink 和启动场景。
+- 脱敏收集 PATH/fpath、环境变量名称、alias、function、wrapper、补全、插件、主题、历史策略和工具激活。
+- 盘点现有 Brewfile 与 Intel/ARM Homebrew 的 tap/formula/leaf/cask/service/data，以及 mise、uv、Bun、Node、pnpm、Go、Python、NVM、pyenv、pipx 等所有权。
+- 可以运行工具自身的只读 list/dump 功能，也可以由 Agent 根据本机安装、配置和命令实际来源形成证据；所有输出先作为原始证据，记录 `generator` 和脱敏哈希，不得直接冒充顶层阶段 1 目标文件。
+- 查找顶层阶段 1 目标树中已经有当前来源的文件，并列出尚无当前来源、需要顶层阶段 1 新建的 README、安装器、schema、测试和 CI 等文件。
+- 密钥与历史只记录类别、脱敏来源、命中数和不可逆指纹，不记录值。
+
+产物：脱敏 `inventory.md`、source map、已安装项清单、目标文件覆盖矩阵和敏感信息处置清单。
+
+#### 0B：逐项功能、最佳实践、替代方案与归属评估
+
+- 对每个安装项和可独立决策的配置项说明实际功能，不根据名称猜测。
+- 对“当前源文件”做文件级最佳实践检查，记录语法、边界、幂等性、架构、安全、所有权、可移植性、性能和可公开性问题。
+- 对每个项目评估“保留、改写、替代、移除或待决”，给出推荐方案、理由、风险与验证方式。
+- 对每项给出 public/company/local-only/retire/unresolved 建议归属；归属不明确的内容不得默认放入 public。
+
+产物：`best-practices.md`、`file-decisions.tsv`、替代方案矩阵和 unresolved 清单。
+
+#### 0C：生成与目标仓库同构的候选文件
+
+- 把旧单体 Zsh 配置按 `.zprofile`/`.zshrc` 职责和 profile.d/pre.d/rc.d/wrapper 模块拆分为候选文件。
+- 将已安装项转换为经审阅待选的分层 Brewfile、mise/uv 精确版本、插件 catalog/revision 和工具所有权配置；不得直接提交 `brew bundle dump` 输出。
+- 严格按第 5.5 节 `stage0-candidate/v1` 映射目标路径、文件格式、稳定排序、字段和固定表头；dump、Agent 推导和现有文件拆分得到的相同项目必须归一为同一种候选格式。
+- 对支持注释的候选 `.zsh`/Brewfile 等文件按第 5.4 节保留结构化同行注释；不支持注释的格式使用 sidecar 记录。
+- 对“拟生成候选文件”再次执行文件级最佳实践、目标格式语法/schema、敏感信息、内部信息和目标归属检查，避免把旧问题只是换个文件复制过去；验证失败的文件不得交给 0D 人审。
+- public 候选写入本仓库未提交工作树或受控 public staging；company 候选写入获授权 checkout 或受控 company staging；local-only/retire/unresolved 留在仓库外。
+
+产物：public/company 候选文件树、local-only 候选文件、retire/unresolved 清单、候选文件语法/安全/最佳实践报告与 `files.tsv`。
+
+#### 0D：人工审查与顶层阶段 1 准入
+
+- 向审查者展示每个候选文件的来源摘要、diff、同行注释/sidecar、最佳实践结论、推荐替代和建议归属，不显示密钥值或未脱敏内容。
+- 审查者对每个候选文件和每个 `review/unresolved` 项记录 accept/revise/reject/defer。
+- 任何缺少审查决策、仍含敏感/公司信息的 public 内容、或者候选文件最佳实践检查未完成的项，都会阻止顶层阶段 1 对应文件落库。
+- 前置阶段 0 不执行 `git add/commit/push`；它的终态是“候选文件与人审结论已就绪”，不是“仓库已交付”。
+
+前置阶段 0 产物：脱敏现状 inventory、源/目标文件映射、public/company 待审候选文件、local-only/retire/unresolved 仓库外产物、原文件+候选文件最佳实践报告、替代方案矩阵、人审决策和追溯 manifest。其中只有获得 `accept/revise` 的 public/company 内容能成为顶层阶段 1 最终落库文件的输入。
+
+### 顶层阶段 1：建设公开仓库与公司同步契约（当前主目标）
+
+本阶段只建设可复用产品能力，不对开发者的真实 HOME 执行本地应用，也不卸载任何 Homebrew。
+
+#### 1A：准备仓库与权限边界
 
 前置条件：
 
 - 用户自行创建或指定一个已存在的个人私有远程仓库；安装器不得自动创建远程仓库。
-- 用户提供个人仓库 URL/本地路径；公司仓库提供获批 URL/路径或选择 `skip`。
-- 初次创建代码由实施 Agent 在明确目录中完成；新机器安装则先手工 clone 个人仓库，再运行 README 中的流程。
+- 确认本仓库是公开候选仓库；如需实际生成公司层文件，由用户提供获批的公司仓库 checkout，否则选择 `skip`。
+- 固定 public/company/local 覆盖关系、Zsh 加载阶段、保留名称、工具所有权、manifest schema 和不可逆边界。
+- 验证前置阶段 0 的 `contract_version`、`files.tsv`、最佳实践报告、人审决策和候选文件哈希完整；拒绝目标路径/格式不符合第 5.5 节、无决策、验证失败或已过期的候选输入。
+- 仓库建设只使用工作树、临时目录和隔离 HOME；不得把“建设仓库”理解为“获准改动当前机器”。
 
-产物：来源配置草案、仓库 origin/权限检查报告、公司层启用状态。
+产物：仓库 origin/权限检查报告、公司层契约或 `skip` 状态、实施边界、获准候选输入清单。
 
-### 阶段 1：只读盘点
+#### 1B：实现公开仓库与公司文件集
 
-收集并脱敏记录：
+- 建立本文定义的目录结构、完整中英 README、MIT License、`install.sh`、`bin/dotfiles`、loader、诊断、备份、manifest、rollback、插件目录与 CI。
+- 对前置阶段 0 的 `accept` 候选内容按原样落库；对 `revise` 内容先按审查结论改写并重新执行语法、最佳实践、归属与密钥检查；不落库 `reject/defer`。
+- 实现前置阶段 0 列出的“无现有来源、仍需新建”文件，但不得越过已确认的产品契约。
+- `install.sh` 与 `bin/dotfiles` 实现顶层阶段 2 的 plan/apply/verify/rollback 闭环，以及与之分离的顶层阶段 3 retire preview/apply 入口。
+- 在本仓库建立公司仓库 schema、脱敏 fixture 和同步说明；如已提供获批公司 checkout，在该 checkout 生成第 7 节文件并验证，但不自动 push。
+- 所有需要固定的工具、OMZ、插件和 Gitleaks 版本都写入仓库；禁止 `latest`。
 
-- `uname -m`、`arch`、shell 路径和 Rosetta 状态。
-- `.zshenv/.zprofile/.zshrc`、所有 source 链、PATH、重复 compinit、插件和环境变量名称。
-- `command -v`/`type -a`/二进制架构。
-- Intel 与 ARM Homebrew 的 formula、leaves、taps、casks、services 和数据目录。
-- NVM/npm、pyenv/Python、pipx/uv、Bun/pnpm、Go、mise inventories。
-- Keychain 外的疑似密钥和 shell 历史命中（仅脱敏元数据）。
-- Mac App Store 应用和其他 dotfiles 的脱敏 backlog。
+产物：经人审结论更新的公开仓库文件、公司同步 schema/fixture/说明、如已授权则包含实际公司仓库文件集，以及候选哈希→审查决策→最终文件的追溯表。
 
-产物：`inventory.md`、命令解析表、密钥轮换清单、Intel 退役账本初稿。
+#### 1C：在隔离环境验证自闭环
 
-### 阶段 2：实现并测试公开/公司契约
+- 使用 fixture 和临时 HOME 完成 syntax、plan、apply、再次 apply 幂等性、verify、rollback 和公司 `skip`/启用两种路径。
+- 用 mock/fixture 验证退役预览、阻断条件和真实 TTY 确认防护；测试不得触碰真实 Homebrew。
+- 执行 Gitleaks 全历史扫描、人工发布审查和 CI；发布报告不得声称任何用户已完成本地迁移或退役。
+- 用户单独确认后，手工把公开候选仓库改为公开；脚本不自动修改可见性。
 
-- 建立本文目录结构、README 中英文、MIT License、安装器、loader、插件目录、测试和 CI。
-- 为当前旧 Zsh 配置建立逐项迁移账本：原位置、用途、目标层/模块、保留/改写/限定/Keychain/淘汰、验证方法。
-- 未解释的有效配置不得进入切换。
-- 使用 fixture 在隔离 HOME 中完成 plan/apply/再次 apply/rollback 测试。
+顶层阶段 1 产物：可审查的本仓库、公司同步契约与文件状态、隔离环境测试报告、CI/Gitleaks 报告和发布报告。这些产物是任何用户开始顶层阶段 2/3 的唯一代码基线。
 
-产物：可审查的仓库提交、迁移账本、测试报告。
+### 顶层阶段 2：每个用户应用本地配置与 ARM 替代项
 
-### 阶段 3：密钥迁移与安全清理
+本阶段由每个用户在自己的机器上，从顶层阶段 1 交付的仓库启动。本阶段可以完成并长期停留；它不会自动进入 Intel Homebrew 退役。
+
+#### 2A：配置来源与单机安全 preflight
+
+- 用户先 clone 公开仓库，再运行无参数 `./install.sh`；个人/公司来源路径由用户确认，公司层可选 `skip`。
+- 脱敏收集 `uname -m`、`arch`、Rosetta、Zsh source 链、PATH、`compinit`、插件、环境变量名称和命令/二进制架构。
+- 盘点 Intel/ARM Homebrew formula、leaves、taps、casks、services、数据目录，以及 NVM/npm、pyenv/Python、pipx/uv、Bun/pnpm、Go、mise、Mac App Store 和其他 dotfiles。
+- 只记录 Keychain 外疑似密钥和 shell 历史命中的脱敏元数据，不记录值。
+- 本子阶段只用于判断已落库文件能否安全应用到该机器，不得从用户的旧 `.zshrc` 反向生成、修改或提交顶层阶段 1 仓库内容；需要回馈仓库的改进必须重新走前置阶段 0 与顶层阶段 1。
+
+产物：`inventory.md`、命令解析表、密钥轮换清单、Intel 退役账本初稿和本地 apply plan。
+
+#### 2B：备份、密钥边界与本地配置应用
 
 - 把需保留密钥录入 Keychain，建立 wrapper。
-- 轮换曾出现在文件、历史或 Git 中的密钥。
-- 清理旧配置中的明文值；定向清理历史。
+- 密钥轮换和明文清除分别显式确认，不随 symlink apply 暗中执行。
+- 为当前旧 Zsh 配置建立逐项迁移账本；未解释的有效配置不得进入切换。
+- 先创建备份和 manifest，再建立 `~/.zprofile`、`~/.zshrc` 及其他已批准入口的 symlink，加载 public/company/local 三层。
 - 安装原生 Git pre-commit hook 和固定版本 Gitleaks。
-
-产物：脱敏扫描报告、轮换状态、历史清理 manifest。报告不得包含值。
-
-### 阶段 4：ARM 工具链与配置切换
-
 - 完善 ARM Brewfile，安装缺失 ARM 工具。
 - 配置 mise 分层与固定版本；迁移 Bun/Node/pnpm/Go。
 - 配置 uv 并迁移 Python 版本、venv/tool 所有权。
 - 安装固定 revision 的 Oh My Zsh/插件。
 - 导入 autojump 数据到 zoxide，验证后标记 autojump 可淘汰。
-- 部署 `~/.zprofile`、`~/.zshrc` symlink；必要时启用唯一的临时 Intel 兼容文件。
+- 必要时启用唯一的临时 Intel 兼容文件。
 
-产物：apply manifest、ARM 命令矩阵、配置加载报告。
+产物：脱敏扫描报告、密钥处理状态、backup、apply manifest、ARM 命令矩阵和配置加载报告。
 
-### 阶段 5：服务、cask 与最终替代验证
+#### 2C：本地验证与退役准备
 
 - 迁移运行中服务及其数据。
 - 逐项接管 cask，标记 ARM/Universal/Rosetta/替代/淘汰。
 - 让 Intel 账本中所有条目离开 `unresolved`。
 - 在干净 login shell 和 IDE 风格非-login 交互 shell 中验证 PATH 和工具。
+- 运行 `./install.sh verify`，产生独立的本地配置验收结果和 retirement-readiness 状态。
+- 未解决 Intel 项目只阻止顶层阶段 3，不否定已验证的本地 Zsh 应用；本阶段结束时必须停止。
 
-产物：最终退役预览、服务验证、cask 分类表。
+顶层阶段 2 产物：本地 inventory、backup、apply manifest、ARM 命令矩阵、配置加载报告、服务/cask 分类、退役账本和 retirement-readiness 报告。它们全部留在当前机器。
 
-### 阶段 6：当天退役 Intel Homebrew
+### 顶层阶段 3：每台机器显式退役 Intel Homebrew
 
-- `./install.sh apply` 到最后阶段暂停。
-- 用户查看最终清单并亲自输入精确短语。
-- 内部调用 `dotfiles homebrew retire-intel --apply`。
-- 不设置观察天数；成功后立即进入最终验证。
+本阶段必须与顶层阶段 2 使用不同命令发起。用户可在顶层阶段 2 完成后决定何时进入；一旦明确进入且最终预览通过，本计划仍要求当天退役，不设观察期。
 
-产物：官方卸载记录、manifest、retired inventory、残留 `/usr/local` 审计。
+#### 3A：独立预览与阻断检查
 
-### 阶段 7：最终验收与公开准备
+- 用户或 Agent 只能先运行 `./install.sh retire-intel`，重新验证当前机器标识、顶层阶段 2 manifest、ARM Homebrew 健康状态和账本时效性。
+- 再次验证所有 ARM 替代命令的路径、架构和版本，以及服务、cask 和数据状态。
+- 存在 `unresolved`、未知数据、运行中 Intel 服务、过期 manifest 或机器不匹配时阻止正式命令。
 
-- 运行全部本机验证、Gitleaks、Git 历史扫描和 CI。
+#### 3B：真实 TTY 确认与当天退役
+
+- 用户运行 `./install.sh retire-intel --apply`；内部调用 `dotfiles homebrew retire-intel --apply`，不复制第二套退役实现。
+- 用户查看最终清单、官方卸载将影响的路径和 reviewed manifest，并在真实 TTY 亲自输入精确短语。
+- 使用已固定来源/revision/哈希且经审查的 Homebrew 官方卸载机制；只处理 manifest 内项目，不递归删除 `/usr/local`。
+
+#### 3C：最终验收与记录
+
+- 运行全部本机验证。
 - 验证临时 Intel 文件已移除，活动 PATH 无 Intel Homebrew。
-- 生成公开 allowlist/denylist 和发布报告。
-- 用户单独确认后，手工把个人候选仓库改为公开；脚本不自动修改可见性。
+- 验证 `dotfiles homebrew retired` 能查询旧路径/架构、替代路径/架构、处置状态和时间。
+- 交付官方卸载记录、manifest、retired inventory 和残留 `/usr/local` 审计；不将这些本机产物提交回公开仓库。
+
+阶段门禁是：前置阶段 0 没有完成原文件+候选文件最佳实践评估、归属分类、候选文件与人审决策时，顶层阶段 1 不得将对应配置 stage/commit；顶层阶段 1 的仓库能力未通过隔离测试时，不得用于顶层阶段 2；顶层阶段 2 未验证或退役账本存在阻断项时，不得进入顶层阶段 3。
 
 ## 19. 检查与验收矩阵
 
 ### 19.1 阻断检查
 
-| 类别 | 必须验证 |
-|---|---|
-| Zsh 语法 | 所有启用 `.zsh` 文件通过 `zsh -n` |
-| 启动 | 隔离 HOME 与真实 HOME 的 login/interactive/non-login 交互场景正常退出 |
-| 架构 | apply/retire 为 arm64；brew 和替代二进制不是 x86_64-only |
-| PATH | 去重、优先级正确、最终无活动 Intel Homebrew 路径 |
-| 补全 | Oh My Zsh/compinit 只初始化一次；缓存权限和路径正常 |
-| 分层 | public < company < local；公司 skip 可用；覆盖链可诊断 |
-| 保留名称 | 公司/本地层不能覆盖核心安全接口 |
-| 密钥 | 暂存区、当前提交、完整历史通过固定版本 Gitleaks；本地权限正确 |
-| Git | 工作区状态已报告；更新只 fast-forward；URL 不嵌入凭据 |
-| 备份 | manifest、哈希、备份目标与回滚动作完整 |
-| Intel | 每项已归类；服务、cask、数据已确认；替代命令架构验证通过 |
+| 阶段 | 类别 | 必须验证 |
+|---|---|---|
+| 0 | 现状覆盖 | Zsh 启动文件/source 链、PATH/fpath、变量、alias/function/wrapper、补全/插件、Brewfile 与 Homebrew/mise/uv/语言工具所有权已脱敏盘点；顶层阶段 1 目标文件有源/无源状态已列出 |
+| 0 | 最佳实践 | 当前源文件与拟生成候选文件均已按诊断指南完成语法、边界、幂等、架构、安全、所有权、可移植性和可公开性评估 |
+| 0 | 候选格式 | dump/Agent/现有文件等证据均已归一为 `stage0-candidate/v1`；候选路径镜像顶层阶段 1，文件通过对应语法/schema，追溯 TSV 使用固定表头；原始 dump 未冒充候选文件 |
+| 0 | 注释与归属 | 每个可决策项都有功能、最佳实践结论、推荐/替代、public/company/local-only/retire/unresolved 归属和验证；支持注释的文件使用同行注释，其他格式使用 sidecar |
+| 0 | 密钥与工作树 | public 候选不含公司/本地/密钥信息；原始敏感输出未保存；现有未提交工作未被覆盖；本阶段未执行 add/commit/push |
+| 0 | 人审准入 | 每个候选文件与 review/unresolved 项都有 accept/revise/reject/defer 决策；候选哈希、审查决策和目标路径可追溯 |
+| 1 | 仓库结构 | 公开目录、公司 schema/fixture、README、License、命令入口、测试与 CI 完整 |
+| 1 | 候选落库 | 只消费前置阶段 0 的 accept/revise 内容；revise 已重新验证；reject/defer 未落库；最终文件可追溯到候选哈希与人审决策 |
+| 1 | 隔离自闭环 | 临时 HOME 中的 plan/apply/幂等/verify/rollback 通过；retire 只使用 mock/fixture，不触碰真实 HOME/Homebrew |
+| 1 | 公司契约 | company 启用与 `skip` 均通过；公司层不能覆盖保留安全接口；实际同步状态未被夸大 |
+| 1 | 仓库密钥 | tracked/untracked/ignored、暂存区、当前提交和完整历史通过固定版本 Gitleaks |
+| 2 | Zsh 语法与启动 | 所有启用 `.zsh` 文件通过 `zsh -n`；真实 HOME 的 login/interactive/non-login interactive 场景正常 |
+| 2 | 分层与补全 | public < company < local；覆盖链可诊断；Oh My Zsh/`compinit` 只初始化一次 |
+| 2 | 应用与回滚边界 | symlink 目标正确；manifest、哈希、备份目标与配置回滚动作完整；软件新增项只生成 cleanup 预览；`./install.sh apply` 未调用退役 |
+| 2 | ARM 替代项 | apply 会话为 arm64；ARM Homebrew 和替代二进制架构正确；退役账本与 readiness 状态已生成 |
+| 2 | 本地密钥 | 诊断/报告无密钥值；本地例外文件与父目录权限正确；不可逆密钥操作有独立确认 |
+| 3 | 阶段门禁 | 只接受本机已验证的顶层阶段 2 manifest；机器 ID、账本和计划未过期 |
+| 3 | Intel 归类 | 每项已归类；服务、cask、数据已确认；替代命令架构验证通过；无 `unresolved` |
+| 3 | 不可逆退役 | retire 会话为 arm64；真实 TTY 精确确认；仅执行 reviewed manifest；不递归删除 `/usr/local` |
+| 3 | 最终 PATH 与记录 | PATH 去重、优先级正确、无活动 Intel Homebrew 路径；retired record 可查询 |
 
 ### 19.2 性能诊断（仅建议）
 
@@ -771,6 +1087,7 @@ dotfiles homebrew retired
 - 个人仓库使用明确版本的 GitHub 托管 ARM macOS runner（例如 `macos-26`，实施时再次核对可用标签），不使用个人 self-hosted runner。
 - 公司仓库由公司获批 CI 调用同一验证命令；暂未配置时在发布报告标记缺失，但本地验证仍执行。
 - CI 覆盖 Zsh 语法、目录 schema、插件 revision、Brewfile 语法/重复项、隔离 HOME、plan/apply/幂等/rollback、manifest、README 双语结构和 Gitleaks。
+- CI 检查 `stage0-candidate/v1` 目标路径/格式、受管 `.zsh`/Brewfile 的结构化同行注释字段、不支持注释文件的 sidecar 覆盖、固定 TSV 表头、前置阶段 0 审查追溯和已落库路径中不存在 `defer/unresolved`。
 - CI 不安装全部 cask、不改真实系统偏好、不访问真实公司服务、不读取真实 Keychain、不执行真实 Intel 卸载。
 - ShellCheck 只检查真正使用 `sh/bash/dash/ksh` 的脚本；不得用 Bash 方言误检 Zsh。若仓库全为 Zsh，则不运行 ShellCheck。
 
@@ -795,30 +1112,50 @@ dotfiles homebrew retired
 5. README 中英两版的命令与安全警告是否同步。
 6. License 是否只覆盖公开仓库内容。
 7. Git remote、Actions、issue/PR 模板、artifact 是否不含私有信息。
-8. 所有 CI 是否通过，本机最终 ARM 验收是否通过。
+8. 顶层阶段 1 的所有 CI、隔离 HOME 和退役 fixture 是否通过；如有参考机器的端到端结果，是否明确标注为单机证据而不是其他用户的完成条件。
+9. 由前置阶段 0 生成的内容是否都有人审决策，最终落库文件是否可追溯到候选哈希与 accept/revise，以及 public 同行注释/sidecar 本身是否不泄露公司或本机信息。
 
-通过后也只能建议发布；仓库可见性必须由用户手工修改。
+顶层阶段 1 的公开发布不以任何用户完成顶层阶段 2/3 为前置；否则新用户将无法先获取仓库再执行本地流程。通过发布关卡后也只能建议发布；仓库可见性必须由用户手工修改。
 
 ## 22. 实施时待填数据（不是设计分歧）
 
-以下信息应在阶段 0/1 由用户或只读盘点提供，不允许硬编码假设：
+以下信息必须按顶层阶段区分，不允许为了提前宣称某个阶段完成而硬编码假设。
+
+前置阶段 0 由仓库维护者当前机器的只读盘点提供：
+
+- 实际 Zsh 启动文件与 source 链、现有 Brewfile/Homebrew 项目、插件、补全、函数、工具管理器和命令解析状态。
+- 每个项目的功能、最佳实践结论、建议/替代方案、建议归属和验证方式。
+- 顶层阶段 1 目标文件的“可由现状生成候选”或“需要新建”状态。
+- public/company 候选文件、local-only/retire/unresolved 仓库外产物和每项人审 accept/revise/reject/defer 决策。
+
+上述信息中的本机结果只用于生产和审查仓库候选文件，不能被当作其他用户的默认环境或阶段 2/3 完成证据。
+
+顶层阶段 1 完成前必须固定：
+
+- 公开默认的 mise、uv、Bun、Node、pnpm、Go 精确版本或明确的无默认策略。
+- 最终插件/Oh My Zsh revision、Gitleaks 固定版本和 GitHub/CI 的实际 runner 标签与权限。
+- 公司仓库 schema、需同步文件集、兼容契约，以及实际公司 checkout 的“已同步”或“待同步”状态。
+
+顶层阶段 2 由每台机器的用户或只读盘点提供：
 
 - 个人仓库 URL/本地路径。
 - 公司仓库 URL/本地路径或 `skip`。
 - 实际 Brew formula/cask/service 清单。
-- mise、uv、Bun、Node、pnpm、Go 的精确目标版本。
 - 每个 API key 的变量名、消费命令和是否支持单命令 wrapper；不记录值。
 - 服务数据迁移步骤和验证命令。
 - 旧 `.zshrc` 每条有效配置的迁移归类。
-- 最终插件 revision 与 Gitleaks 固定版本。
-- GitHub/公司 CI 的实际 runner 标签与权限。
 
-这些数据缺失时可以完成代码骨架和只读 plan，但不得假装完成迁移或 Intel 退役。
+顶层阶段 2 的单机数据缺失不影响顶层阶段 1 的通用仓库交付；但它们缺失时只能生成受限的只读 plan，不得假装完成本地应用或 Intel 退役。
 
 ## 23. 主要风险与缓解
 
 | 风险 | 缓解 |
 |---|---|
+| 把工具 dump 或 Agent 推导结果直接当成阶段 1 文件 | dump/推导只作证据；统一转换为版本化候选契约，按目标路径和语法验证后才能人审 |
+| 前置阶段 0 的候选生成覆盖现有未提交工作 | 生成前检查 public/company 工作区；无冲突才写未提交工作树，有冲突则写仓库外受控 staging 并生成差异报告 |
+| 当前机器现状被误当成所有用户的默认配置 | 当前机器只提供候选证据；顶层阶段 1 用可移植默认、schema、fixture 和隔离 HOME 验证后才落库 |
+| 同行注释、sidecar、人审结论与最终文件漂移 | 使用固定字段、候选哈希和追溯表；CI 阻止缺字段、缺决策、过期哈希及 `defer/unresolved` 内容落库 |
+| 本机、密钥或公司信息经候选文件/注释泄露到公开仓库 | 写入 public 前先脱敏和归属分类；敏感原始输出不落盘；候选与注释同时经过人工复核和 Gitleaks |
 | 删除 Intel Homebrew 后遗漏命令 | 每项强制归类；替代路径和架构实际执行验证 |
 | `/usr/local` 中混有非 Homebrew 数据 | 官方卸载 + reviewed manifest；未知目录保留并报告 |
 | 数据库/服务中断 | 服务与数据单独 runbook，用户逐项确认启动 |
@@ -879,19 +1216,46 @@ dotfiles homebrew retired
 
 ## 26. 最终验收清单
 
-- [ ] 个人候选仓库仍为私有，来源和路径由用户确认；公司层可 `skip`。
-- [ ] README 为完整中英双语且是唯一 Agent 入口；不存在 `bootstrap.sh` 或 `AGENTS.md`。
-- [ ] `.zshenv` 未被接管；`.zprofile/.zshrc` 职责和加载顺序符合本文。
-- [ ] public < company < local 覆盖正确，保留名称无法被覆盖。
-- [ ] ARM Homebrew、mise、uv、Bun、Node、pnpm、Go 所有权无重叠。
-- [ ] Oh My Zsh/插件固定 revision，只有一次 compinit，语法高亮最后加载。
-- [ ] API key 已进入 Keychain wrapper 或获批本地例外；无全局明文 export。
-- [ ] 历史策略安全，旧历史命中已轮换并定向清理。
-- [ ] 三层 Brewfile 人工审查通过；Mac App Store 仅盘点。
-- [ ] 所有 Intel formula/cask/service/data 已归类且替代验证完成。
-- [ ] `./install.sh apply` 在退役处要求用户精确 TTY 确认。
-- [ ] `dotfiles homebrew retire-intel --apply` 成功，且 `retired` 可查询记录。
+### 前置阶段 0：现状盘点与待审候选文件
+
+- [ ] 已完整阅读诊断指南，并脱敏覆盖当前 Zsh 启动文件及 source 链、Brewfile/Homebrew、插件、补全、函数、工具管理器和顶层阶段 1 目标文件来源。
+- [ ] 当前源文件和拟生成候选文件均完成文件级最佳实践检查；不能因为当前可运行而直接判定适合落库。
+- [ ] 工具 dump、只读命令、Agent 推导和现有文件拆分都只作为证据；最终候选已转换为第 5.5 节 `stage0-candidate/v1` 的目标路径、格式、排序和字段，没有用原始 dump 替代配置文件。
+- [ ] 每个 Zsh、Brewfile、mise、uv、插件和公司候选文件都通过对应语法/schema 验证；`files.tsv` 与 `file-decisions.tsv` 使用固定表头且能覆盖所有候选项。
+- [ ] 每个可独立决策项都有功能、最佳实践结论、推荐/替代、归属和验证方式；支持注释的格式使用结构化同行注释，其他格式有完整 sidecar。
+- [ ] public/company 候选文件与顶层阶段 1 目标路径同构；local-only/retire/unresolved 内容留在仓库外，company 内容只进入获授权 checkout 或受控 staging。
+- [ ] public 候选文件及其注释不含密钥、公司或机器专属信息；原始敏感诊断输出没有保存。
+- [ ] 未修改真实 HOME、symlink 或已安装软件，未覆盖现有未提交工作，也未执行 `git add`、`git commit`、`git push`。
+- [ ] 每个候选文件和 `review/unresolved` 项都有人工作出的 `accept/revise/reject/defer` 决策；候选哈希、审查意见和目标路径可追溯。
+
+### 顶层阶段 1：仓库能力（当前交付门）
+
+- [ ] 只消费前置阶段 0 的 `accept/revise` 内容；`revise` 已按审查意见修改并重新验证，`reject/defer` 没有落库。
+- [ ] 已校验阶段 0 候选的 `contract_version`、目标相对路径和格式；契约不兼容时先版本化并按 `revise` 重新生成，没有静默转换。
+- [ ] 每个由前置阶段 0 产生的最终文件都能追溯到候选哈希、人审决策和顶层阶段 1 的修改/验证结果。
+- [ ] 本仓库包含第 6 节全部公开文件；不存在 `bootstrap.sh` 或 `AGENTS.md`。
+- [ ] README 为完整中英双语且是用户与 Agent 的唯一入口，清楚区分独立前置阶段 0 与三个顶层阶段。
+- [ ] `install.sh` 与 `bin/dotfiles` 在仓库内形成顶层阶段 2 的 plan/apply/verify/rollback 闭环和独立的顶层阶段 3 retire 入口。
+- [ ] `./install.sh apply` 的代码路径绝不会调用 Intel Homebrew 退役；退役只能由 `./install.sh retire-intel --apply` 显式发起。
+- [ ] 公司仓库 schema、需同步文件契约和脱敏 fixture 已完成；实际公司 checkout 的“已同步/待同步/skip”状态如实记录。
+- [ ] `.zshenv` 未被接管；`.zprofile/.zshrc`、public < company < local、保留名称、补全所有权和工具所有权已用 fixture 验证。
+- [ ] Oh My Zsh、插件、Gitleaks 和需固定的工具都有明确版本/revision，不使用 `latest`。
+- [ ] 隔离 HOME 的 syntax/plan/apply/幂等/verify/rollback、公司启用/`skip` 和退役 fixture 全部通过，且没有修改真实 HOME/Homebrew。
+- [ ] CI、Gitleaks 全历史扫描和公开发布报告通过；仓库可见性只由用户手工修改。
+
+### 顶层阶段 2：单机本地应用
+
+- [ ] 用户从顶层阶段 1 的仓库运行 `./install.sh`，完成个人/公司来源配置和只读盘点。
+- [ ] 现有配置已备份，`~/.zprofile`、`~/.zshrc` 等 symlink 目标正确，三层加载与覆盖链可诊断。
+- [ ] ARM Homebrew、mise、uv、Bun、Node、pnpm、Go 所有权无重叠；Oh My Zsh/`compinit`/插件加载正确。
+- [ ] API key 已进入 Keychain wrapper 或获批本地例外；不可逆密钥操作经过独立确认。
+- [ ] 三层 Brewfile 已人工审查，Intel formula/cask/service/data 账本和 retirement-readiness 报告已生成。
+- [ ] `./install.sh verify` 通过本地配置检查，manifest 明确标记“本地配置完成、Intel Homebrew 未退役”。
+
+### 顶层阶段 3：单机 Intel Homebrew 退役
+
+- [ ] 用户先单独运行 `./install.sh retire-intel`，且它只消费本机已验证的顶层阶段 2 manifest/账本。
+- [ ] 所有 Intel formula/cask/service/data 已归类，无 `unresolved`，ARM 替代项经实际路径/架构/版本验证。
+- [ ] `./install.sh retire-intel --apply` 由用户在真实 TTY 亲自输入精确确认短语，执行过程不递归删除 `/usr/local`。
 - [ ] 临时 Intel 兼容文件已移除，最终活动 PATH 无 Intel Homebrew。
-- [ ] 真实 ARM 本机验证、隔离 HOME 测试、CI 和 Gitleaks 全历史扫描通过。
-- [ ] 备份/manifest 可审计；密钥清除和 Intel 退役的不可逆边界已记录。
-- [ ] 公开发布报告通过，并由用户单独手工决定是否公开。
+- [ ] `dotfiles homebrew retired` 可查询退役记录，官方卸载记录、manifest、retired inventory 和残留审计留在本地。
