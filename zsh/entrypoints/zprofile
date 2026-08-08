@@ -1,5 +1,0 @@
-# shellcheck shell=zsh
-typeset -g DOTFILES_PUBLIC_ROOT="${DOTFILES_PUBLIC_ROOT:-${${(%):-%N}:A:h:h:h}}" # 功能=定位公开配置根目录；最佳实践=rewrite；修改级别=一定要改；建议=从薄入口自身路径推导并允许测试覆盖；归属=public；验证=移动仓库后入口仍能定位 loader
-
-builtin source "$DOTFILES_PUBLIC_ROOT/zsh/lib.zsh" || return 1 # 功能=加载统一公共运行时；最佳实践=rewrite；修改级别=一定要改；建议=入口只加载按原文件章节组织的集中运行时；归属=public；验证=zsh -l 启动无业务配置副本
-dotfiles_source_phase profile # 功能=按 public-company-local 顺序加载登录配置；最佳实践=rewrite；修改级别=一定要改；建议=可选层缺失时静默跳过；归属=public；验证=来源追踪显示固定覆盖顺序
