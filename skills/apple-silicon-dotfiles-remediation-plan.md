@@ -1,7 +1,7 @@
 # Apple Silicon Dotfiles 整改、迁移与 Intel Homebrew 退役实施计划
 
 > 状态：已确认的实施级规格（尚未实施；当前交付重点是前置阶段 0 与顶层阶段 1）<br>
-> 版本：1.3<br>
+> 版本：1.4<br>
 > 日期：2026-08-08<br>
 > 适用目标：先建设可复用的 dotfiles 公开仓库与公司层文件契约，再由每个 Apple Silicon macOS 用户独立完成本地配置和 Intel Homebrew 退役<br>
 > 文档用途：交给实施 Agent 或人工维护者，先完成独立前置阶段 0，再严格按“仓库能力 → 本地应用 → 不可逆退役”三个顶层阶段执行。
@@ -11,13 +11,15 @@
 本项目有一个独立前置阶段 0，以及三个顶层实施阶段；顺序不得颠倒：
 
 ```text
-前置阶段 0：盘点当前机器，分类并生成待人工审查的候选文件
-  → 顶层阶段 1：根据审查结论建设并 commit 可复用仓库能力（当前主目标）
-    → 顶层阶段 2：每个用户/每台机器应用本地配置
-      → 顶层阶段 3：每台机器单独预览并退役 Intel Homebrew
+前置阶段 0 / 操作 A：只读诊断并给出 Zsh 修改建议（禁止导出候选配置）
+  → 人工审查 Zsh 修改建议
+    → 前置阶段 0 / 操作 B：单独导出当前设备配置为待审候选文件
+      → 顶层阶段 1：根据审查结论建设并 commit 可复用仓库能力（当前主目标）
+        → 顶层阶段 2：每个用户/每台机器应用本地配置
+          → 顶层阶段 3：每台机器单独预览并退役 Intel Homebrew
 ```
 
-- **前置阶段 0 是仓库生产的输入阶段，不计入三个顶层实施阶段。** 它结合 [Zsh 配置诊断与优化指南](./zshrc-diagnostics-guide.md) 读取当前机器，将 `.zshrc`、Brewfile/已安装项与其他目标文件拆分、注释、分类，检查原文件和候选文件是否符合最佳实践，并生成不得直接 commit 的候选文件集与审查报告。
+- **前置阶段 0 是仓库生产的输入阶段，不计入三个顶层实施阶段。** 它必须拆成两个不可合并的操作：先结合 [Zsh 配置诊断与优化指南](./zshrc-diagnostics-guide.md) 只读分析 `.zshrc` 及其 source 链，生成 Zsh 修改建议且不导出候选配置；建议经人工确认后，再单独读取 Brewfile/已安装项与其他配置，把已确认的 Zsh 建议和设备现状转换为符合阶段 1 格式的待审候选文件。
 - **顶层阶段 1 是当前主交付目标。** 它以前置阶段 0 产物的人工审查结论为输入，在本仓库中建成通用公开层、`install.sh`、`bin/dotfiles`、测试、文档、安全保护，并在获批的公司仓库中更新需同步文件；只有此阶段可以 stage/commit 已审查文件。
 - **顶层阶段 2 是单机操作。** 用户 clone 或更新顶层阶段 1 的仓库后，从该仓库运行 `./install.sh`，完成只读盘点、本地计划、备份、symlink、配置分层、ARM 替代工具和验证；此阶段不允许卸载 Intel Homebrew。
 - **顶层阶段 3 是独立的不可逆单机操作。** 只有顶层阶段 2 验证通过并生成完整退役账本后，用户才能显式发起预览和正式退役。
@@ -50,6 +52,8 @@
 - **公司层**：公司批准的私有配置仓库，可在没有访问权限的机器上跳过。
 - **本地层**：只存在于当前机器、无 Git/云同步的私有覆盖。
 - **候选文件**：前置阶段 0 从当前机器现状生成的建议版配置；它必须先经人工审查，不是已批准仓库内容。
+- **Zsh 修改建议**：前置阶段 0 第一段只读诊断产生的逐项建议；它说明当前行为、问题、建议改法、归属和验证，但不是配置文件，也不得触发配置导出。
+- **当前设备配置导出**：前置阶段 0 第二段独立操作；它只消费已完成人审的 Zsh 修改建议和脱敏设备证据，并生成与顶层阶段 1 目标路径、格式和 schema 一致的候选文件，不等于复制原始配置或 dump。
 - **同行注释**：在目标格式安全支持注释时，紧跟配置项的结构化说明；至少包含功能、最佳实践结论、推荐/替代方案和建议归属。
 - **仓库能力**：顶层阶段 1 交付的公开层代码、公司层契约、命令入口、测试、文档和安全规则；它不包含任何用户的本机执行结果。
 - **本地应用**：顶层阶段 2，只在当前机器建立配置、symlink、ARM 替代项和可回滚状态，不卸载 Intel Homebrew。
@@ -59,19 +63,21 @@
 
 ### 3.1 目标
 
-1. **先完成前置阶段 0。** 依据诊断指南盘点当前 `.zshrc/.zprofile/.zshenv`、source 链、Brewfile/已安装项、插件、工具管理器和其他顶层阶段 1 目标文件；逐项说明功能、最佳实践结论、替代方案与 public/company/local-only/retire/unresolved 建议归属。
-2. 前置阶段 0 生成与顶层阶段 1 目标树同构的未提交公开/公司候选文件，以及仓库外的 local-only/退役/未决项清单；所有候选文件必须经人工审查，不得由生成器直接 stage、commit 或 push。
-3. **再完成顶层阶段 1。** 人工对前置阶段 0 的每项结论做 accept/revise/reject/defer 决策，根据结果更新本仓库和获批公司仓库的最终文件，再经测试与安全检查后 commit。
-4. 顶层阶段 1 的 README、`install.sh`、`bin/dotfiles`、schema、fixture 和 CI 形成自闭环：新用户只需取得该仓库，即可规划、应用、验证和回滚顶层阶段 2，并单独预览和执行顶层阶段 3。
-5. Zsh 启动文件边界清楚、模块化、幂等、可诊断，公开、公司、本地三层按固定顺序覆盖，并且只有一次补全初始化。
-6. 顶层阶段 2 在每台机器上完成本地收敛：`./install.sh apply` 只做备份、symlink、配置分层和已计划的 ARM 替代安装；配置变更可回滚，新增软件只提供 cleanup 预览；密钥轮换/明文清除等不可逆安全操作必须分别确认；本阶段不自动进入 Homebrew 退役。
-7. 顶层阶段 3 仅处理 Intel Homebrew 的最终退役；它必须消费顶层阶段 2 的已验证 manifest 和退役账本，不得重新猜测机器状态。
-8. 每个用户都能使用同一份顶层阶段 1 产物，在自己的本地环境独立执行顶层阶段 2 和 3，互不共享本机状态、密钥、备份或退役记录。
-9. 当前交互 shell、Homebrew、常用 CLI 和语言工具链最终全部以 `arm64` 原生方式运行，最终活动 PATH 不包含 Intel Homebrew 路径。
-10. Brewfile 是人工维护的“期望状态”；mise 与 uv 使用明确版本，不使用 `latest`。
-11. 密钥不进入仓库、Git 历史、诊断输出或长期普通备份；旧 shell 历史中的疑似密钥完成轮换和定向清理。
-12. Intel Homebrew 的 formula、cask、服务和数据目录全部有明确处置状态，可用一条受保护命令正式退役，并能查询退役记录。
-13. 公开前同时完成人工审查、本地/CI Gitleaks 全历史扫描和托管平台安全检查。
+1. **先完成前置阶段 0 的 Zsh 修改建议。** 依据诊断指南盘点当前 `.zshrc/.zprofile/.zshenv` 及完整 source 链，逐项说明功能、问题、最佳实践结论、建议改法、归属和验证；本操作只输出报告，不创建 public/company/local-only 候选配置文件。
+2. 人工先对每条 Zsh 修改建议做 accept/revise/reject/defer；只有 accept/revise 建议可以进入配置导出，reject 不导出对应项，defer 保持未决并阻止对应项导出。
+3. **再单独执行前置阶段 0 的当前设备配置导出。** 盘点 Brewfile/已安装项、插件、工具管理器和其他顶层阶段 1 目标文件，消费已确认的 Zsh 建议，生成与顶层阶段 1 目标树同构的未提交 public/company 候选文件，以及仓库外的 local-only/retire/unresolved 清单。
+4. 人工再对导出的候选文件做 accept/revise/reject/defer；所有候选必须经语法/schema、安全和人审检查，不得由导出操作直接 stage、commit 或 push。
+5. **最后进入顶层阶段 1。** 根据候选文件审查结果更新本仓库和获批公司仓库的最终文件，再经测试与安全检查后 commit。
+6. 顶层阶段 1 的 README、`install.sh`、`bin/dotfiles`、schema、fixture 和 CI 形成自闭环：新用户只需取得该仓库，即可规划、应用、验证和回滚顶层阶段 2，并单独预览和执行顶层阶段 3。
+7. Zsh 启动文件边界清楚、模块化、幂等、可诊断，公开、公司、本地三层按固定顺序覆盖，并且只有一次补全初始化。
+8. 顶层阶段 2 在每台机器上完成本地收敛：`./install.sh apply` 只做备份、symlink、配置分层和已计划的 ARM 替代安装；配置变更可回滚，新增软件只提供 cleanup 预览；密钥轮换/明文清除等不可逆安全操作必须分别确认；本阶段不自动进入 Homebrew 退役。
+9. 顶层阶段 3 仅处理 Intel Homebrew 的最终退役；它必须消费顶层阶段 2 的已验证 manifest 和退役账本，不得重新猜测机器状态。
+10. 每个用户都能使用同一份顶层阶段 1 产物，在自己的本地环境独立执行顶层阶段 2 和 3，互不共享本机状态、密钥、备份或退役记录。
+11. 当前交互 shell、Homebrew、常用 CLI 和语言工具链最终全部以 `arm64` 原生方式运行，最终活动 PATH 不包含 Intel Homebrew 路径。
+12. Brewfile 是人工维护的“期望状态”；mise 与 uv 使用明确版本，不使用 `latest`。
+13. 密钥不进入仓库、Git 历史、诊断输出或长期普通备份；旧 shell 历史中的疑似密钥完成轮换和定向清理。
+14. Intel Homebrew 的 formula、cask、服务和数据目录全部有明确处置状态，可用一条受保护命令正式退役，并能查询退役记录。
+15. 公开前同时完成人工审查、本地/CI Gitleaks 全历史扫描和托管平台安全检查。
 
 ### 3.2 首期非目标
 
@@ -89,7 +95,7 @@
 
 | 阶段 | 完成标志 |
 |---|---|
-| 0. 现状盘点与候选文件 | 当前配置和安装项已脱敏盘点；原文件与候选文件均完成最佳实践评估；每项有功能、推荐/替代、归属和验证信息；公开/公司候选文件已生成但未 stage/commit；local-only/retire/unresolved 仍在仓库外；人工审查结论已记录 |
+| 0. 建议与配置导出 | Zsh 修改建议已先独立生成并完成人审，建议阶段没有导出候选配置；随后才单独导出当前设备配置，原文件与候选文件均完成最佳实践评估；公开/公司候选文件已生成但未 stage/commit；local-only/retire/unresolved 仍在仓库外；候选文件已完成第二次人审 |
 | 1. 仓库能力 | 本仓库的公开文件、公司同步契约、安装/诊断/回滚/退役命令、隔离 HOME fixture、CI、中英 README 和密钥扫描全部通过；无需修改真实 HOME 或卸载软件即可验收 |
 | 2. 本地应用 | 本机 symlink、三层加载、ARM 替代工具、密钥边界、备份与 manifest 验证通过；状态明确标记“本地配置完成，Intel Homebrew 未退役” |
 | 3. Intel Homebrew 退役 | 本机所有 Intel 项目已归类、替代已验证、退役成功，且可查询 retired record；本机达到下方最终 ARM 状态 |
@@ -112,20 +118,21 @@ dotfiles homebrew retired    -> 能查询本次退役清单、替代关系和结
 1. 前置阶段 0 对真实 HOME 和已安装软件只读；只能写受控本地状态目录、本公开仓库的未提交工作树，以及用户明确授权的公司仓库 checkout；不得建立 symlink、安装/卸载软件、轮换密钥或清理历史。
 2. 前置阶段 0 开始前必须检查公开/公司工作区；对已存在的未提交修改不得覆盖。如果候选文件与现有修改冲突，只能在受控 staging 目录中生成候选副本和差异报告。
 3. 前置阶段 0 在任何内容进入公开工作树前必须先脱敏并完成归属分类；company、local-only、retire、unresolved 内容和原始诊断输出不得写入公开候选文件。
-4. 前置阶段 0 不得运行 `git add`、`git commit`、`git push` 或修改仓库可见性。每个候选文件及其审查结论都必须经人工 accept/revise/reject/defer；只有顶层阶段 1 可以根据结论 stage/commit。
-5. 顶层阶段 1 的构建和 CI 只能操作仓库工作树、临时目录和隔离 HOME；不得修改开发者的真实 shell 入口或包管理器。
-6. `install.sh` 无参数运行只允许为顶层阶段 2 收集配置并生成计划，不得应用修改，也不执行前置阶段 0。
-7. `./install.sh apply` 只允许应用顶层阶段 2 的本地配置与已计划 ARM 替代项，必须在变更前展示计划标识和 manifest；可回滚配置与只提供 cleanup 预览的软件新增项必须分开记录；它不得调用任何 Intel Homebrew 卸载路径。
-8. 顶层阶段 2 的 `apply` 与顶层阶段 3 的 Intel 退役都必须在原生 `arm64` 会话运行。Rosetta/x86_64 日常 shell 只警告，不加载 Intel 回退。
-9. 顶层阶段 3 必须由单独的 retire 命令显式发起，并且只接受同一台机器上顶层阶段 2 产生且已验证的 manifest/退役账本。
-10. Intel 退役必须在真实 TTY 中展示清单，并由用户亲自输入精确确认短语；Agent、CI、管道输入和普通 `--yes` 都不得代替。
-11. 任何 Git 更新只允许 `fetch` 和显式的 `pull --ff-only`；禁止自动 `reset`、`stash`、force checkout 或覆盖未提交修改。
-12. 所有远程 URL 必须拒绝内嵌用户名、token 或密码；认证交给 SSH agent、Keychain 或托管平台 credential helper。
-13. 公司仓库默认只提供声明式内容。任何公司 hook 都必须进入计划、显示路径与摘要并单独获批。
-14. 日志、报告和 CI artifact 不得包含密钥值、Keychain 输出、完整环境变量或未脱敏的 shell 历史。
-15. 本地明文密钥例外文件必须是 `0600`，父目录必须是 `0700`；公司仓库不得保存任何密钥。
-16. 未归类的 Intel 程序、运行中服务、cask 或服务数据会阻止退役。
-17. 性能数据只给建议，不作为强制门槛；语法、加载、架构、密钥、权限、备份和 manifest 正确性才是阻断项。
+4. 前置阶段 0 的“Zsh 修改建议”和“当前设备配置导出”不得合并执行。建议操作只能写诊断/建议报告，禁止写 public/company/local-only 候选配置；配置导出必须校验建议报告哈希和人审状态，只消费 accept/revise 建议。建议重新生成或审查结论变化后，既有导出立即失效并必须重新执行。
+5. 前置阶段 0 不得运行 `git add`、`git commit`、`git push` 或修改仓库可见性。Zsh 建议和导出候选分别经人工 accept/revise/reject/defer；只有顶层阶段 1 可以根据候选审查结论 stage/commit。
+6. 顶层阶段 1 的构建和 CI 只能操作仓库工作树、临时目录和隔离 HOME；不得修改开发者的真实 shell 入口或包管理器。
+7. `install.sh` 无参数运行只允许为顶层阶段 2 收集配置并生成计划，不得应用修改，也不执行前置阶段 0。
+8. `./install.sh apply` 只允许应用顶层阶段 2 的本地配置与已计划 ARM 替代项，必须在变更前展示计划标识和 manifest；可回滚配置与只提供 cleanup 预览的软件新增项必须分开记录；它不得调用任何 Intel Homebrew 卸载路径。
+9. 顶层阶段 2 的 `apply` 与顶层阶段 3 的 Intel 退役都必须在原生 `arm64` 会话运行。Rosetta/x86_64 日常 shell 只警告，不加载 Intel 回退。
+10. 顶层阶段 3 必须由单独的 retire 命令显式发起，并且只接受同一台机器上顶层阶段 2 产生且已验证的 manifest/退役账本。
+11. Intel 退役必须在真实 TTY 中展示清单，并由用户亲自输入精确确认短语；Agent、CI、管道输入和普通 `--yes` 都不得代替。
+12. 任何 Git 更新只允许 `fetch` 和显式的 `pull --ff-only`；禁止自动 `reset`、`stash`、force checkout 或覆盖未提交修改。
+13. 所有远程 URL 必须拒绝内嵌用户名、token 或密码；认证交给 SSH agent、Keychain 或托管平台 credential helper。
+14. 公司仓库默认只提供声明式内容。任何公司 hook 都必须进入计划、显示路径与摘要并单独获批。
+15. 日志、报告和 CI artifact 不得包含密钥值、Keychain 输出、完整环境变量或未脱敏的 shell 历史。
+16. 本地明文密钥例外文件必须是 `0600`，父目录必须是 `0700`；公司仓库不得保存任何密钥。
+17. 未归类的 Intel 程序、运行中服务、cask 或服务数据会阻止退役。
+18. 性能数据只给建议，不作为强制门槛；语法、加载、架构、密钥、权限、备份和 manifest 正确性才是阻断项。
 
 ## 5. 仓库与本机目录模型
 
@@ -256,7 +263,20 @@ plugins=(git) # 功能=Git alias 与补全；最佳实践=pass；建议=保留 O
 - 功能和建议必须可验证，不得使用“常用工具”“优化体验”之类无法审查的空泛说法。
 - public 注释本身也必须可公开，不得因为二进制或密钥已移除就在注释中留下公司名、内部域名、账号或机器路径。
 
-人工审查必须为每个候选文件和每个 `review/unresolved` 项记录一个决策：
+阶段 0 必须进行两次彼此独立的人审，不能用一次“整体同意”同时代替建议审查和候选文件审查。
+
+第一次人审只处理 Zsh 修改建议，并决定配置导出可以消费什么：
+
+| 建议决策 | 含义 | 当前设备配置导出动作 |
+|---|---|---|
+| `accept` | 同意建议的改法、归属和验证方式 | 按建议生成对应 Zsh 候选内容 |
+| `revise` | 同意问题判断，但需要修改改法、归属或验证 | 先更新建议并重新检查，再按修订建议生成候选 |
+| `reject` | 不采用该建议 | 不导出该建议对应的候选项；不得静默保留原实现 |
+| `defer` | 证据或用户决策不足 | 保持未决并阻止对应项导出 |
+
+第一次人审的产物是 `reports/recommendation-decisions.tsv`。它必须记录建议报告哈希；任何建议内容或决策变化都会使已生成的候选文件失效。
+
+第二次人审发生在配置导出完成后，为每个候选文件和每个 `review/unresolved` 项记录一个候选决策：
 
 | 决策 | 含义 | 顶层阶段 1 动作 |
 |---|---|---|
@@ -265,22 +285,26 @@ plugins=(git) # 功能=Git alias 与补全；最佳实践=pass；建议=保留 O
 | `reject` | 不应进入目标仓库 | 不落库；按审查结论改归 local-only/retire 或删除候选副本 |
 | `defer` | 证据或用户决策不足 | 保持仓库外，列入 unresolved；不得先 commit 后补审 |
 
-前置阶段 0 产物与顶层阶段 1 提交建立可追溯关系：每个最终落库文件必须能指向候选文件哈希、人审决策和顶层阶段 1 中的修改/验证结果；追溯报告不得包含原始密钥或未脱敏内容。
+前置阶段 0 产物与顶层阶段 1 提交建立完整追溯关系：每个最终落库文件必须能指向 Zsh 建议项、建议报告哈希、第一次人审决策、导出候选文件哈希、第二次人审决策和顶层阶段 1 中的修改/验证结果；追溯报告不得包含原始密钥或未脱敏内容。
 
 ### 5.5 前置阶段 0 到顶层阶段 1 的候选文件格式契约
 
-前置阶段 0 的生成方式可以是工具原生 dump、只读命令组合、现有文件拆分，或 Agent 根据本机安装和实际命令来源生成；但生成方式不能决定最终格式。所有交给顶层阶段 1 的候选文件必须遵循本节 `stage0-candidate/v1` 契约：
+当前设备配置导出的生成方式可以是工具原生 dump、只读命令组合、现有文件拆分，或 Agent 根据本机安装和实际命令来源生成；但生成方式不能决定最终格式。所有交给顶层阶段 1 的候选文件必须遵循本节 `stage0-candidate/v2` 契约；v2 相比 v1 强制记录 Zsh 建议与第一次人审的追溯字段。
 
 ```text
 本机文件/安装状态
   → 原始证据（dump、list、source map；仅脱敏后保存在 source-inventory）
-    → 逐项分类与最佳实践判断
-      → 规范化候选文件（路径、格式和内容均与顶层阶段 1 目标一致）
-        → 语法/schema/安全验证
-          → 人工 accept/revise/reject/defer
+    → Zsh 修改建议（只写报告，禁止导出候选配置）
+      → 第一次人审 accept/revise/reject/defer
+        → 单独启动当前设备配置导出
+          → 规范化候选文件（路径、格式和内容均与顶层阶段 1 目标一致）
+            → 语法/schema/安全验证
+              → 第二次人审 accept/revise/reject/defer
 ```
 
-原始 dump 不是候选文件。即使工具能直接 dump，也必须经过以下规范化步骤：删除传递依赖和机器偶然状态、分离 public/company/local-only/retire/unresolved、固定版本或 revision、改成目标文件的稳定排序与语法、补全结构化注释，并执行目标格式验证。无法可靠转换的项目进入 `unresolved`，不得用猜测值或占位符生成看似完整的候选文件。
+Zsh 修改建议不是候选文件，建议操作结束时不得出现下方 staging/public、staging/company 或 local-only 配置树。当前设备配置导出必须是后续单独操作，并首先验证 `recommendation-decisions.tsv` 与当前建议报告哈希一致。
+
+原始 dump 也不是候选文件。即使工具能直接 dump，也必须在配置导出操作中经过以下规范化步骤：删除传递依赖和机器偶然状态、分离 public/company/local-only/retire/unresolved、固定版本或 revision、改成目标文件的稳定排序与语法、补全结构化注释，并执行目标格式验证。无法可靠转换的项目进入 `unresolved`，不得用猜测值或占位符生成看似完整的候选文件。
 
 候选目录必须镜像顶层阶段 1 的相对路径：
 
@@ -323,7 +347,7 @@ brew "zoxide" # 功能=智能目录跳转；最佳实践=replace；建议=替代
 cask "iterm2" # 功能=提供终端应用；最佳实践=review；建议=人审确认是否作为公共默认 GUI 应用；归属=public；验证=brew info --cask iterm2
 ```
 
-上例只说明阶段 1 所需的候选语法和同行注释格式，不代表三个项目已获准落库。归属仍为 `unresolved` 的项目只能进入仓库外报告，不能进入 public/company 候选文件；归属为 public/company 但最佳实践结论是 `review` 的项目可以进入待审候选，但必须在 0D 获得 `accept/revise` 才能由顶层阶段 1 落库。
+上例只说明阶段 1 所需的候选语法和同行注释格式，不代表三个项目已获准落库。归属仍为 `unresolved` 的项目只能进入仓库外报告，不能进入 public/company 候选文件；归属为 public/company 但最佳实践结论是 `review` 的项目可以进入待审候选，但必须在 0E 获得 `accept/revise` 才能由顶层阶段 1 落库。
 
 mise 候选必须是可直接被阶段 1 使用的 TOML，并固定实际版本：
 
@@ -353,19 +377,25 @@ python-downloads = "manual" # 功能=限制隐式下载；最佳实践=pass；�
 
 #### 5.5.2 追溯文件的固定表头
 
+`reports/recommendation-decisions.tsv` 的第一行固定为：
+
+```text
+recommendation_id\tsource_locator\tfunction\tfinding\trecommendation\tclassification\tverification\trecommendation_report_sha256\trecommendation_decision\treview_note
+```
+
 `manifest/files.tsv` 的第一行固定为：
 
 ```text
-contract_version\tsource_kind\tsource_locator\tgenerator\traw_evidence_sha256\ttarget_repository\ttarget_path\tformat\tcandidate_sha256\tclassification\tbest_practice\treview_decision\tfinal_path
+contract_version\tsource_kind\tsource_locator\tgenerator\traw_evidence_sha256\trecommendation_ids\trecommendation_report_sha256\ttarget_repository\ttarget_path\tformat\tcandidate_sha256\tclassification\tbest_practice\treview_decision\tfinal_path
 ```
 
 `reports/file-decisions.tsv` 的第一行固定为：
 
 ```text
-target_repository\ttarget_path\titem_locator\tfunction\tbest_practice\trecommendation\tclassification\tverification\treview_decision\treview_note
+target_repository\ttarget_path\titem_locator\trecommendation_ids\tfunction\tbest_practice\trecommendation\tclassification\tverification\treview_decision\treview_note
 ```
 
-上述 `\t` 表示一个真实 tab，文件中不得保存为反斜杠加字母 `t`。`generator` 只允许 `dump-normalized`、`agent-derived`、`source-split` 或 `manual`；它用于说明生成方式，不降低目标格式要求。`target_repository` 只允许 `public`、`company`、`local-only` 或 `none`，其中 retire/unresolved 等无候选目标的报告项使用 `none`。`classification` 使用 public/company/local-only/retire/unresolved，`best_practice` 和 `review_decision` 使用第 5.4 节枚举。阶段 0 初次生成时允许 `review_decision` 和 `final_path` 为空；0D 结束时必须填充 `review_decision`，只有顶层阶段 1 实际落库后才填写 `final_path`。
+上述 `\t` 表示一个真实 tab，文件中不得保存为反斜杠加字母 `t`。`recommendation_decision` 是配置导出前的第一次人审，`review_decision` 是导出后的候选文件人审，两者不得复用同一字段或互相推导。Zsh 候选必须填写 `recommendation_ids` 和 `recommendation_report_sha256`；非 Zsh 候选允许这两个字段为空，但仍需完成候选人审。`generator` 只允许 `dump-normalized`、`agent-derived`、`source-split` 或 `manual`；它用于说明生成方式，不降低目标格式要求。`target_repository` 只允许 `public`、`company`、`local-only` 或 `none`，其中 retire/unresolved 等无候选目标的报告项使用 `none`。`classification` 使用 public/company/local-only/retire/unresolved，两个决策字段使用第 5.4 节枚举。配置导出开始前必须填充 Zsh 项的 `recommendation_decision`；候选初次生成时允许 `review_decision` 和 `final_path` 为空，0E 结束时必须填充 `review_decision`，只有顶层阶段 1 实际落库后才填写 `final_path`。
 
 ## 6. 公开候选仓库目标结构
 
@@ -686,7 +716,7 @@ company/macos/Brewfile        # 可选
 ```
 
 - 三个文件都是人工维护的期望状态。
-- `brew bundle dump` 只生成带时间戳的审计输入，不直接覆盖任何正式 Brewfile。
+- `brew bundle dump` 只能在前置阶段 0D 的独立配置导出操作中生成带时间戳的审计输入；0A–0C 禁止运行。dump 不得直接覆盖任何正式或候选 Brewfile。
 - 应用前检查重复 tap/formula/cask、层间冲突和 owner 归属。
 - Homebrew 是滚动发布管理器，Brewfile 不设计 lockfile；需固定版本的语言运行时由 mise/uv 管理。
 - `brew bundle cleanup` 默认只预览；不在通用 `apply` 中使用 `--force`。
@@ -748,14 +778,16 @@ dotfiles homebrew retired                # 查询已退役项目和替代记录
 
 README 必须同时提供完整中文与完整英文正文，并使用相同章节编号、命令块和安全警告。Agent 流程固定为：
 
-1. 先判断当前任务是“前置阶段 0 现状盘点/候选文件”、“顶层阶段 1 审查后落库”，还是“使用已交付仓库执行单机顶层阶段 2/3”；不得把盘点或仓库建设任务当成修改真实 HOME 的授权，也不得把前置阶段 0 的未审候选文件当作已交付配置。
-2. 完整阅读 README，检查架构、Git 工作区和来源配置。
-3. 顶层阶段 2 只能从无参数 `./install.sh` 或 `./install.sh plan` 开始。
-4. 把顶层阶段 2 的变更、风险、备份、manifest 和阻断项报告给用户；获得确认后运行 `./install.sh apply`。
-5. 运行 `./install.sh verify`，交付顶层阶段 2 的 manifest 和报告，然后停止；不得因为本地应用成功就自动启动顶层阶段 3。
-6. 只有用户单独提出或明确确认进入顶层阶段 3 时，才运行 `./install.sh retire-intel` 生成最终预览。
-7. 正式退役必须再次报告不可逆边界，并让用户亲自在真实 TTY 中通过 `./install.sh retire-intel --apply` 输入精确短语。
-8. 退役后再次运行 `verify`，交付 retired record、最终报告和后续建议。
+1. 先判断当前任务是“前置阶段 0 的 Zsh 修改建议”、“建议人审后的当前设备配置导出”、“顶层阶段 1 候选审查后落库”，还是“使用已交付仓库执行单机顶层阶段 2/3”；不得在 Zsh 建议任务中顺带导出候选配置，不得绕过第一次人审启动导出，也不得把未审候选文件当作已交付配置。
+2. 如果任务是 Zsh 修改建议，只生成建议报告和哈希，报告后停止；不得运行 dump/export，不得创建候选配置树。
+3. 如果任务是当前设备配置导出，先校验建议 run-id、报告哈希和第一次人审，再单独导出并在候选文件待第二次人审时停止；不得继续进入顶层阶段 1 commit。
+4. 完整阅读 README，检查架构、Git 工作区和来源配置。
+5. 顶层阶段 2 只能从无参数 `./install.sh` 或 `./install.sh plan` 开始。
+6. 把顶层阶段 2 的变更、风险、备份、manifest 和阻断项报告给用户；获得确认后运行 `./install.sh apply`。
+7. 运行 `./install.sh verify`，交付顶层阶段 2 的 manifest 和报告，然后停止；不得因为本地应用成功就自动启动顶层阶段 3。
+8. 只有用户单独提出或明确确认进入顶层阶段 3 时，才运行 `./install.sh retire-intel` 生成最终预览。
+9. 正式退役必须再次报告不可逆边界，并让用户亲自在真实 TTY 中通过 `./install.sh retire-intel --apply` 输入精确短语。
+10. 退役后再次运行 `verify`，交付 retired record、最终报告和后续建议。
 
 README 必须明确禁止 Agent 自动创建远程仓库、自动改仓库可见性、自动信任公司 hook、自动 force Git 或代替用户确认不可逆卸载。
 
@@ -768,15 +800,21 @@ README 必须明确禁止 Agent 自动创建远程仓库、自动改仓库可见
 ```text
 ~/.local/state/dotfiles/stage0/<run-id>/manifest/files.tsv
 ~/.local/state/dotfiles/stage0/<run-id>/reports/inventory.md
+~/.local/state/dotfiles/stage0/<run-id>/reports/zsh-recommendations.md
+~/.local/state/dotfiles/stage0/<run-id>/reports/recommendation-decisions.tsv
+~/.local/state/dotfiles/stage0/<run-id>/reports/export-report.md
 ~/.local/state/dotfiles/stage0/<run-id>/reports/file-decisions.tsv
-~/.local/state/dotfiles/stage0/<run-id>/reports/best-practices.md
+~/.local/state/dotfiles/stage0/<run-id>/reports/zsh-best-practices.md
+~/.local/state/dotfiles/stage0/<run-id>/reports/export-best-practices.md
 ~/.local/state/dotfiles/stage0/<run-id>/reports/review-decisions.tsv
 ~/.local/state/dotfiles/stage0/<run-id>/reports/unresolved.md
 ```
 
-`files.tsv` 必须使用第 5.5.2 节固定表头，记录契约版本、来源类别、脱敏来源定位、生成方式、原始证据哈希、候选目标仓库、候选相对路径、格式、候选 SHA-256、归属、最佳实践结论、人审决策和顶层阶段 1 最终提交路径。对于不支持注释的格式，`file-decisions.tsv` 使用第 5.5.2 节固定表头，作为同行注释的 sidecar 替代。
+`zsh-recommendations.md` 是第一次操作的唯一主交付物；`recommendation-decisions.tsv` 记录第一次人审，并以建议报告 SHA-256 锁定被审内容。两者完成前不得创建 `files.tsv` 或候选文件树。
 
-顶层阶段 1 的每个最终提交项必须在 `review-decisions.tsv` 中有 `accept` 或 `revise` 决策；`reject`、`defer` 或缺少决策的项不得落库。
+`files.tsv` 必须使用第 5.5.2 节固定表头，记录契约版本、来源类别、脱敏来源定位、生成方式、原始证据哈希、关联建议 ID/报告哈希、候选目标仓库、候选相对路径、格式、候选 SHA-256、归属、最佳实践结论、候选人审决策和顶层阶段 1 最终提交路径。对于不支持注释的格式，`file-decisions.tsv` 使用第 5.5.2 节固定表头，作为同行注释的 sidecar 替代。
+
+顶层阶段 1 的每个最终提交项必须在 `review-decisions.tsv` 中有 `accept` 或 `revise` 候选决策；Zsh 项还必须关联 `recommendation-decisions.tsv` 中的 `accept/revise` 建议决策和匹配的建议报告哈希。任一审查为 `reject/defer`、缺少决策或追溯哈希失配时不得落库。
 
 顶层阶段 2/3 使用单机运行产物：
 
@@ -900,49 +938,72 @@ dotfiles homebrew retired
 
 下文先定义一个独立前置阶段 0，再定义三个顶层实施阶段。数字后的字母是该阶段内部的子阶段，不是新的顶层阶段。
 
-### 前置阶段 0：盘点当前机器并生成待审候选文件
+### 前置阶段 0：先提出 Zsh 修改建议，再单独导出当前设备配置
 
-本阶段是仓库生产的前置步骤，由仓库维护者在一台现有机器上执行，不是每个终端用户的安装步骤。它不计入三个顶层实施阶段，不通过 `install.sh` 执行。
+本阶段是仓库生产的前置步骤，由仓库维护者在一台现有机器上执行，不是每个终端用户的安装步骤。它不计入三个顶层实施阶段，不通过 `install.sh` 执行。Zsh 修改建议与配置导出是两个独立操作：可以在不同时间、不同 Agent turn 中执行，必须有不同的开始条件、输出目录状态和完成标志。
+
+实施可以由 Agent 直接执行，也可以在顶层阶段 1 后补充维护者工具；无论实现方式如何，都必须暴露两个不同的操作意图。若提供命令，接口至少等价于：
+
+```text
+stage0 zsh-recommend
+stage0 export-config --recommendation-run <run-id> --recommendation-sha256 <sha256>
+```
+
+禁止提供会把二者自动串联的 `stage0 all`、`--continue-to-export` 或类似入口。`export-config` 必须由维护者在第一次人审结束后重新显式发起。
 
 #### 0A：只读发现与脱敏现状清单
 
 - 完整阅读诊断指南，检查当前 `.zshenv`、`.zprofile`、`.zshrc`、`.zlogin`、其全部 source 链、权限、symlink 和启动场景。
 - 脱敏收集 PATH/fpath、环境变量名称、alias、function、wrapper、补全、插件、主题、历史策略和工具激活。
-- 盘点现有 Brewfile 与 Intel/ARM Homebrew 的 tap/formula/leaf/cask/service/data，以及 mise、uv、Bun、Node、pnpm、Go、Python、NVM、pyenv、pipx 等所有权。
-- 可以运行工具自身的只读 list/dump 功能，也可以由 Agent 根据本机安装、配置和命令实际来源形成证据；所有输出先作为原始证据，记录 `generator` 和脱敏哈希，不得直接冒充顶层阶段 1 目标文件。
+- 为后续导出预先脱敏盘点现有 Brewfile 与 Intel/ARM Homebrew 的 tap/formula/leaf/cask/service/data，以及 mise、uv、Bun、Node、pnpm、Go、Python、NVM、pyenv、pipx 等所有权，但本子阶段不得生成这些配置的候选文件。
+- 只能运行不会生成配置文件的只读 inspect/list/status 命令，或由 Agent 读取现有配置和命令实际来源形成证据；本子阶段禁止 `brew bundle dump` 及其他会写出配置文件的 dump/export 功能。脱敏证据记录来源和哈希，但不得触发候选导出。
 - 查找顶层阶段 1 目标树中已经有当前来源的文件，并列出尚无当前来源、需要顶层阶段 1 新建的 README、安装器、schema、测试和 CI 等文件。
 - 密钥与历史只记录类别、脱敏来源、命中数和不可逆指纹，不记录值。
 
 产物：脱敏 `inventory.md`、source map、已安装项清单、目标文件覆盖矩阵和敏感信息处置清单。
 
-#### 0B：逐项功能、最佳实践、替代方案与归属评估
+#### 0B：只生成 Zsh 修改建议
 
-- 对每个安装项和可独立决策的配置项说明实际功能，不根据名称猜测。
-- 对“当前源文件”做文件级最佳实践检查，记录语法、边界、幂等性、架构、安全、所有权、可移植性、性能和可公开性问题。
-- 对每个项目评估“保留、改写、替代、移除或待决”，给出推荐方案、理由、风险与验证方式。
-- 对每项给出 public/company/local-only/retire/unresolved 建议归属；归属不明确的内容不得默认放入 public。
+- 只分析 `.zshenv`、`.zprofile`、`.zshrc`、`.zlogin` 和完整 source 链；对每个可独立决策的 Zsh 项说明当前功能与实际命令来源，不根据名称猜测。
+- 做文件级和逐项最佳实践检查，记录语法、启动文件职责、加载顺序、幂等性、PATH/fpath、补全、插件、架构、安全、所有权、可移植性、性能和可公开性问题。
+- 对每项给出“保留、改写、替代、移除或待决”建议，说明建议代码形态、理由、风险、public/company/local-only/retire/unresolved 归属和验证方式。
+- 每条建议分配稳定 `recommendation_id`，并生成整份建议报告 SHA-256，便于后续导出精确引用。
+- 本子阶段只能写 `inventory.md`、`zsh-recommendations.md`、`zsh-best-practices.md` 和未决报告；不得创建或修改 staging/public、staging/company、local-only 候选配置树，也不得把建议直接改写回当前 `.zshrc`。
 
-产物：`best-practices.md`、`file-decisions.tsv`、替代方案矩阵和 unresolved 清单。
+产物：`zsh-recommendations.md`、`zsh-best-practices.md`、建议报告 SHA-256 和 Zsh unresolved 清单。完成标志为 `zsh_recommendations=ready_for_review`，不是“配置已导出”。
 
-#### 0C：生成与目标仓库同构的候选文件
+#### 0C：第一次人审——确认 Zsh 修改建议
 
-- 把旧单体 Zsh 配置按 `.zprofile`/`.zshrc` 职责和 profile.d/pre.d/rc.d/wrapper 模块拆分为候选文件。
-- 将已安装项转换为经审阅待选的分层 Brewfile、mise/uv 精确版本、插件 catalog/revision 和工具所有权配置；不得直接提交 `brew bundle dump` 输出。
-- 严格按第 5.5 节 `stage0-candidate/v1` 映射目标路径、文件格式、稳定排序、字段和固定表头；dump、Agent 推导和现有文件拆分得到的相同项目必须归一为同一种候选格式。
-- 对支持注释的候选 `.zsh`/Brewfile 等文件按第 5.4 节保留结构化同行注释；不支持注释的格式使用 sidecar 记录。
-- 对“拟生成候选文件”再次执行文件级最佳实践、目标格式语法/schema、敏感信息、内部信息和目标归属检查，避免把旧问题只是换个文件复制过去；验证失败的文件不得交给 0D 人审。
+- 审查者只查看 Zsh 现状、问题证据和修改建议，不在这次审查中批准尚未生成的候选文件。
+- 对每个 `recommendation_id` 记录 accept/revise/reject/defer；revise 必须先更新建议报告并重新计算哈希，reject 不允许导出对应项，defer 保持未决。
+- `recommendation-decisions.tsv` 必须引用当前 `zsh-recommendations.md` 的 SHA-256；建议或决策缺失、哈希不匹配时，配置导出不得开始。
+- 本次人审结束后仍不得存在由本 run 生成的候选配置树。
+
+产物：`recommendation-decisions.tsv` 和 `zsh_recommendations=reviewed` 门禁状态。
+
+#### 0D：单独导出当前设备配置
+
+- 必须由新的显式操作启动；首先验证 0C 完成状态、建议报告哈希和每条 Zsh 建议决策，不允许从 0B/0C 自动继续执行。
+- 只有本子阶段可以运行 `brew bundle dump` 等会生成配置文件的原生 dump/export 功能；输出必须先进入受控临时证据区并记录 `generator=dump-normalized`，随后规范化，不能直接成为候选文件。
+- 只把 accept/revise 的 Zsh 建议转换为候选：将旧单体配置按 `.zprofile`/`.zshrc` 职责和 profile.d/pre.d/rc.d/wrapper 模块拆分；reject/defer 项不得静默复制原实现。
+- 对 Brewfile、Homebrew 安装项、mise、uv、插件和其他设备配置逐项说明功能并评估最佳实践、替代方案与归属，再转换为经审阅待选的分层 Brewfile、精确版本和 catalog/revision；不得直接提交原始 dump。
+- 严格按第 5.5 节 `stage0-candidate/v2` 映射目标路径、文件格式、稳定排序、字段和固定表头；dump、Agent 推导和现有文件拆分得到的相同项目必须归一为同一种候选格式。
+- 对支持注释的候选 `.zsh`/Brewfile 等文件保留结构化同行注释；不支持注释的格式使用 sidecar。
+- 对拟生成候选再次执行文件级最佳实践、目标格式语法/schema、敏感信息、内部信息和归属检查；验证失败的文件不得进入 0E。
 - public 候选写入本仓库未提交工作树或受控 public staging；company 候选写入获授权 checkout 或受控 company staging；local-only/retire/unresolved 留在仓库外。
+- 每个 Zsh 候选项必须记录 `recommendation_id` 和建议报告哈希。重新运行 0B、修改 0C 决策或改变设备证据后，旧导出标记为 stale，不得交给顶层阶段 1。
 
-产物：public/company 候选文件树、local-only 候选文件、retire/unresolved 清单、候选文件语法/安全/最佳实践报告与 `files.tsv`。
+产物：public/company 候选文件树、local-only 候选文件、retire/unresolved 清单、`export-report.md`、`export-best-practices.md`、候选语法/安全报告和 `files.tsv`。完成标志为 `device_config_export=ready_for_review`。
 
-#### 0D：人工审查与顶层阶段 1 准入
+#### 0E：第二次人审——候选文件与顶层阶段 1 准入
 
 - 向审查者展示每个候选文件的来源摘要、diff、同行注释/sidecar、最佳实践结论、推荐替代和建议归属，不显示密钥值或未脱敏内容。
 - 审查者对每个候选文件和每个 `review/unresolved` 项记录 accept/revise/reject/defer。
 - 任何缺少审查决策、仍含敏感/公司信息的 public 内容、或者候选文件最佳实践检查未完成的项，都会阻止顶层阶段 1 对应文件落库。
+- 本次审查不能反向替代 0C 的建议审查；如果候选审查要求改变 Zsh 修改方案，必须回到 0B/0C 更新建议，然后重新执行 0D 导出。
 - 前置阶段 0 不执行 `git add/commit/push`；它的终态是“候选文件与人审结论已就绪”，不是“仓库已交付”。
 
-前置阶段 0 产物：脱敏现状 inventory、源/目标文件映射、public/company 待审候选文件、local-only/retire/unresolved 仓库外产物、原文件+候选文件最佳实践报告、替代方案矩阵、人审决策和追溯 manifest。其中只有获得 `accept/revise` 的 public/company 内容能成为顶层阶段 1 最终落库文件的输入。
+前置阶段 0 产物：脱敏现状 inventory、独立 Zsh 修改建议、建议人审决策、源/目标文件映射、独立配置导出报告、public/company 待审候选文件、local-only/retire/unresolved 仓库外产物、原文件+候选文件最佳实践报告、候选人审决策和追溯 manifest。其中只有来源建议与候选文件两次审查均满足门禁，且候选获得 `accept/revise` 的 public/company 内容，才能成为顶层阶段 1 最终落库文件的输入。
 
 ### 顶层阶段 1：建设公开仓库与公司同步契约（当前主目标）
 
@@ -955,7 +1016,7 @@ dotfiles homebrew retired
 - 用户自行创建或指定一个已存在的个人私有远程仓库；安装器不得自动创建远程仓库。
 - 确认本仓库是公开候选仓库；如需实际生成公司层文件，由用户提供获批的公司仓库 checkout，否则选择 `skip`。
 - 固定 public/company/local 覆盖关系、Zsh 加载阶段、保留名称、工具所有权、manifest schema 和不可逆边界。
-- 验证前置阶段 0 的 `contract_version`、`files.tsv`、最佳实践报告、人审决策和候选文件哈希完整；拒绝目标路径/格式不符合第 5.5 节、无决策、验证失败或已过期的候选输入。
+- 验证前置阶段 0 的 Zsh 建议报告/最佳实践报告与哈希、`recommendation-decisions.tsv`、独立 `export-report.md`/`export-best-practices.md`、`contract_version`、`files.tsv`、候选人审决策和候选文件哈希完整；拒绝两次审查未分离、建议/导出哈希不匹配、目标路径/格式不符合第 5.5 节、验证失败或已过期的候选输入。
 - 仓库建设只使用工作树、临时目录和隔离 HOME；不得把“建设仓库”理解为“获准改动当前机器”。
 
 产物：仓库 origin/权限检查报告、公司层契约或 `skip` 状态、实施边界、获准候选输入清单。
@@ -969,7 +1030,7 @@ dotfiles homebrew retired
 - 在本仓库建立公司仓库 schema、脱敏 fixture 和同步说明；如已提供获批公司 checkout，在该 checkout 生成第 7 节文件并验证，但不自动 push。
 - 所有需要固定的工具、OMZ、插件和 Gitleaks 版本都写入仓库；禁止 `latest`。
 
-产物：经人审结论更新的公开仓库文件、公司同步 schema/fixture/说明、如已授权则包含实际公司仓库文件集，以及候选哈希→审查决策→最终文件的追溯表。
+产物：经人审结论更新的公开仓库文件、公司同步 schema/fixture/说明、如已授权则包含实际公司仓库文件集，以及 Zsh 建议/第一次审查→配置导出→候选哈希/第二次审查→最终文件的追溯表。
 
 #### 1C：在隔离环境验证自闭环
 
@@ -1044,7 +1105,7 @@ dotfiles homebrew retired
 - 验证 `dotfiles homebrew retired` 能查询旧路径/架构、替代路径/架构、处置状态和时间。
 - 交付官方卸载记录、manifest、retired inventory 和残留 `/usr/local` 审计；不将这些本机产物提交回公开仓库。
 
-阶段门禁是：前置阶段 0 没有完成原文件+候选文件最佳实践评估、归属分类、候选文件与人审决策时，顶层阶段 1 不得将对应配置 stage/commit；顶层阶段 1 的仓库能力未通过隔离测试时，不得用于顶层阶段 2；顶层阶段 2 未验证或退役账本存在阻断项时，不得进入顶层阶段 3。
+阶段门禁是：前置阶段 0 没有先独立完成 Zsh 修改建议和第一次人审时，不得执行当前设备配置导出；配置导出没有单独完成格式/安全验证和第二次人审时，顶层阶段 1 不得将对应配置 stage/commit；顶层阶段 1 的仓库能力未通过隔离测试时，不得用于顶层阶段 2；顶层阶段 2 未验证或退役账本存在阻断项时，不得进入顶层阶段 3。
 
 ## 19. 检查与验收矩阵
 
@@ -1053,11 +1114,14 @@ dotfiles homebrew retired
 | 阶段 | 类别 | 必须验证 |
 |---|---|---|
 | 0 | 现状覆盖 | Zsh 启动文件/source 链、PATH/fpath、变量、alias/function/wrapper、补全/插件、Brewfile 与 Homebrew/mise/uv/语言工具所有权已脱敏盘点；顶层阶段 1 目标文件有源/无源状态已列出 |
-| 0 | 最佳实践 | 当前源文件与拟生成候选文件均已按诊断指南完成语法、边界、幂等、架构、安全、所有权、可移植性和可公开性评估 |
-| 0 | 候选格式 | dump/Agent/现有文件等证据均已归一为 `stage0-candidate/v1`；候选路径镜像顶层阶段 1，文件通过对应语法/schema，追溯 TSV 使用固定表头；原始 dump 未冒充候选文件 |
+| 0 | Zsh 建议独立性 | 先只生成逐项 Zsh 修改建议和建议报告哈希；该操作没有生成/修改任何候选配置树，也没有改写真实 Zsh 文件 |
+| 0 | 建议人审门禁 | 每条 Zsh 建议有独立 accept/revise/reject/defer，`recommendation-decisions.tsv` 匹配当前建议报告哈希；导出只消费 accept/revise |
+| 0 | 配置导出独立性 | 导出由单独操作显式启动，不从建议流程自动继续；Zsh 候选能追溯到建议 ID/哈希，建议变化会令导出失效 |
+| 0 | 最佳实践 | 当前源文件、Zsh 修改建议和拟生成候选文件均已按诊断指南完成语法、边界、幂等、架构、安全、所有权、可移植性和可公开性评估 |
+| 0 | 候选格式 | dump/Agent/现有文件等证据均已归一为 `stage0-candidate/v2`；候选路径镜像顶层阶段 1，文件通过对应语法/schema，追溯 TSV 使用固定表头；原始 dump 未冒充候选文件 |
 | 0 | 注释与归属 | 每个可决策项都有功能、最佳实践结论、推荐/替代、public/company/local-only/retire/unresolved 归属和验证；支持注释的文件使用同行注释，其他格式使用 sidecar |
 | 0 | 密钥与工作树 | public 候选不含公司/本地/密钥信息；原始敏感输出未保存；现有未提交工作未被覆盖；本阶段未执行 add/commit/push |
-| 0 | 人审准入 | 每个候选文件与 review/unresolved 项都有 accept/revise/reject/defer 决策；候选哈希、审查决策和目标路径可追溯 |
+| 0 | 候选人审准入 | 每个候选文件与 review/unresolved 项另有 accept/revise/reject/defer 决策；候选审查不能代替建议审查；完整两段追溯链成立 |
 | 1 | 仓库结构 | 公开目录、公司 schema/fixture、README、License、命令入口、测试与 CI 完整 |
 | 1 | 候选落库 | 只消费前置阶段 0 的 accept/revise 内容；revise 已重新验证；reject/defer 未落库；最终文件可追溯到候选哈希与人审决策 |
 | 1 | 隔离自闭环 | 临时 HOME 中的 plan/apply/幂等/verify/rollback 通过；retire 只使用 mock/fixture，不触碰真实 HOME/Homebrew |
@@ -1087,7 +1151,7 @@ dotfiles homebrew retired
 - 个人仓库使用明确版本的 GitHub 托管 ARM macOS runner（例如 `macos-26`，实施时再次核对可用标签），不使用个人 self-hosted runner。
 - 公司仓库由公司获批 CI 调用同一验证命令；暂未配置时在发布报告标记缺失，但本地验证仍执行。
 - CI 覆盖 Zsh 语法、目录 schema、插件 revision、Brewfile 语法/重复项、隔离 HOME、plan/apply/幂等/rollback、manifest、README 双语结构和 Gitleaks。
-- CI 检查 `stage0-candidate/v1` 目标路径/格式、受管 `.zsh`/Brewfile 的结构化同行注释字段、不支持注释文件的 sidecar 覆盖、固定 TSV 表头、前置阶段 0 审查追溯和已落库路径中不存在 `defer/unresolved`。
+- CI 检查 `stage0-candidate/v2` 目标路径/格式、Zsh 建议与第一次人审追溯、受管 `.zsh`/Brewfile 的结构化同行注释字段、不支持注释文件的 sidecar 覆盖、固定 TSV 表头、第二次人审追溯和已落库路径中不存在 `defer/unresolved`。
 - CI 不安装全部 cask、不改真实系统偏好、不访问真实公司服务、不读取真实 Keychain、不执行真实 Intel 卸载。
 - ShellCheck 只检查真正使用 `sh/bash/dash/ksh` 的脚本；不得用 Bash 方言误检 Zsh。若仓库全为 Zsh，则不运行 ShellCheck。
 
@@ -1113,7 +1177,7 @@ dotfiles homebrew retired
 6. License 是否只覆盖公开仓库内容。
 7. Git remote、Actions、issue/PR 模板、artifact 是否不含私有信息。
 8. 顶层阶段 1 的所有 CI、隔离 HOME 和退役 fixture 是否通过；如有参考机器的端到端结果，是否明确标注为单机证据而不是其他用户的完成条件。
-9. 由前置阶段 0 生成的内容是否都有人审决策，最终落库文件是否可追溯到候选哈希与 accept/revise，以及 public 同行注释/sidecar 本身是否不泄露公司或本机信息。
+9. 前置阶段 0 是否先独立完成 Zsh 建议及第一次人审、再单独导出配置并完成第二次人审；最终落库文件是否可追溯到建议 ID/哈希、两次决策和候选哈希，以及 public 同行注释/sidecar 本身是否不泄露公司或本机信息。
 
 顶层阶段 1 的公开发布不以任何用户完成顶层阶段 2/3 为前置；否则新用户将无法先获取仓库再执行本地流程。通过发布关卡后也只能建议发布；仓库可见性必须由用户手工修改。
 
@@ -1124,9 +1188,10 @@ dotfiles homebrew retired
 前置阶段 0 由仓库维护者当前机器的只读盘点提供：
 
 - 实际 Zsh 启动文件与 source 链、现有 Brewfile/Homebrew 项目、插件、补全、函数、工具管理器和命令解析状态。
-- 每个项目的功能、最佳实践结论、建议/替代方案、建议归属和验证方式。
+- 独立 Zsh 修改建议、建议报告哈希，以及每条建议的第一次人审决策。
+- 配置导出阶段中每个非 Zsh 项目的功能、最佳实践结论、建议/替代方案、建议归属和验证方式。
 - 顶层阶段 1 目标文件的“可由现状生成候选”或“需要新建”状态。
-- public/company 候选文件、local-only/retire/unresolved 仓库外产物和每项人审 accept/revise/reject/defer 决策。
+- 独立配置导出报告、public/company 候选文件、local-only/retire/unresolved 仓库外产物和候选文件的第二次人审决策。
 
 上述信息中的本机结果只用于生产和审查仓库候选文件，不能被当作其他用户的默认环境或阶段 2/3 完成证据。
 
@@ -1151,6 +1216,8 @@ dotfiles homebrew retired
 
 | 风险 | 缓解 |
 |---|---|
+| Agent 在给出 Zsh 建议时顺带导出或改写配置 | 建议与导出使用独立操作、产物和完成标志；建议阶段禁止候选树，导出必须验证第一次人审和建议报告哈希 |
+| Zsh 建议更新后仍沿用旧导出 | 候选记录建议 ID/报告哈希；建议或决策变化立即把导出标记为 stale，并强制重新导出 |
 | 把工具 dump 或 Agent 推导结果直接当成阶段 1 文件 | dump/推导只作证据；统一转换为版本化候选契约，按目标路径和语法验证后才能人审 |
 | 前置阶段 0 的候选生成覆盖现有未提交工作 | 生成前检查 public/company 工作区；无冲突才写未提交工作树，有冲突则写仓库外受控 staging 并生成差异报告 |
 | 当前机器现状被误当成所有用户的默认配置 | 当前机器只提供候选证据；顶层阶段 1 用可移植默认、schema、fixture 和隔离 HOME 验证后才落库 |
@@ -1216,23 +1283,27 @@ dotfiles homebrew retired
 
 ## 26. 最终验收清单
 
-### 前置阶段 0：现状盘点与待审候选文件
+### 前置阶段 0：Zsh 修改建议与独立配置导出
 
 - [ ] 已完整阅读诊断指南，并脱敏覆盖当前 Zsh 启动文件及 source 链、Brewfile/Homebrew、插件、补全、函数、工具管理器和顶层阶段 1 目标文件来源。
-- [ ] 当前源文件和拟生成候选文件均完成文件级最佳实践检查；不能因为当前可运行而直接判定适合落库。
-- [ ] 工具 dump、只读命令、Agent 推导和现有文件拆分都只作为证据；最终候选已转换为第 5.5 节 `stage0-candidate/v1` 的目标路径、格式、排序和字段，没有用原始 dump 替代配置文件。
+- [ ] 已先单独生成 `zsh-recommendations.md`：每条建议有稳定 ID、当前功能、问题证据、建议改法、归属和验证；此时没有生成候选配置树，也没有修改真实 Zsh 文件。
+- [ ] 每条 Zsh 建议已完成第一次 accept/revise/reject/defer 人审，`recommendation-decisions.tsv` 与建议报告 SHA-256 一致。
+- [ ] 当前设备配置导出是后续单独启动的操作；它没有从建议流程自动继续，只消费 accept/revise 建议，reject/defer 项未被静默复制。
+- [ ] 当前源文件、Zsh 修改建议和拟生成候选文件均完成文件级最佳实践检查；不能因为当前可运行而直接判定适合落库。
+- [ ] 工具 dump、只读命令、Agent 推导和现有文件拆分都只作为证据；最终候选已转换为第 5.5 节 `stage0-candidate/v2` 的目标路径、格式、排序和字段，没有用原始 dump 替代配置文件。
 - [ ] 每个 Zsh、Brewfile、mise、uv、插件和公司候选文件都通过对应语法/schema 验证；`files.tsv` 与 `file-decisions.tsv` 使用固定表头且能覆盖所有候选项。
+- [ ] 每个 Zsh 候选项都能追溯到建议 ID 和建议报告哈希；建议、第一次审查或设备证据变化后旧导出已标记失效并重新生成。
 - [ ] 每个可独立决策项都有功能、最佳实践结论、推荐/替代、归属和验证方式；支持注释的格式使用结构化同行注释，其他格式有完整 sidecar。
 - [ ] public/company 候选文件与顶层阶段 1 目标路径同构；local-only/retire/unresolved 内容留在仓库外，company 内容只进入获授权 checkout 或受控 staging。
 - [ ] public 候选文件及其注释不含密钥、公司或机器专属信息；原始敏感诊断输出没有保存。
 - [ ] 未修改真实 HOME、symlink 或已安装软件，未覆盖现有未提交工作，也未执行 `git add`、`git commit`、`git push`。
-- [ ] 每个候选文件和 `review/unresolved` 项都有人工作出的 `accept/revise/reject/defer` 决策；候选哈希、审查意见和目标路径可追溯。
+- [ ] 每个候选文件和 `review/unresolved` 项都完成了独立于建议审查的第二次 accept/revise/reject/defer 人审；建议 ID/哈希、两次审查、候选哈希和目标路径可追溯。
 
 ### 顶层阶段 1：仓库能力（当前交付门）
 
 - [ ] 只消费前置阶段 0 的 `accept/revise` 内容；`revise` 已按审查意见修改并重新验证，`reject/defer` 没有落库。
 - [ ] 已校验阶段 0 候选的 `contract_version`、目标相对路径和格式；契约不兼容时先版本化并按 `revise` 重新生成，没有静默转换。
-- [ ] 每个由前置阶段 0 产生的最终文件都能追溯到候选哈希、人审决策和顶层阶段 1 的修改/验证结果。
+- [ ] 每个由前置阶段 0 产生的最终文件都能追溯到 Zsh 建议 ID/哈希、第一次人审、独立配置导出、候选哈希、第二次人审和顶层阶段 1 的修改/验证结果。
 - [ ] 本仓库包含第 6 节全部公开文件；不存在 `bootstrap.sh` 或 `AGENTS.md`。
 - [ ] README 为完整中英双语且是用户与 Agent 的唯一入口，清楚区分独立前置阶段 0 与三个顶层阶段。
 - [ ] `install.sh` 与 `bin/dotfiles` 在仓库内形成顶层阶段 2 的 plan/apply/verify/rollback 闭环和独立的顶层阶段 3 retire 入口。
