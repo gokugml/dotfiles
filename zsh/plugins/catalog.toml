@@ -1,0 +1,79 @@
+schema_version = 1
+
+# 功能=提供 OMZ 框架与唯一补全初始化；最佳实践=rewrite；修改级别=一定要改；建议=仅官方 origin 且按用户审批每十三天自动检查更新；归属=public；验证=origin-update-mode-frequency 与离线启动通过
+[[plugins]]
+id = "oh-my-zsh"
+display_name = "Oh My Zsh"
+kind = "framework"
+default_selected = true
+reason = "提供主题、内置插件和唯一一次 compinit"
+pain_point = "当前单体配置缺少来源策略且补全重复初始化"
+source_url = "https://github.com/ohmyzsh/ohmyzsh.git"
+revision = "6f39351feff2126608ea696ca1ab9ba6b13cb77f"
+install_owner = "dotfiles-installer"
+dependencies = ["git", "zsh"]
+activation_phase = "framework"
+load_order = 100
+conflicts = ["second-compinit", "second-plugin-manager"]
+security_notes = "仅允许官方 origin；运行时自动更新是用户明确批准的例外"
+performance_notes = "每十三天最多执行一次上游更新检查"
+uninstall_steps = ["移除 checkout 后由公开入口降级为基础 shell"]
+update_policy = "official-auto"
+update_frequency_days = 13
+
+# 功能=提供 Git alias 与补全；最佳实践=pass；修改级别=建议修改；建议=保留当前内置插件并随 OMZ 官方基线；归属=public；验证=Git 补全与 alias 可用
+[[plugins]]
+id = "omz-git"
+display_name = "Oh My Zsh git"
+kind = "omz-builtin"
+default_selected = true
+reason = "保留当前使用的 Git 交互集成"
+pain_point = "缺少独立 catalog 说明"
+source_url = "https://github.com/ohmyzsh/ohmyzsh.git"
+revision = "6f39351feff2126608ea696ca1ab9ba6b13cb77f"
+install_owner = "oh-my-zsh"
+dependencies = ["oh-my-zsh", "git"]
+activation_phase = "framework"
+load_order = 110
+conflicts = []
+security_notes = "随受信任的 OMZ 官方 checkout 加载"
+performance_notes = "内置插件，无额外仓库"
+uninstall_steps = ["从 plugins 数组删除 git"]
+
+# 功能=按历史提供输入建议；最佳实践=pass；修改级别=建议修改；建议=由阶段 1 安装固定 commit 并在框架后激活；归属=public；验证=插件只 source 一次
+[[plugins]]
+id = "zsh-autosuggestions"
+display_name = "zsh-autosuggestions"
+kind = "external-zle-plugin"
+default_selected = true
+reason = "降低重复命令输入成本"
+pain_point = "当前配置没有轻量输入建议"
+source_url = "https://github.com/zsh-users/zsh-autosuggestions.git"
+revision = "e52ee8ca55bcc56a17c828767a3f98f22a68d4eb"
+install_owner = "dotfiles-installer"
+dependencies = ["git", "zsh"]
+activation_phase = "post-rc"
+load_order = 900
+conflicts = []
+security_notes = "只 checkout revisions.toml 固定 commit"
+performance_notes = "默认异步；大输入性能在阶段 1 fixture 验证"
+uninstall_steps = ["删除插件目录并取消激活"]
+
+# 功能=高亮交互命令语法；最佳实践=pass；修改级别=建议修改；建议=由阶段 1 安装固定 commit 且最后加载；归属=public；验证=所有 widget 后才注册高亮 hook
+[[plugins]]
+id = "zsh-syntax-highlighting"
+display_name = "zsh-syntax-highlighting"
+kind = "external-zle-plugin"
+default_selected = true
+reason = "输入阶段发现无效命令和语法问题"
+pain_point = "当前 shell 缺少即时语法反馈"
+source_url = "https://github.com/zsh-users/zsh-syntax-highlighting.git"
+revision = "db085e4661f6aafd24e5acb5b2e17e4dd5dddf3e"
+install_owner = "dotfiles-installer"
+dependencies = ["git", "zsh"]
+activation_phase = "post-rc-last"
+load_order = 999
+conflicts = ["plugins-loaded-after-syntax-highlighting"]
+security_notes = "只 checkout revisions.toml 固定 commit"
+performance_notes = "必须最后加载；启动耗时作为建议指标"
+uninstall_steps = ["删除插件目录并取消激活"]
