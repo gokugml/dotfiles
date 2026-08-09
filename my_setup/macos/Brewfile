@@ -1,16 +1,87 @@
+# AI-REVIEW: 功能=提供 AST 结构化代码搜索；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=在 ARM Homebrew 重装以替代 Intel 副本。
+# AI-REVIEW: 归属=personal；验证=command -v ast-grep 且 file 显示 arm64。
 brew "ast-grep"
+
+# AI-REVIEW: 功能=提供跨项目原生构建生成器；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=保留直接安装项并迁移到 ARM Homebrew。
+# AI-REVIEW: 归属=personal；验证=cmake --version 且命令来源为 /opt/homebrew。
 brew "cmake"
+
+# AI-REVIEW: 功能=提供 GitHub 命令行客户端；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=在 ARM Homebrew 重装并沿用凭证助手。
+# AI-REVIEW: 归属=personal；验证=gh auth status 且命令为 arm64。
 brew "gh"
+
+# AI-REVIEW: 功能=提供 Git 大文件扩展；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=迁移到 ARM Homebrew 后重新验证 filter。
+# AI-REVIEW: 归属=personal；验证=git lfs version 且 git lfs env 正常。
 brew "git-lfs"
+
+# AI-REVIEW: 功能=提供图形布局与 dot 渲染；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=保留直接工具并改由 ARM Homebrew 安装。
+# AI-REVIEW: 归属=personal；验证=dot -V 且命令为 arm64。
 brew "graphviz"
+
+# AI-REVIEW: 功能=托管 Bun、Node、pnpm 与 Gitleaks 精确版本；最佳实践=replace。
+# AI-REVIEW: 修改级别=一定要改；建议=由 ARM Homebrew 提供宿主，并作为唯一跨项目运行时版本管理器。
+# AI-REVIEW: 归属=personal；验证=mise doctor 与 my_setup/tooling/mise/10-public.toml 解析通过。
 brew "mise"
+# AI-RETIRE: Intel NVM 及直接安装的 Bun/Node/pnpm 在 mise 替代验证后进入 Stage 3；不保留活动 NVM PATH。
+
+# AI-REVIEW: 功能=提供 PDF 检查与渲染 CLI；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=迁移当前直接工具到 ARM Homebrew。
+# AI-REVIEW: 归属=personal；验证=pdftoppm -v 且命令为 arm64。
 brew "poppler"
+
+# AI-REVIEW: 功能=提供快速文本搜索；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=保留工作流并迁移到 ARM Homebrew。
+# AI-REVIEW: 归属=personal；验证=rg --version 且命令为 arm64。
 brew "ripgrep"
+
+# AI-REVIEW: 功能=提供现代 rsync 同步能力；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=保留当前直接工具并迁移到 ARM Homebrew。
+# AI-REVIEW: 归属=personal；验证=rsync --version 且来源为 /opt/homebrew。
 brew "rsync"
+
+# AI-REVIEW: 功能=把源代码渲染为图片；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=保留当前直接工具并迁移到 ARM Homebrew。
+# AI-REVIEW: 归属=personal；验证=silicon --version 且命令为 arm64。
 brew "silicon"
+
+# AI-REVIEW: 功能=提供 Temporal 开发 CLI；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=只迁移 CLI，不自动启停服务或迁移服务数据。
+# AI-REVIEW: 归属=personal；验证=temporal --version 且服务状态未变化。
 brew "temporal"
+
+# AI-REVIEW: 功能=提供终端复用；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=保留当前直接工具并迁移到 ARM Homebrew。
+# AI-REVIEW: 归属=personal；验证=tmux -V 且命令为 arm64。
 brew "tmux"
+
+# AI-REVIEW: 功能=提供目录树展示；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=保留当前直接工具并迁移到 ARM Homebrew。
+# AI-REVIEW: 归属=personal；验证=tree --version 且命令为 arm64。
 brew "tree"
+
+# AI-REVIEW: 功能=统一 Python 版本、项目环境和 Python CLI tool；最佳实践=replace。
+# AI-REVIEW: 修改级别=一定要改；建议=由 ARM Homebrew 提供宿主，并只管理 uv Python 与 uv tools。
+# AI-REVIEW: 归属=personal；验证=uv --version 且命令为 arm64。
 brew "uv"
+
+# AI-REVIEW: 功能=提供终端演示录制；最佳实践=replace。
+# AI-REVIEW: 修改级别=建议修改；建议=保留当前直接工具并迁移到 ARM Homebrew。
+# AI-REVIEW: 归属=personal；验证=vhs --version 且命令为 arm64。
 brew "vhs"
+
+# AI-REVIEW: 功能=提供智能目录跳转；最佳实践=replace。
+# AI-REVIEW: 修改级别=一定要改；建议=导入 autojump 数据后由 ARM zoxide 替代 Intel autojump。
+# AI-REVIEW: 归属=personal；验证=zoxide --version 且常用目录可跳转。
 brew "zoxide"
+# AI-RETIRE: Intel autojump 在数据迁移和 zoxide 验证后进入 Stage 3。
+
+# AI-RETIRE: Intel yarn 在 mise 管理的 pnpm 与项目兼容性验证后进入 Stage 3。
+# AI-MANUAL: fprobe、gcc 和 c-ares 的直接使用证据不足；不写入期望状态，确认项目依赖后再决定保留或退役。
+# AI-MANUAL: nginx、redis 及其配置/数据目录不得自动迁移或退役；需先确认服务用途和数据处置。
+# AI-MANUAL: Intel pre-commit formula 不等于仓库必须保留的 pre-commit 管理；先验证 .githooks/pre-commit 与 CI，再决定是否退役 formula。
+# AI-MANUAL: Cursor、Temurin、VS Code 扩展和 npm global CLI 已由原生 Dump 记录；是否成为可分享安装期望尚未确认，因此本轮不启用对应条目。

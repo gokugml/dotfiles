@@ -1,3 +1,6 @@
+# AI-REVIEW: 功能=提供 Zsh 框架、主题和基础库；最佳实践=固定上游 commit，禁用 shell 启动时自动更新。
+# AI-REVIEW: 修改级别=一定要改；建议=由安装器 checkout 固定 revision，并只 source 一次。
+# AI-REVIEW: 归属=personal；验证=Git HEAD 匹配 revision，离线 shell 启动不 fetch。
 [[plugins]]
 name = "oh-my-zsh"
 source = "https://github.com/ohmyzsh/ohmyzsh.git"
@@ -5,6 +8,9 @@ revision = "6f39351feff2126608ea696ca1ab9ba6b13cb77f"
 enabled = true
 load_order = 100
 
+# AI-REVIEW: 功能=提供 Oh My Zsh Git alias 与提示信息；最佳实践=复用同一 OMZ revision。
+# AI-REVIEW: 修改级别=建议修改；建议=只启用实际使用的 git 插件，不保留模板插件列表。
+# AI-REVIEW: 归属=personal；验证=插件路径存在且不会触发第二次 compinit。
 [[plugins]]
 name = "git"
 source = "oh-my-zsh/plugins/git"
@@ -12,6 +18,9 @@ revision = "6f39351feff2126608ea696ca1ab9ba6b13cb77f"
 enabled = true
 load_order = 110
 
+# AI-REVIEW: 功能=提供历史命令自动建议；最佳实践=固定独立上游 commit 并在 OMZ 后加载。
+# AI-REVIEW: 修改级别=建议修改；建议=保留当前插件选择，由安装器验证 revision。
+# AI-REVIEW: 归属=personal；验证=输入历史前缀时出现建议，Git HEAD 匹配 revision。
 [[plugins]]
 name = "zsh-autosuggestions"
 source = "https://github.com/zsh-users/zsh-autosuggestions.git"
@@ -19,6 +28,9 @@ revision = "e52ee8ca55bcc56a17c828767a3f98f22a68d4eb"
 enabled = true
 load_order = 900
 
+# AI-REVIEW: 功能=提供交互命令语法高亮；最佳实践=在所有 ZLE 插件之后最后加载。
+# AI-REVIEW: 修改级别=建议修改；建议=固定上游 commit，并保持最高 load_order。
+# AI-REVIEW: 归属=personal；验证=有效/无效命令高亮正常，Git HEAD 匹配 revision。
 [[plugins]]
 name = "zsh-syntax-highlighting"
 source = "https://github.com/zsh-users/zsh-syntax-highlighting.git"
