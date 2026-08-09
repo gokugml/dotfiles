@@ -227,7 +227,7 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 - [ ] smoke test、pre-commit、双语 README 和 CI 通过；
 - [ ] 未修改开发者真实 HOME 或软件；
 
-完成后进入 [Stage 2](./stage-2-target-machine-configuration-and-software-migration.md)。
+完成后进入 [Stage 2](./stage-2-target-machine-configuration-and-software-migration/SKILL.md)。
 
 ## 12. 未来 Skill 接口
 
