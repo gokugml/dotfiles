@@ -1,4 +1,4 @@
 interface:
   display_name: "Zsh 配置分析与修改建议"
-  short_description: "采集脱敏 Zsh 证据并依据内置最佳实践生成文件修改建议"
-  default_prompt: "使用 $analyze-zsh-configuration 分析当前源机器的 Zsh 配置并生成脱敏修改建议。"
+  short_description: "采集脱敏 Zsh 证据并生成结论一览表与分级修复建议"
+  default_prompt: "使用 $analyze-zsh-configuration 分析当前源机器的 Zsh 配置，生成含结论一览表、证据等级和脱敏修改建议的候选计划。"
