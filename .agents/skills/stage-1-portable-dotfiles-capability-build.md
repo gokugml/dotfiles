@@ -133,7 +133,7 @@ company-dotfiles/
 
 ### 6.3 退役入口
 
-`install.sh` 同时实现 Stage 3 的 `retire` 和 `retire --apply`，但不得从普通安装自动进入退役。具体行为以 [Stage 3](./stage-3-intel-homebrew-retirement.md) 为准。
+`install.sh` 同时实现 Stage 3 的 `retire` 和 `retire --apply`，但不得从普通安装自动进入退役。具体行为以 [Stage 3 Skill](./stage-3-intel-homebrew-retirement/SKILL.md) 为准。
 
 ## 7. 配置文件约定
 

@@ -13,7 +13,7 @@
 - [导出配置 AI Review Skill](./review-exported-dotfiles/SKILL.md)
 - [Stage 1：轻量 Dotfiles 能力建设](./stage-1-portable-dotfiles-capability-build.md)
 - [Stage 2：目标机器配置与软件迁移 Skill](./stage-2-target-machine-configuration-and-software-migration/SKILL.md)
-- [Stage 3：旧 Intel 软件退役](./stage-3-intel-homebrew-retirement.md)
+- [Stage 3：旧 Intel 软件退役 Skill](./stage-3-intel-homebrew-retirement/SKILL.md)
 
 [四阶段流程图](./steps.excalidraw) 是阶段职责和功能范围的首要来源。本契约用于补充安全与跨阶段一致性，不得扩张或改变图中的主流程。领域词汇以 [CONTEXT.md](../CONTEXT.md) 为准。
 
