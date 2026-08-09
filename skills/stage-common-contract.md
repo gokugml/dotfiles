@@ -6,9 +6,11 @@
 
 ## 1. 目的与权威顺序
 
-本文件只保存四个阶段真正共用的术语、目录、命令和安全边界。具体步骤由对应阶段文档定义：
+本文件只保存四个阶段真正共用的术语、目录、命令和安全边界。具体步骤由对应阶段 Skill 或文档定义：
 
-- [Stage 0：本地分析与配置导出](./stage-0-source-machine-analysis-and-export.md)
+- [Stage 0：源机器分析与配置导出编排 Skill](./stage-0-source-machine-analysis-and-export/SKILL.md)
+- [Zsh 配置分析与修改建议 Skill](./analyze-zsh-configuration/SKILL.md)
+- [导出配置 AI Review Skill](./review-exported-dotfiles/SKILL.md)
 - [Stage 1：轻量 Dotfiles 能力建设](./stage-1-portable-dotfiles-capability-build.md)
 - [Stage 2：应用分析结果](./stage-2-target-machine-configuration-and-software-migration.md)
 - [Stage 3：旧 Intel 软件退役](./stage-3-intel-homebrew-retirement.md)
@@ -18,7 +20,7 @@
 ## 2. 四阶段主线
 
 ```text
-Stage 0：dump.sh 原生导出到仓库 tmp/ → AI 就地审阅并评论 → AI 自检 → 用户一次确认
+Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 → Review Skill 审阅导出文件 → 跨结果自检 → 用户一次确认
   → Stage 1：建设 dump.sh、install.sh 与可复用仓库能力
     → Stage 2：AI 生成仓库版 Zsh → install.sh 安装 → verify
       → Stage 3：install.sh retire 预览 → 用户确认 → 退役与验证
@@ -109,7 +111,7 @@ company-dotfiles/
 
 - 文件权限 `0600`，父目录权限 `0700`；
 - 不进入 Git、云同步、普通备份、日志、报告、测试 fixture 或哈希输入；
-- `dump.sh` 不采集文件内容；`install.sh` 不打印、复制或持久化内容，只允许无输出的语法检查和正常 shell 加载；
+- Zsh Skill 的采集脚本只提取脱敏结构信号，`dump.sh` 不读取 Zsh 文件；两者都不采集 `parameters.zsh` 内容。`install.sh` 不打印、复制或持久化内容，只允许无输出的语法检查和正常 shell 加载；
 - Keychain 是可选增强，不是安装前置条件。
 
 ## 6. 软件与插件边界
@@ -117,7 +119,7 @@ company-dotfiles/
 - Homebrew 管理系统 CLI、原生库和 GUI cask。
 - mise 管理需要固定版本的跨项目 runtime 和 CLI。
 - uv 管理 Python 版本、环境和 Python tool。
-- Stage 0 优先调用各管理器只读、可回放的原生 Dump；没有 Dump 时使用结构化只读输出，由 AI 转为目标配置。
+- `dump.sh` 优先调用各管理器只读、可回放的原生 Dump；没有 Dump 时使用结构化只读输出，由导出配置 Review Skill 转为目标配置。
 - 原生命令如果会维护或写入仓库外状态，Stage 0 必须退化为只读元数据检查。
 - personal 与 company 分别声明自己的 Brewfile 和 tooling；完全相同的项目去重，可覆盖字段按 company → personal 处理，管理器或版本所有权不兼容时停止并报告。
 - personal 与 company 各自最多使用一份 `plugins.toml`，同一条目内记录来源、固定 revision、启用状态和加载顺序。
@@ -133,7 +135,7 @@ company-dotfiles/
 ./install.sh retire --apply
 ```
 
-- `dump.sh` 属于 Stage 0，只读收集分析输入，并只在当前仓库被忽略的 `tmp/` 生成同构候选文件。
+- `dump.sh` 属于 Stage 0，只读导出软件、tooling 和插件证据及同构候选文件；Zsh 证据由 Zsh Skill 内部脚本独立采集。
 - 无参数 `install.sh` 等于安装 apply。执行前即时展示摘要，并以默认 `N` 的 `y/N` 确认。
 - `install.sh verify` 验证 Zsh、symlink、架构、软件来源和插件状态。
 - `install.sh retire` 属于 Stage 3，只读预览。
@@ -145,7 +147,7 @@ company-dotfiles/
 - 覆盖本地 Zsh 入口前，只为已有 `.zsh` 文件或 symlink 创建保留类型与目标的副本。
 - 安装器不得覆盖 Git 工作树中的未提交冲突。
 - 密钥、公司内容和本机路径不得进入 public 输出。
-- Stage 0 只清理自己生成的 `tmp/dump.md`、`tmp/my_setup/`、执行期间的 `tmp/.runtime/` 和明确生成的可选 `tmp/company/`，不得清空未知临时内容。
+- Stage 0 只清理自己生成的 `tmp/zsh-evidence.md`、`tmp/dump.md`、`tmp/my_setup/`、执行期间的 `tmp/.runtime/` 和明确生成的可选 `tmp/company/`，不得清空未知临时内容。
 - `dump.sh` 必须覆盖子进程的临时目录和可重定向缓存位置；只读使用 Homebrew 已有 metadata cache 时必须禁用 refresh、自动更新和 description 查询，使原生工具采集不会写入仓库外目录。
 - 服务、数据库和 GUI 应用数据只检测并报告，不自动迁移。
 - 未处理服务数据、未知 Intel 项、项目级依赖或未验证 ARM 替代不得删除。
@@ -165,7 +167,7 @@ company-dotfiles/
 - local 权限正确且未被 Git 跟踪；
 - PATH 无活动 Intel Homebrew 路径；
 - Brewfile、mise/uv 和 `plugins.toml` 可解析；
-- Stage 0 候选文件中的每个直接期望项目都有功能、最佳实践、修改级别、建议、归属和验证评论；
+- 导出配置 Review Skill 范围内的每个直接期望项目都有功能、最佳实践、修改级别、建议、归属和验证评论；
 - 已安装命令的实际路径、版本和架构符合期望；
 - `install.sh` 再次执行不会重复破坏已有配置；
 - retire 预览不包含未知项目和未处理数据。
@@ -175,6 +177,7 @@ company-dotfiles/
 ## 10. 文档和 Skill 约束
 
 - 阶段文档只描述本阶段输入、主流程、输出和停止边界。
-- 详细 Zsh 诊断按需读取 [Zsh 配置诊断与优化指南](./zshrc-diagnostics-guide.md)，不得复制回每个阶段。
+- Zsh 修改建议只由 Zsh Skill 生成；按需读取其内置的 [Zsh 配置诊断与优化指南](./analyze-zsh-configuration/references/zshrc-diagnostics-guide.md)，不得复制回编排或 Review Skill。
+- 导出配置 Review Skill 只审阅 `dump.sh` 已导出的软件、tooling 和插件文件，不读取 Zsh 证据或修改 `zsh-repair-plan.md`。
 - 后续转化为真正 Skill 时，`SKILL.md` 只保留触发条件和核心工作流；确定性检查再沉淀为 scripts。
 - README 保持完整中文和英文正文，pre-commit 与 CI 负责验证两种语言的结构同步及基础安全。

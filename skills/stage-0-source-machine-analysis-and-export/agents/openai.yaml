@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stage 0 源机器分析与导出编排"
+  short_description: "编排 Zsh 修改建议、配置导出、AI Review 与一次确认"
+  default_prompt: "使用 $stage-0-source-machine-analysis-and-export 编排 Zsh 分析、配置导出与审阅，并在写入前集中请求确认。"

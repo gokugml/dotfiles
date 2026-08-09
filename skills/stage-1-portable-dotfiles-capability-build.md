@@ -12,7 +12,7 @@
 
 ## 2. 目标
 
-1. 固化 `dump.sh` 的只读采集能力。
+1. 固化 `dump.sh` 的软件/tooling/plugin 只读导出能力，以及 Zsh Skill 的独立脱敏证据采集能力。
 2. 生成单一 `install.sh`，同时承担 Stage 2 安装和 Stage 3 退役入口。
 3. 建立 `my_setup/`、company 和 local 的轻量契约。
 4. 用最小 smoke test 验证关键路径，不建设额外管理 CLI。
@@ -69,7 +69,7 @@ company-dotfiles/
 
 ## 5. `dump.sh`
 
-`dump.sh` 满足 Stage 0 文档的只读边界，并作为面向其他用户的稳定采集入口：
+`dump.sh` 满足 Stage 0 编排 Skill 的只读边界，并作为面向其他用户的软件、tooling 和插件稳定导出入口：
 
 ```text
 ./dump.sh
@@ -78,12 +78,13 @@ company-dotfiles/
 实现要求：
 
 - 使用 macOS 自带工具和可选的已安装管理器；
+- 不读取或分析 Zsh 启动文件；Zsh 证据由 `analyze-zsh-configuration` Skill 内部脚本独立采集；
 - 缺少某个工具时记录 `not-installed`，不自动安装；
 - 原生 Dump/List 只写当前仓库被 Git 忽略的 `tmp/` 候选树，不使用仓库外临时目录；
 - 输出目录与 `my_setup/` 和可选 company 目标结构对齐，便于 AI 就地审阅；
 - 有可回放原生 Dump 时优先使用；只有结构化 List/Status 时经脱敏写入 `tmp/dump.md`，由 AI 转成目标配置；
 - 强制把子进程临时文件和可重定向缓存写入执行期间的 `tmp/.runtime/`，结束前清理，不继承仓库外 `TMPDIR`；Homebrew 只读使用已有 metadata cache 时禁用 refresh、自动更新和 description 查询；
-- AI 可调整候选条目，并为每个直接期望项目补齐功能、最佳实践、修改级别、建议、归属和验证评论；
+- 导出完成后由 `review-exported-dotfiles` Skill 调整候选条目，并为每个直接期望项目补齐功能、最佳实践、修改级别、建议、归属和验证评论；
 - 不读取 local 密钥值，不修改 HOME，不调用 `install.sh`；
 - 只清理本次明确生成的候选文件，不清空 `tmp/` 中的未知内容；
 - 退出时清楚区分成功、部分证据缺失和安全失败。
@@ -177,7 +178,7 @@ README 必须包含完整中文和完整英文正文，并保持：
 至少解释：
 
 1. 四阶段流程；
-2. `dump.sh` 是 Stage 0 只读入口；
+2. Stage 0 分别使用 Zsh 分析 Skill、`dump.sh` 和导出配置 Review Skill；
 3. 无参数 `install.sh` 会在确认后安装；
 4. local 可以保存密钥值但永不进入 Git；
 5. `retire` 不会被普通安装触发；
@@ -200,6 +201,7 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 本地只保留最小 `tests/smoke.zsh`，CI 可以复用同一验证入口。CI 至少覆盖：
 
 - `dump.sh` 只读行为；
+- Zsh 证据采集脚本不 source 启动文件、不输出值，只写 `tmp/zsh-evidence.md`；
 - Zsh 和脚本语法；
 - 安装摘要与默认 `N` 行为；
 - 临时 HOME 中的 Zsh 副本和 symlink；
@@ -216,7 +218,7 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 ## 11. 完成条件
 
 - [ ] 目标结构轻量且无被删除的旧组件；
-- [ ] `dump.sh` 只读并可供 Stage 0 使用；
+- [ ] `dump.sh` 只导出软件/tooling/plugin，Zsh 采集与导出 Review 已拆分为独立 Skill；
 - [ ] `install.sh` 具备安装、verify 和 retire 命令；
 - [ ] 安装默认展示摘要并使用 `y/N`；
 - [ ] company/personal/local 加载顺序正确；

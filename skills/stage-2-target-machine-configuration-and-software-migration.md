@@ -115,7 +115,7 @@ local 固定为：
 - 父目录 `0700`；
 - 文件 `0600`；
 - 不进入 Git、云同步、普通备份、日志或测试；
-- `dump.sh` 和 AI 不采集其内容；`install.sh` 不打印、复制或持久化内容，只允许语法检查和正常 shell 加载；
+- Zsh 证据采集脚本、`dump.sh` 和 AI 都不采集其内容；`install.sh` 不打印、复制或持久化内容，只允许语法检查和正常 shell 加载；
 - local 文件只在 personal 主配置之后 source；
 - Keychain 可以由用户自行采用，但不是默认流程。
 

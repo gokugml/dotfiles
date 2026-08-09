@@ -1,8 +1,8 @@
 #!/bin/zsh
 
-# Stage 0 read-only collector. Native tool dumps and sanitized evidence are
-# written only to the repository's ignored tmp/ candidate tree. AI review is a
-# separate step and is never invoked from this script.
+# Stage 0 software and tooling collector. Native tool dumps and sanitized
+# evidence are written only to the repository's ignored tmp/ candidate tree.
+# Zsh analysis and AI review are separate skills and are never invoked here.
 
 emulate -L zsh
 setopt NO_UNSET PIPE_FAIL NULL_GLOB
@@ -131,108 +131,6 @@ classify_path() {
       print -r -- '<redacted-path>'
       ;;
   esac
-}
-
-zsh_file_signals() {
-  local file="$1"
-  /usr/bin/awk '
-    function emit(kind, value) {
-      if (value != "") print "- " kind ": line " NR " " value
-    }
-    {
-      line = $0
-      sub(/[[:space:]]*#.*/, "", line)
-
-      source_line = line
-      if (source_line ~ /^[[:space:]]*(source|\.)[[:space:]]+/) {
-        sub(/^[[:space:]]*(source|\.)[[:space:]]+/, "", source_line)
-        sub(/[[:space:];].*/, "", source_line)
-        gsub(/[\047\042]/, "", source_line)
-        emit("source", source_line)
-      }
-
-      alias_line = line
-      if (alias_line ~ /^[[:space:]]*alias[[:space:]]+/) {
-        sub(/^[[:space:]]*alias[[:space:]]+/, "", alias_line)
-        sub(/=.*/, "", alias_line)
-        emit("alias", alias_line)
-      }
-
-      function_line = line
-      if (function_line ~ /^[[:space:]]*function[[:space:]]+/) {
-        sub(/^[[:space:]]*function[[:space:]]+/, "", function_line)
-        sub(/[[:space:]\(\{].*/, "", function_line)
-        emit("function", function_line)
-      } else if (function_line ~ /^[[:space:]]*[A-Za-z_][A-Za-z0-9_-]*[[:space:]]*\(\)[[:space:]]*\{/) {
-        sub(/^[[:space:]]*/, "", function_line)
-        sub(/[[:space:]]*\(\).*/, "", function_line)
-        emit("function", function_line)
-      }
-
-      variable_line = line
-      sub(/^[[:space:]]*export[[:space:]]+/, "", variable_line)
-      if (variable_line ~ /^[A-Za-z_][A-Za-z0-9_]*=/) {
-        sub(/=.*/, "", variable_line)
-        emit("variable", variable_line)
-      }
-    }
-  ' "$file" | sanitize_stream
-}
-
-zsh_file_summary() {
-  local file="$1"
-  local label="${file:t}"
-  local kind='missing'
-  local target='-'
-  local permissions='-'
-  local syntax='not-checked'
-  local intel_hits=0
-  local compinit_hits=0
-  local completion_hits=0
-  local plugin_hits=0
-  local load_context='unknown'
-
-  case "$label" in
-    .zshenv) load_context='all-zsh-invocations' ;;
-    .zprofile) load_context='login-shell' ;;
-    .zshrc) load_context='interactive-shell' ;;
-    .zlogin) load_context='login-shell-after-zshrc' ;;
-  esac
-
-  if [[ -L "$file" ]]; then
-    kind='symlink'
-    target="$(classify_path "$(readlink "$file")")"
-  elif [[ -f "$file" ]]; then
-    kind='file'
-  elif [[ -e "$file" ]]; then
-    kind='other'
-  fi
-
-  if [[ -e "$file" || -L "$file" ]]; then
-    permissions="$(stat -f '%Sp' "$file" 2>/dev/null || print unknown)"
-  fi
-  if [[ -f "$file" ]]; then
-    zsh -n "$file" >/dev/null 2>&1 && syntax='pass' || syntax='fail'
-    intel_hits="$(grep -Eci '/usr/local|x86_64|arch[[:space:]]+-x86_64|Rosetta' "$file" 2>/dev/null || true)"
-    compinit_hits="$(grep -Eci '(^|[^[:alnum:]_])compinit([^[:alnum:]_]|$)' "$file" 2>/dev/null || true)"
-    completion_hits="$(grep -Eci 'compdef|bashcompinit|fpath|FPATH' "$file" 2>/dev/null || true)"
-    plugin_hits="$(grep -Eci 'oh-my-zsh|plugins=|plugin(s)?/' "$file" 2>/dev/null || true)"
-  fi
-
-  print -r -- "### $label" >> "$report"
-  print -r -- "- load-context: $load_context" >> "$report"
-  print -r -- "- kind: $kind" >> "$report"
-  print -r -- "- permissions: $permissions" >> "$report"
-  print -r -- "- symlink-target: $target" >> "$report"
-  print -r -- "- syntax: $syntax" >> "$report"
-  print -r -- "- intel-markers: $intel_hits" >> "$report"
-  print -r -- "- compinit-markers: $compinit_hits" >> "$report"
-  print -r -- "- completion-markers: $completion_hits" >> "$report"
-  print -r -- "- plugin-markers: $plugin_hits" >> "$report"
-  if [[ -f "$file" ]]; then
-    zsh_file_signals "$file" >> "$report"
-  fi
-  print >> "$report"
 }
 
 tool_summary() {
@@ -449,32 +347,14 @@ prepare_output
 {
   print -r -- '# Dotfiles Stage 0 dump'
   print
-  print -r -- '- scope: read-only source-machine evidence and native candidate files'
+  print -r -- '- scope: read-only software, tooling, and plugin evidence plus native candidate files'
   print -r -- '- repository: current-public-repository'
   print -r -- '- candidate-root: tmp/my_setup/'
   print -r -- '- secrets: values not collected'
   print
-  print -r -- '## Zsh startup files'
-  print
 } > "$report"
 
-for startup_file in .zshenv .zprofile .zshrc .zlogin; do
-  zsh_file_summary "$HOME/$startup_file"
-done
-
 {
-  print -r -- '## Inherited command search paths'
-  print
-  for path_entry in ${(s/:/)PATH}; do
-    print -r -- "- $(classify_path "$path_entry")"
-  done
-  print
-  print -r -- '## Inherited completion search paths'
-  print
-  for path_entry in "${fpath[@]}"; do
-    print -r -- "- $(classify_path "$path_entry")"
-  done
-  print
   print -r -- '## Tool availability'
   print
 } >> "$report"
@@ -538,8 +418,7 @@ for declaration in \
   "$repo_root/my_setup/tooling/mise/10-public.toml" \
   "$repo_root/my_setup/tooling/uv/.python-versions" \
   "$repo_root/my_setup/tooling/uv/uv.toml" \
-  "$repo_root/my_setup/zsh/plugins.toml" \
-  "$repo_root/my_setup/zsh/zsh-repair-plan.md"; do
+  "$repo_root/my_setup/zsh/plugins.toml"; do
   if [[ -f "$declaration" ]]; then
     print -r -- "- ${declaration#$repo_root/}: present" >> "$report"
   else
@@ -549,18 +428,15 @@ done
 
 {
   print
-  print -r -- '## AI review handoff'
+  print -r -- '## Export handoff'
   print
-  print -r -- '- Review tmp/my_setup/ in place; do not write formal my_setup/ before user confirmation.'
-  print -r -- '- Preserve any safely exported native descriptions; otherwise add the description during AI review.'
-  print -r -- '- Add all required AI-REVIEW fields for every direct desired item.'
-  print -r -- '- Convert removed or replaced items to adjacent AI-RETIRE comments.'
-  print -r -- '- Generate tooling and plugin candidates from the sanitized native state above.'
+  print -r -- '- Candidate files require the exported-dotfiles review skill before user confirmation.'
+  print -r -- '- Zsh startup-file analysis is intentionally outside dump.sh.'
   print
   print -r -- '## Manual follow-up'
   print
   print -r -- '- Service and application data were not read or migrated.'
-  print -r -- '- Dynamic source expressions and unknown tool ownership require AI review.'
+  print -r -- '- Unknown tool ownership requires AI review.'
   print -r -- '- Local parameters and Keychain contents were not inspected.'
 } >> "$report"
 
@@ -569,8 +445,8 @@ safety_check
 chmod 600 "$report" "$candidate_root"/**/*(.N)
 
 if (( partial )); then
-  print -r -- 'dump.sh: 部分采集器失败；候选文件仍可供 AI 审阅：tmp/'
+  print -r -- 'dump.sh: 部分采集器失败；候选文件仍可供导出配置 Review Skill 审阅：tmp/'
   exit 2
 fi
 
-print -r -- 'dump.sh: 完成；请由 AI 审阅：tmp/dump.md 与 tmp/my_setup/'
+print -r -- 'dump.sh: 完成；请使用导出配置 Review Skill 审阅 tmp/dump.md 与 tmp/my_setup/'
