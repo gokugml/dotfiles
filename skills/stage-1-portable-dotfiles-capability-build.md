@@ -79,9 +79,13 @@ company-dotfiles/
 
 - 使用 macOS 自带工具和可选的已安装管理器；
 - 缺少某个工具时记录 `not-installed`，不自动安装；
-- 原始 dump 只写系统临时目录；
-- 输出结构稳定，便于 AI 读取；
+- 原生 Dump/List 只写当前仓库被 Git 忽略的 `tmp/` 候选树，不使用仓库外临时目录；
+- 输出目录与 `my_setup/` 和可选 company 目标结构对齐，便于 AI 就地审阅；
+- 有可回放原生 Dump 时优先使用；只有结构化 List/Status 时经脱敏写入 `tmp/dump.md`，由 AI 转成目标配置；
+- 强制把子进程临时文件和可重定向缓存写入执行期间的 `tmp/.runtime/`，结束前清理，不继承仓库外 `TMPDIR`；Homebrew 只读使用已有 metadata cache 时禁用 refresh、自动更新和 description 查询；
+- AI 可调整候选条目，并为每个直接期望项目补齐功能、最佳实践、修改级别、建议、归属和验证评论；
 - 不读取 local 密钥值，不修改 HOME，不调用 `install.sh`；
+- 只清理本次明确生成的候选文件，不清空 `tmp/` 中的未知内容；
 - 退出时清楚区分成功、部分证据缺失和安全失败。
 
 ## 6. 统一 `install.sh`

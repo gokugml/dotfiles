@@ -31,7 +31,7 @@ _避免使用_：public-company-local 三层栈
 运行 `install.sh`，应用仓库配置并安装已确认软件的 Apple Silicon 机器。它可以与源机器是同一台设备。
 
 **Dump（配置采集）**：
-通过只读 `dump.sh` 收集脱敏的 Zsh、软件和工具状态，供 AI 分析；它不修改真实配置。
+通过只读 `dump.sh` 优先调用工具原生 Dump/List，把脱敏状态写入当前仓库被忽略的 `tmp/` 同构候选树；AI 随后就地调整条目并增加评论。它不修改真实配置或软件。
 
 **安装（Install）**：
 通过无参数 `install.sh` 备份本地 Zsh 入口、建立 symlink，并安装 personal/company 声明的配置与软件。

@@ -18,7 +18,7 @@
 ## 2. 四阶段主线
 
 ```text
-Stage 0：dump.sh 收集 → AI 分析 Zsh 与配置 → AI 自检 → 用户一次确认
+Stage 0：dump.sh 原生导出到仓库 tmp/ → AI 就地审阅并评论 → AI 自检 → 用户一次确认
   → Stage 1：建设 dump.sh、install.sh 与可复用仓库能力
     → Stage 2：AI 生成仓库版 Zsh → install.sh 安装 → verify
       → Stage 3：install.sh retire 预览 → 用户确认 → 退役与验证
@@ -57,6 +57,7 @@ dotfiles/
 ├── README.md
 ├── dump.sh
 ├── install.sh
+├── tmp/                 # Git ignored；Stage 0 临时候选树
 ├── skills/
 ├── my_setup/
 │   ├── zsh/
@@ -116,6 +117,8 @@ company-dotfiles/
 - Homebrew 管理系统 CLI、原生库和 GUI cask。
 - mise 管理需要固定版本的跨项目 runtime 和 CLI。
 - uv 管理 Python 版本、环境和 Python tool。
+- Stage 0 优先调用各管理器只读、可回放的原生 Dump；没有 Dump 时使用结构化只读输出，由 AI 转为目标配置。
+- 原生命令如果会维护或写入仓库外状态，Stage 0 必须退化为只读元数据检查。
 - personal 与 company 分别声明自己的 Brewfile 和 tooling；完全相同的项目去重，可覆盖字段按 company → personal 处理，管理器或版本所有权不兼容时停止并报告。
 - personal 与 company 各自最多使用一份 `plugins.toml`，同一条目内记录来源、固定 revision、启用状态和加载顺序。
 - local 不定义软件、版本或插件。
@@ -130,7 +133,7 @@ company-dotfiles/
 ./install.sh retire --apply
 ```
 
-- `dump.sh` 属于 Stage 0，只读收集分析输入。
+- `dump.sh` 属于 Stage 0，只读收集分析输入，并只在当前仓库被忽略的 `tmp/` 生成同构候选文件。
 - 无参数 `install.sh` 等于安装 apply。执行前即时展示摘要，并以默认 `N` 的 `y/N` 确认。
 - `install.sh verify` 验证 Zsh、symlink、架构、软件来源和插件状态。
 - `install.sh retire` 属于 Stage 3，只读预览。
@@ -142,6 +145,8 @@ company-dotfiles/
 - 覆盖本地 Zsh 入口前，只为已有 `.zsh` 文件或 symlink 创建保留类型与目标的副本。
 - 安装器不得覆盖 Git 工作树中的未提交冲突。
 - 密钥、公司内容和本机路径不得进入 public 输出。
+- Stage 0 只清理自己生成的 `tmp/dump.md`、`tmp/my_setup/`、执行期间的 `tmp/.runtime/` 和明确生成的可选 `tmp/company/`，不得清空未知临时内容。
+- `dump.sh` 必须覆盖子进程的临时目录和可重定向缓存位置；只读使用 Homebrew 已有 metadata cache 时必须禁用 refresh、自动更新和 description 查询，使原生工具采集不会写入仓库外目录。
 - 服务、数据库和 GUI 应用数据只检测并报告，不自动迁移。
 - 未处理服务数据、未知 Intel 项、项目级依赖或未验证 ARM 替代不得删除。
 - 不递归删除 `/usr/local`，不整体改变其 owner。
@@ -160,6 +165,7 @@ company-dotfiles/
 - local 权限正确且未被 Git 跟踪；
 - PATH 无活动 Intel Homebrew 路径；
 - Brewfile、mise/uv 和 `plugins.toml` 可解析；
+- Stage 0 候选文件中的每个直接期望项目都有功能、最佳实践、修改级别、建议、归属和验证评论；
 - 已安装命令的实际路径、版本和架构符合期望；
 - `install.sh` 再次执行不会重复破坏已有配置；
 - retire 预览不包含未知项目和未处理数据。
