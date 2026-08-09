@@ -2,7 +2,7 @@
 
 > 适用范围：macOS 上的 Zsh，尤其是从 Intel Mac 迁移到 Apple Silicon 的环境。<br>
 > 文档目标：提供一套可复用、可验证、适合公开分享的诊断方法；不记录任何个人路径、账号、密钥或机器专属配置。
-> 项目关系：本文是 [Apple Silicon Dotfiles 整改、迁移与 Intel Homebrew 退役实施计划](./apple-silicon-dotfiles-remediation-plan.md) 的诊断背景与目的说明；实施约束和最终决策以该计划为准。
+> 项目关系：本文是 [四阶段共用契约](./stage-common-contract.md) 的按需诊断参考；阶段职责以 [四阶段流程图](./steps.excalidraw) 和对应阶段文档为准。
 
 ## 文档背景与目的
 
@@ -30,7 +30,7 @@
 1. **正确性**：配置是否真的产生预期效果？
 2. **边界**：代码是否放在正确的启动文件，变量是否具有恰当的作用域？
 3. **一致性**：架构、包管理器、版本管理器和 `PATH` 是否互相匹配？
-4. **可维护性**：配置能否重复加载、安全迁移、公开分享并可靠恢复？
+4. **可维护性**：配置能否重复加载、安全迁移、公开分享并可靠验证？
 
 ## 2. 修改建议的分类
 
@@ -48,7 +48,7 @@
 | 变量作用域 | 只把必要值传给子进程 | 交互路径和单工具选项被全局 `export` | P2 |
 | 工具职责与版本管理 | 一个运行时只有一个明确的管理者 | 两个版本管理器同时修改同一运行时的 `PATH` | P2 |
 | 可移植性与配置分层 | 区分公开配置、私有配置和机器配置 | 绝对用户路径、无条件加载私有文件、公开仓库混入本机信息 | P2 |
-| 安装、备份与恢复 | 让变更可预览、可回滚、可验证 | 安装脚本直接覆盖文件、Brewfile 未经审阅、缺少验收步骤 | P2–P3 |
+| 安装与本地副本 | 让变更可预览、保留原入口、可验证 | 安装脚本直接覆盖文件、Brewfile 未经审阅、缺少验收步骤 | P2–P3 |
 
 优先级建议：
 
@@ -131,7 +131,7 @@ Homebrew 支持的默认前缀是：
 
 1. 盘点旧包、服务、数据目录和依赖关系；
 2. 安装并激活 Apple Silicon 原生 Homebrew；
-3. 只恢复经过审阅的工具清单；
+3. 只迁移经过审阅的工具清单；
 4. 验证常用命令的路径、架构和功能；
 5. 确认没有依赖后，再退役旧 Homebrew。
 
@@ -322,9 +322,35 @@ example-cli() {
 - 诊断脚本只检查变量是否存在，不打印变量值，也不转储完整环境；
 - 能由应用自己的 secret 管理功能保存时，优先使用应用提供的机制。
 
-### 10.2 macOS Keychain + 命令 wrapper
+### 10.2 本机单文件（默认）
 
-Keychain 适合保存小型秘密。下面使用完全虚构的服务名；`-w` 放在最后时，`security` 会交互式提示输入，避免密钥出现在 shell 历史和命令参数中：
+本项目默认把密钥值和不可公开参数保存在仓库外的单一文件，并严格限制权限：
+
+```zsh
+mkdir -p "$HOME/.config/dotfiles/local"
+chmod 700 "$HOME/.config/dotfiles/local"
+touch "$HOME/.config/dotfiles/local/parameters.zsh"
+chmod 600 "$HOME/.config/dotfiles/local/parameters.zsh"
+```
+
+`my_setup/zsh/.zshrc` 在 personal 主配置完成后条件加载：
+
+```zsh
+local_parameters="$HOME/.config/dotfiles/local/parameters.zsh"
+[[ -r "$local_parameters" ]] && source "$local_parameters"
+unset local_parameters
+```
+
+该文件可以直接定义 API key、账号和本机路径，但必须认识到它是本机明文：
+
+- 不进入 Git、云同步、普通备份、诊断报告或测试；
+- `dump.sh` 和 AI 不采集其内容；`install.sh` 不打印、复制或持久化内容，只允许语法检查和正常 shell 加载；
+- 跨机器迁移密钥时由用户使用可信的密码管理方式处理；
+- 曾经泄露或提交过的密钥仍需在服务端轮换。
+
+### 10.3 macOS Keychain（可选增强）
+
+不希望让密钥长期存在于 shell 环境时，可以改用 Keychain 和命令 wrapper。下面使用完全虚构的服务名；`-w` 放在最后时，`security` 会交互式提示输入：
 
 ```zsh
 security add-generic-password \
@@ -334,7 +360,7 @@ security add-generic-password \
   -w
 ```
 
-只在运行指定命令时读取并注入：
+只在运行目标命令时读取并注入：
 
 ```zsh
 example-cli() {
@@ -354,27 +380,7 @@ example-cli() {
 }
 ```
 
-这样，密钥不会长期存在于普通终端环境中，只有目标命令及其子进程能够收到它。
-
-### 10.3 明文私有文件是次优方案
-
-如果某个工具只能从环境变量读取密钥，可以使用仓库外的私有文件，并限制权限：
-
-```zsh
-mkdir -p "$HOME/.config/zsh"
-chmod 700 "$HOME/.config/zsh"
-touch "$HOME/.config/zsh/private.zsh"
-chmod 600 "$HOME/.config/zsh/private.zsh"
-```
-
-公开 `.zshrc` 只做条件加载：
-
-```zsh
-[[ -r "$HOME/.config/zsh/private.zsh" ]] && \
-  source "$HOME/.config/zsh/private.zsh"
-```
-
-这种方式只是把私有信息与公开配置分开，不等于安全备份。跨机器保存应使用 Keychain、密码管理器或经过审查的加密方案。
+Keychain 是可选增强，不是当前 `install.sh` 的前置条件。
 
 ## 11. 工具职责与版本管理
 
@@ -394,25 +400,28 @@ chmod 600 "$HOME/.config/zsh/private.zsh"
 
 - `Brewfile` 表达希望安装的工具集合，是声明式期望状态；
 - `brew bundle dump` 生成的是当前安装状态快照，应人工审阅后再纳入版本控制；
-- Brewfile 通常不保证恢复到逐字节相同的历史版本；
+- Brewfile 通常不保证复刻逐字节相同的历史版本；
 - 机器专属应用、服务和数据目录不应未经判断地复制到所有机器。
 
-## 12. 公开配置、私有覆盖与机器差异
+## 12. 公开仓库、个人配置与私有参数
 
-适合公开分享的 dotfiles 可以采用三层模型：
+本项目使用明确的存储边界：
 
 ```text
-公开通用配置 < 组织私有配置（可选） < 本机私有配置
+公开仓库根：通用能力
+公开仓库 my_setup/：personal 配置
+独立 company 仓库：可选公司增量
+~/.config/dotfiles/local/parameters.zsh：本机密钥和私有参数
 ```
 
-公开层可以包含：
+`my_setup/` 可以包含：
 
 - 通用的 Zsh 行为、补全和函数；
 - 不含凭证的工具初始化；
 - 经过审阅的 Brewfile；
 - 使用 `$HOME` 和公开占位符的安装说明。
 
-公开层不应包含：
+`my_setup/` 不应包含：
 
 - 用户名和绑定具体账户的主目录路径；
 - 公司域名、内部仓库地址、客户名称或组织路径；
@@ -420,31 +429,21 @@ chmod 600 "$HOME/.config/zsh/private.zsh"
 - 某台机器独有的应用数据目录；
 - 未脱敏的诊断输出、shell 历史或完整环境变量。
 
-私有层应通过条件加载接入。缺少私有层时，公开配置仍应能正常启动。
+`.zshrc` 的加载顺序是 company → personal → local。company 和 local 缺失时，personal 仍应正常启动。
 
-## 13. 安装脚本与恢复策略
+## 13. 安装脚本与本地副本
 
-一个可分享的 dotfiles 仓库不应把“安装”理解为直接删除现有配置。安全安装器至少应做到：
+一个可分享的 dotfiles 仓库不应把“安装”理解为直接删除现有配置。当前轻量安装器至少应做到：
 
-1. 先展示将要创建、移动和链接的文件；
-2. 检测现有文件、符号链接和未提交修改；
-3. 把现有配置移动到带时间标识的备份目录；
-4. 再建立指向仓库源文件的链接；
-5. 对新配置执行语法、启动和功能验证；
-6. 提供清晰的回滚方法。
+1. 即时展示将要创建和链接的文件；
+2. 检测现有文件、symlink 和未提交冲突；
+3. 为本地已有 Zsh 文件或 symlink 创建副本；
+4. 再建立指向 `my_setup/zsh/` 的链接；
+5. 对新配置执行语法、启动和功能验证。
 
-示意性的备份逻辑：
+主流程不实现自动恢复；未来相关能力统一记录在 [rollback_feature.md](./rollback_feature.md)。
 
-```zsh
-backup_dir="$HOME/.local/state/dotfiles/backups/$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$backup_dir"
-
-if [[ -e "$HOME/.zshrc" || -L "$HOME/.zshrc" ]]; then
-  mv "$HOME/.zshrc" "$backup_dir/.zshrc"
-fi
-```
-
-破坏性操作，例如卸载旧包管理器、清理数据目录或覆盖用户文件，应与普通配置调整分开确认，并在执行前记录精确目标。
+破坏性操作，例如退役旧包管理器或旧 runtime，必须通过独立 `retire` 预览和确认。服务与数据只报告，不由通用安装器自动清理。
 
 ## 14. 推荐的只读诊断流程
 
@@ -502,7 +501,7 @@ file "$(command -v example-cli)"
   → PATH 与初始化幂等性
   → 变量作用域
   → 启动性能
-  → 配置分层与恢复能力
+  → 配置边界与本地副本
 ```
 
 一次只修改一个类别，保留修改前后的命令输出和性能对比，更容易定位回归。
@@ -546,7 +545,7 @@ file "$(command -v example-cli)"
 - [ ] 单工具配置和密钥已缩小到命令级作用域；
 - [ ] 仓库当前内容、Git 历史和诊断输出不含敏感信息；
 - [ ] 文档示例只使用 `$HOME`、`example.*` 和虚构变量名；
-- [ ] 安装与迁移步骤具备备份、验证和回滚路径；
+- [ ] 安装步骤具备 Zsh 本地副本、验证和破坏性操作确认；
 - [ ] 性能优化前后有可重复的测量结果。
 
 ## 17. 参考资料
