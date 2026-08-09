@@ -1,2 +1,0 @@
-python-preference = "only-managed" # 功能=只使用 uv 管理的 Python；最佳实践=pass；修改级别=一定要改；建议=避免系统与 Python.org Framework 抢占；归属=public；验证=uv python find --managed-python
-python-downloads = "manual" # 功能=禁止普通命令隐式下载 Python；最佳实践=pass；修改级别=建议修改；建议=只在阶段 2 明确安装计划中下载；归属=public；验证=缺失版本时普通 uv 命令不自动下载

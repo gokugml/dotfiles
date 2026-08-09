@@ -1,0 +1,27 @@
+[[plugins]]
+name = "oh-my-zsh"
+source = "https://github.com/ohmyzsh/ohmyzsh.git"
+revision = "6f39351feff2126608ea696ca1ab9ba6b13cb77f"
+enabled = true
+load_order = 100
+
+[[plugins]]
+name = "git"
+source = "oh-my-zsh/plugins/git"
+revision = "6f39351feff2126608ea696ca1ab9ba6b13cb77f"
+enabled = true
+load_order = 110
+
+[[plugins]]
+name = "zsh-autosuggestions"
+source = "https://github.com/zsh-users/zsh-autosuggestions.git"
+revision = "e52ee8ca55bcc56a17c828767a3f98f22a68d4eb"
+enabled = true
+load_order = 900
+
+[[plugins]]
+name = "zsh-syntax-highlighting"
+source = "https://github.com/zsh-users/zsh-syntax-highlighting.git"
+revision = "db085e4661f6aafd24e5acb5b2e17e4dd5dddf3e"
+enabled = true
+load_order = 999
