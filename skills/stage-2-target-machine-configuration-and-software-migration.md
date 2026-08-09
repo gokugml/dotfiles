@@ -1,14 +1,14 @@
 # Stage 2：目标机器配置与软件迁移需求
 
 > 状态：实施级阶段需求<br>
-> 版本：1.0<br>
+> 版本：1.1<br>
 > 日期：2026-08-09<br>
 > 执行角色：每台目标机器的用户与实施 Agent<br>
 > 执行位置：Apple Silicon macOS 目标机器
 
 ## 1. 阶段定位
 
-本阶段消费阶段 1 已交付的可移植仓库能力，在目标机器建立 Zsh 配置、私有分层和可回滚状态，再由独立迁移脚本安装并验证关键 ARM 软件和工具链。目标是让用户无需回忆或手工复刻源机器步骤，即可重建经过审批的关键工作环境。
+本阶段消费阶段 1 已交付的公开仓库，在目标机器应用其集中式 `my_setup/` 个人配置、可选 company 增量和 local 私有参数，再由独立迁移脚本安装并验证关键 ARM 软件和工具链。目标是让用户无需回忆或手工复刻源机器步骤，即可重建经过审批的关键工作环境。
 
 目标机器可以是另一台新机器，也可以是源机器本身。无论是否存在 Intel Homebrew，都必须从仓库产品接口开始，不能直接复制旧 `.zshrc` 或跳过计划、备份和验证。
 
@@ -18,10 +18,10 @@
 
 ## 2. 阶段目标
 
-1. 取得并验证阶段 1 的 public 仓库及可选 company 来源。
+1. 取得并验证阶段 1 的公开仓库、其中固定 `my_setup/` 配置及可选 company 来源。
 2. 在真实目标机器执行只读 preflight，生成明确的配置应用计划。
-3. 备份现有有效 Zsh 配置，建立两个真实入口 symlink 和固定 private source 点。
-4. 把密钥从普通 shell 配置迁移到 Keychain wrapper 或获批 local-only 例外。
+3. 备份现有有效 Zsh 配置，建立指向 `my_setup/zsh/` 的两个真实入口 symlink，以及 company/local 固定 source 点。
+4. 把密钥从普通 shell 配置迁移到 Keychain wrapper 或获批 local 例外，并阻止普通配置进入 local。
 5. 由独立迁移脚本盘点目标机器现状，安装缺失的 ARM 关键软件和固定版本工具链。
 6. 迁移已授权的服务、数据和工具所有权，验证 ARM 替代关系。
 7. 生成可供阶段 3 使用的本机 migration manifest、retirement ledger 和 readiness 状态。
@@ -41,15 +41,15 @@
 
 ### 4.1 仓库基线
 
-- public 仓库已经通过阶段 1 的隔离测试、CI 和安全扫描。
+- 公开仓库已经通过阶段 1 的隔离测试、CI 和安全扫描。
 - 当前 checkout 与预期 origin、目录结构和 commit 基线一致。
 - `install.sh`、`bin/dotfiles` 和独立迁移脚本存在且权限正确。
-- public 配置不含 Intel 运行时路径、密钥或公司信息。
+- `my_setup/` 配置存在且不含 Intel 运行时路径、密钥或公司信息；仓库根不存在散落的 `zsh/`、`macos/`、`tooling/` 配置目录。
 
 ### 4.2 本机输入
 
 - 当前架构、shell 启动文件、symlink、PATH 和命令实际来源。
-- 已有个人/company checkout 或安全的来源 URL。
+- 已有公开/company checkout 或安全的来源 URL。
 - 当前关键软件、Brew formula/cask/service、语言运行时和工具管理器状态。
 - 需要保留的 API key 变量名及其消费命令；不得收集值到报告。
 - 有状态服务的数据位置、迁移方式和验证命令。
@@ -76,7 +76,7 @@
 
 ### 6.1 启动入口
 
-用户 clone 或取得阶段 1 public 仓库后，必须从以下只读入口之一开始：
+用户 clone 或取得阶段 1 公开仓库后，必须从以下只读入口之一开始：
 
 ```zsh
 ./install.sh
@@ -85,10 +85,10 @@
 
 首次运行应自动探测：
 
-- 当前 checkout 的 personal 来源、origin 和仓库根。
+- 当前 public repository checkout 的 origin、仓库根和固定 `my_setup/` 配置根。
 - 已存在且获授权的 company checkout。
 - 本机 `sources.toml` 是否与实际 checkout 一致。
-- local-only 固定目录和已有私有文件。
+- local 固定目录和已有私有文件，及其是否只包含密钥/不可公开参数。
 
 证据唯一时直接写入计划；company 不存在或无访问权时标记 `skip`。只有出现多个冲突来源且无法从证据排除时，才汇总为一个阻塞问题。不得逐文件询问路径。
 
@@ -108,12 +108,12 @@
 
 配置 plan 必须列出：
 
-- 个人/company/local 来源和目标路径。
+- 公开仓库及其 `my_setup/`、可选 company、固定 local 私有根的来源和目标路径。
 - 现有 `~/.zprofile`、`~/.zshrc` 的类型与备份动作。
 - 两个真实入口 symlink 的目标。
 - company 稳定 symlink 的创建、更新或缺失处理。
-- local-only 固定文件及权限。
-- Oh My Zsh、插件和 Git hook 的固定 revision/版本。
+- local 固定文件、权限和职责检查结果。
+- personal 与可选 company 已提交的插件选择、固定 revision，以及 Git hook 版本。
 - 疑似密钥的脱敏处置状态。
 - 每项变更的风险、可逆性、验证和回滚动作。
 
@@ -129,14 +129,14 @@
 2. 使用隐藏输入把值写入 Keychain，并验证 wrapper 只向当前命令注入。
 3. Keychain 迁移与配置 apply 分开记录。
 4. 密钥轮换、明文清理和历史定向删除分别请求用户授权，不随 symlink apply 暗中执行。
-5. 无法临时注入的工具只能使用符合共用契约权限要求的 local-only 例外。
+5. 无法临时注入的工具只能使用符合共用契约权限要求的 local 例外；local 不得顺带保存软件、版本、插件或普通 Zsh 偏好。
 
 ### 7.2 旧配置迁移账本
 
 切换前必须为当前旧 Zsh 的每条有效配置记录：
 
 - 原始来源定位和功能。
-- public/company/local-only/retire/unresolved 归属。
+- personal/company/local/retire/unresolved 归属；公开仓库通用能力不是配置归属。
 - 阶段 1 新配置中的对应位置或明确淘汰理由。
 - 验证方法。
 
@@ -155,10 +155,10 @@
 1. 获取 lock，重新验证计划未漂移。
 2. 创建配置 backup 和 manifest。
 3. 保存现有入口的文件类型、权限、owner、symlink 目标和非敏感内容。
-4. 建立 `~/.zprofile -> <public-root>/zsh/.zprofile`。
-5. 建立 `~/.zshrc -> <public-root>/zsh/.zshrc`。
+4. 建立 `~/.zprofile -> <public-root>/my_setup/zsh/.zprofile`。
+5. 建立 `~/.zshrc -> <public-root>/my_setup/zsh/.zshrc`。
 6. company 启用时幂等建立 `~/.config/dotfiles/company -> <selected-company-root>`；`skip` 时确保链接不存在。
-7. 配置 local-only 固定目录、文件和权限。
+7. 配置 local 固定目录、文件和权限；拒绝其中出现 Brewfile、mise/uv 版本、插件选择、inventory 或普通个人配置。
 8. 获取并验证固定 revision 的 Oh My Zsh 和外部插件；它们作为 Zsh 配置运行依赖，不得借此调用包管理器安装其他软件。
 9. 配置仓库跟踪的 pre-commit hook 并记录可回滚的 `core.hooksPath` 原值；固定版本 Gitleaks 尚不存在时，将其记为后续软件迁移前置项，不由 `install.sh` 安装。
 10. 验证固定 profile/pre/rc source 点和覆盖顺序。
@@ -178,10 +178,10 @@
 
 - 所有启用 Zsh 文件通过 `zsh -n`。
 - 三种 shell 场景无加载错误。
-- symlink 目标、company 状态和三层覆盖正确。
+- symlink 目标、company 状态及 personal→company→local 活动配置组合正确。
 - OMZ 模板、`compinit` 次数、插件顺序和 revision 正确。
 - PATH 唯一、无受管 Intel 兼容路径，`~/.local/bin` 正确。
-- Keychain wrapper 和 local-only 权限不泄露值。
+- Keychain wrapper 和 local 权限不泄露值，且 local 内容只承担私有数据职责。
 - 再次 `apply` 幂等。
 
 配置验证失败时，停止软件迁移并使用：
@@ -219,7 +219,7 @@
 - Intel/ARM Homebrew 的 tap、formula、leaf、cask、service、配置和数据目录。
 - 当前 ARM Homebrew 健康状态；缺失时在计划中给出受保护的安装前置动作，不得由 `install.sh` 补装。
 - NVM/npm global、pyenv/Python、pipx/uv tool、Bun/pnpm/Go、mise 的当前所有权。
-- public/company/local 三层 Brewfile 的合并期望与冲突。
+- `my_setup/macos/Brewfile` 与可选 company `macos/Brewfile` 的合并期望与冲突；local 不参与软件期望状态。
 - 每个旧项目的 ARM 替代、改名替代、其他管理器接管、明确淘汰或 unresolved 状态。
 - cask 的 ARM/Universal、替代或淘汰分类。
 - service 的运行状态、配置、数据、端口、停机风险和验证命令。
@@ -255,7 +255,7 @@ Agent 先根据证据完成内容分类和替代决策，不逐项询问。只�
 
 1. 获取独立 migration lock 和 run-id。
 2. 再次验证原生 `arm64`、计划时效和仓库配置状态。
-3. 根据三层 Brewfile 安装缺失的 ARM 系统 CLI、原生库和获准 cask。
+3. 根据 personal + 可选 company 两份 Brewfile 安装缺失的 ARM 系统 CLI、原生库和获准 cask；拒绝从 local 读取软件清单。
 4. 安装或配置固定版本 mise、Bun、Node、pnpm、Go 和跨项目 CLI。
 5. 使用 uv 安装明确 Python 版本、迁移 venv/tool 所有权并移除 pyenv/pipx 重复管理关系。
 6. 将 autojump 数据迁移到 zoxide，验证后只在账本中标记旧工具可退役。
@@ -307,9 +307,9 @@ Agent 先根据证据完成内容分类和替代决策，不逐项询问。只�
 ### 11.1 配置验证
 
 - 干净 login shell 和 IDE 风格 non-login interactive shell 正常。
-- 两个真实入口和三层固定 source 点正确。
+- 两个真实入口指向 `my_setup/zsh/`，personal→company→local 固定 source 点正确。
 - OMZ、插件、补全、history、alias、function 和 wrapper 正常。
-- public/company/local-only 不含 Intel 运行时兼容。
+- personal/company/local 不含 Intel 运行时兼容；local 只含私有参数或秘密注入。
 
 ### 11.2 软件验证
 
@@ -343,15 +343,15 @@ readiness 可以是：
 - 新软件安装成功但后续验证失败：记录 cleanup 预览和修复建议，不由配置 rollback 自动卸载。
 - 服务迁移失败：使用该服务专属 runbook 回滚，不由通用脚本猜测数据恢复。
 - 密钥轮换或明文清理完成后：不可通过配置 rollback 恢复旧值。
-- 发现应进入 public/company 的新通用需求：生成反馈证据，重新执行阶段 0/1，不在目标机器直接修改仓库基线。
+- 发现新的可分享个人配置、通用能力或 company 增量：生成反馈证据，重新执行阶段 0/1，不在目标机器直接修改仓库基线。
 
 ## 13. 完成条件
 
-- [ ] public/company 来源已解析，工作区和 commit 基线通过验证。
+- [ ] 公开/company 来源已解析，工作区、`my_setup/` 固定根和 commit 基线通过验证。
 - [ ] 目标机器写模式为原生 `arm64`。
 - [ ] 配置 plan、backup、manifest 和两个真实入口 symlink 完成。
 - [ ] company 启用或 `skip` 状态正确且 apply 幂等。
-- [ ] local-only 固定文件、Keychain wrapper 和权限符合共用契约。
+- [ ] local 固定文件、Keychain wrapper 和权限符合共用契约，且不存在软件、版本、插件或普通偏好配置。
 - [ ] `install.sh verify` 通过，配置 apply 未触发任何 Homebrew 写操作。
 - [ ] 独立迁移脚本完成 plan、`--apply` 和 `--verify`。
 - [ ] 关键 ARM 软件、固定版本工具链和语言环境已安装并通过实际路径/架构验证。

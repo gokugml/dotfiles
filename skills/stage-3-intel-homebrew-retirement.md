@@ -1,7 +1,7 @@
 # Stage 3：Intel Homebrew 退役需求
 
 > 状态：实施级阶段需求<br>
-> 版本：1.0<br>
+> 版本：1.1<br>
 > 日期：2026-08-09<br>
 > 执行角色：目标机器用户与实施 Agent<br>
 > 执行位置：已完成阶段 2 且仍存在 Intel Homebrew 的目标机器
@@ -77,7 +77,7 @@
 - manifest/ledger 缺失、机器不匹配或时间状态过期。
 - ARM 替代命令实际解析回 Intel 路径或架构不是 ARM。
 - service/cask/data 状态变化，或新发现未盘点 Intel 项。
-- public/company/local-only Zsh 出现 Intel 运行时路径或兼容分支。
+- personal/company/local Zsh 出现 Intel 运行时路径或兼容分支。
 - Homebrew 官方卸载脚本来源、revision 或 SHA-256 未固定和审查。
 - 当前会话没有真实 TTY。
 
@@ -210,7 +210,7 @@ $path                             -> 无重复项、无活动 Intel Homebrew 路
 zsh -l -i -c exit                 -> 无加载错误
 ```
 
-还必须审计 public/company/local-only 的全部受管 Zsh 文件，确认它们始终没有 Intel 运行时兼容。
+还必须审计 personal/company/local 的全部受管 Zsh 文件，确认它们始终没有 Intel 运行时兼容；local 还必须继续满足“只含私有参数或秘密注入”的职责边界。
 
 ### 10.2 软件、服务和数据
 
@@ -253,7 +253,7 @@ zsh -l -i -c exit                 -> 无加载错误
 └── usr-local-residual-audit.*
 ```
 
-具体扩展名由阶段 1 schema 固定。报告不得包含密钥、完整环境变量、未脱敏历史或可用于识别其他私有系统的信息。这些文件不得提交 public/company 仓库。
+具体扩展名由阶段 1 schema 固定。报告不得包含密钥、完整环境变量、未脱敏历史或可用于识别其他私有系统的信息。这些文件不得提交公开/company 仓库。
 
 ## 12. 失败处理
 

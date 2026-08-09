@@ -1,7 +1,7 @@
 # Apple Silicon Dotfiles 四阶段共用契约
 
 > 状态：实施级共用规格<br>
-> 版本：1.0<br>
+> 版本：1.1<br>
 > 日期：2026-08-09<br>
 > 适用范围：阶段 0–3 的共同概念、接口边界和安全不变量
 
@@ -16,12 +16,9 @@
 
 四份阶段文档只定义该阶段特有的流程、输入、输出和验收条件。实施者在执行任一阶段前必须完整阅读本契约；阶段文档引用本契约时，不得自行复制、放宽或重新解释共同规则。
 
-设计来源：
+设计来源：[四阶段流程图](./steps.excalidraw) 及拆分时审阅的原综合实施计划 v2.0。
 
-- [原综合实施计划](./apple-silicon-dotfiles-remediation-plan.md)
-- [四阶段流程图](./steps.excalidraw)
-
-阶段图决定四个阶段的边界和主线；原综合实施计划 v2.0 决定详细行为、安全边界与验收语义。拆分后的五份文档是后续实施和 Skill 化的直接需求基线，原文件保留为追溯依据。
+阶段图决定四个阶段的边界和主线；原综合计划提供历史行为与安全依据。拆分后的五份文档已吸收并修正其配置职责模型，是后续实施和 Skill 化的现行需求基线；发生冲突时以本契约和对应阶段文档为准。
 
 ## 2. 综合目标
 
@@ -49,34 +46,46 @@
 
 ## 4. 规范用语
 
+项目领域词汇以仓库根目录的 [CONTEXT.md](../CONTEXT.md) 为准。本文件只补充实施规格中的规范词：
+
 - **必须**：正确性或安全性要求；不满足时阻止进入下一门禁。
 - **应当**：默认最佳实践；只有记录证据和偏离理由后才可改变。
 - **可以**：可选增强；不影响基础验收。
-- **源机器**：提供当前 Zsh、软件和工具链证据的已有机器。
-- **目标机器**：消费阶段 1 仓库能力并完成配置及软件迁移的机器；可以与源机器是同一设备，但不得因此省略阶段门禁。
-- **公开层（public）**：未来可公开的通用 Dotfiles 仓库内容；初始仍应为私有。
-- **公司层（company）**：保存公司专属但不含密钥的私有声明式配置；可以显式 `skip`。
-- **本地层（local-only）**：只存在于当前机器、不进入 Git 或云同步的私有覆盖。
+- **公开仓库（public repository）**：保存通用能力和集中式 `my_setup/` 个人配置；“公开”描述存储与分享边界，不是运行时配置层。
+- **个人配置（personal configuration）**：公开仓库 `my_setup/` 下完整、可分享的软件和 Zsh 基线。
+- **公司配置（company configuration）**：独立私有仓库中只与公司有关的可选配置；目录类别与个人配置对齐，但不复制通用能力。
+- **本机私有数据（local private data）**：只保存不能公开的密钥、账号、机器路径和其他参数；不保存软件清单、工具版本、插件选择或普通个人偏好。
 - **候选文件**：阶段 0 根据源机器证据生成、符合阶段 1 目标格式但尚未提交的建议版文件。
 - **期望状态**：经分类和预审批后希望在目标机器存在的软件、版本和配置集合，不等于源机器的原始 dump。
-- **本地应用**：阶段 2 中由配置安装器完成的 symlink、私有分层、备份和验证。
+- **本地应用**：阶段 2 中由配置安装器完成的 symlink、私有参数接入、备份和验证。
 - **迁移**：阶段 2 中由独立迁移脚本安装 ARM 替代项、迁移已授权服务/数据并验证；不卸载 Intel Homebrew。
 - **退役**：阶段 3 中由同一迁移脚本正式卸载 Intel Homebrew 并记录结果；不等于递归删除 `/usr/local`。
 - **不可代理边界**：必须由用户亲自选择、授权或确认的外部或不可逆动作。
 
-## 5. 配置分层与固定目录
+## 5. 职责组合与固定目录
 
-覆盖关系固定为：
+### 5.1 职责边界
+
+| 概念 | 保存位置 | 负责 | 不负责 |
+|---|---|---|---|
+| 公开仓库 | 用户选择的可分享 Git 仓库 | 通用 Skill、`install.sh`、`bin/`、`scripts/`、schema、测试、文档，以及集中式 `my_setup/` | 公司内容、密钥、本机不可公开参数 |
+| 个人配置 | 公开仓库固定 `my_setup/` | 可分享的 Zsh、Brewfile、工具版本、插件和软件期望状态 | 通用执行能力、公司增量、密钥 |
+| 公司配置 | 可选的公司私有 Git 仓库 | 仅公司相关 Zsh、软件、工具、插件和诊断增量 | Skill、安装器、迁移/退役脚本、通用 schema、个人偏好、密钥 |
+| 本机私有数据 | 固定 `~/.config/dotfiles/local/` | Keychain 引用、密钥例外、账号、机器路径和不可公开参数 | Brewfile、软件清单、mise/uv 版本、插件选择、普通 alias/function 或通用偏好 |
+
+个人方案由“公开仓库中的个人配置 + 本机私有数据”组成；公司场景在二者之间加入可选公司配置。活动配置的覆盖关系固定为：
 
 ```text
-public < company < local-only
+personal configuration < company configuration（可选） < local private data
 ```
 
-### 5.1 仓库来源目录
+local 的最高优先级只用于私有值覆盖，不得借此重新引入一套普通个人配置。company=`skip` 时，个人配置与本机私有数据必须独立形成完整可用方案。
+
+### 5.2 仓库来源目录
 
 ```text
 ~/.local/share/dotfiles/
-├── personal/                         # public 仓库 checkout
+├── public/                           # 公开仓库 checkout；配置位于其 my_setup/
 ├── company/                          # company 仓库 checkout，可不存在
 ├── oh-my-zsh/                        # 固定 revision
 └── plugins/                          # 固定 revision 的外部插件
@@ -88,11 +97,11 @@ public < company < local-only
 ~/.config/dotfiles/sources.toml
 ```
 
-`source` 可以是安全的 Git URL或已有本地路径。Git URL 不得内嵌用户名、token 或密码；已有目录只能验证，不能删除或重建；远程更新只能 `fetch` 和显式 `pull --ff-only`。
+`source` 可以是安全的 Git URL 或已有本地路径。Git URL 不得内嵌用户名、token 或密码；已有目录只能验证，不能删除或重建；远程更新只能 `fetch` 和显式 `pull --ff-only`。
 
-### 5.2 Local-only 固定根
+### 5.3 本机私有数据固定根
 
-Local-only root 固定为 `~/.config/dotfiles`，配置相对根固定为 `local/`，不得由 Agent 或用户在阶段执行中另选：
+本机私有数据根固定为 `~/.config/dotfiles/local/`，不得由 Agent 或用户在阶段执行中另选：
 
 ```text
 ~/.config/dotfiles/
@@ -103,16 +112,14 @@ Local-only root 固定为 `~/.config/dotfiles`，配置相对根固定为 `local
     │   ├── profile.zsh
     │   ├── pre.zsh
     │   └── rc.zsh
-    ├── macos/Brewfile
-    ├── mise/90-local.toml
-    ├── uv/
-    ├── plugins/selection.toml
-    └── inventory/
+    └── parameters/                    # 仅显式 schema 支持的工具私有参数；不自动加载
 ```
 
-`~/.config/dotfiles/company` 是两个真实 Zsh 入口寻找公司层的唯一稳定路径。company=`skip` 时不得创建该 symlink。
+秘密默认只存在 macOS Keychain，不创建对应明文文件。`local/zsh/*.zsh` 只允许 Keychain wrapper 所需的本机账号、私有路径和无法公开的参数；`local/parameters/` 仅在目标工具有明确安全 schema 时使用，不提供通用 `.env` 自动加载。inventory 必须保存到状态目录，不得放入 local 配置。
 
-### 5.3 状态目录
+`~/.config/dotfiles/company` 是个人 Zsh 真实入口寻找公司配置的唯一稳定路径。company=`skip` 时不得创建该 symlink。
+
+### 5.4 状态目录
 
 ```text
 ~/.local/state/dotfiles/
@@ -132,18 +139,18 @@ Local-only root 固定为 `~/.config/dotfiles`，配置相对根固定为 `local
 ### 6.1 真实入口
 
 - 不接管 `~/.zshenv`，不设置 `ZDOTDIR`。
-- `~/.zprofile` 必须稳定 symlink 到 public `zsh/.zprofile`。
-- `~/.zshrc` 必须稳定 symlink 到 public `zsh/.zshrc`。
-- 两个 public 文件本身必须是完整、可直接阅读和测试的真实入口，不得是薄跳转器。
-- public 不得创建 `entrypoints/`、`lib.zsh`、`zsh/lib/`、`profile.d*`、`pre.d*`、`rc.d*` 或通用 phase loader。
-- company/local-only 每层只允许 `profile.zsh`、`pre.zsh`、`rc.zsh` 三个固定文件，不允许阶段分片目录。
+- `~/.zprofile` 必须稳定 symlink 到公开仓库 `my_setup/zsh/.zprofile`。
+- `~/.zshrc` 必须稳定 symlink 到公开仓库 `my_setup/zsh/.zshrc`。
+- 两个 personal 文件本身必须是完整、可直接阅读和测试的真实入口，不得是薄跳转器。
+- `my_setup/zsh/` 不得创建 `entrypoints/`、`lib.zsh`、`zsh/lib/`、`profile.d*`、`pre.d*`、`rc.d*` 或通用 phase loader。
+- company/local 每层只允许 `profile.zsh`、`pre.zsh`、`rc.zsh` 三个固定增量文件，不允许阶段分片目录；local 文件只能承载私有参数或秘密注入。
 
 ### 6.2 加载顺序
 
 `.zprofile` 的固定顺序：
 
 ```text
-public ARM login PATH 和稳定非敏感环境
+personal ARM login PATH 和稳定非敏感环境
   → company/zsh/profile.zsh
     → local/zsh/profile.zsh
 ```
@@ -154,12 +161,12 @@ public ARM login PATH 和稳定非敏感环境
 OMZ 官方模板头部与选项
   → company/local pre.zsh
     → 唯一一次 source $ZSH/oh-my-zsh.sh
-      → public 用户配置受管区块
+      → personal 用户配置受管区块
         → company/local rc.zsh
           → 外部 ZLE 插件；zsh-syntax-highlighting 最后加载
 ```
 
-Oh My Zsh 独占唯一一次 `compinit`。company/local-only 文件缺失时日常启动静默跳过；文件存在但加载失败时日常 shell 警告并保留 public 基础能力；`apply/verify` 遇到同样错误必须阻断。
+Oh My Zsh 独占唯一一次 `compinit`。company/local 文件缺失时日常启动静默跳过；文件存在但加载失败时日常 shell 警告并保留 personal 基础能力；`apply/verify` 遇到同样错误必须阻断。
 
 ### 6.3 PATH 与架构
 
@@ -180,21 +187,20 @@ Oh My Zsh 独占唯一一次 `compinit`。company/local-only 文件缺失时日�
 
 所有语言运行时、Oh My Zsh、外部插件和安全工具必须固定明确版本、tag 或 commit；禁止 `latest`。移除 NVM、pyenv、旧 autojump、重复 Bun/pnpm/Go PATH 和重复 `compinit`。项目级配置仍可覆盖全局版本，但不得绕过信任机制。
 
-三层 Brewfile 表达经预审批的期望状态：
+软件期望状态只由个人配置与可选公司配置表达：
 
 ```text
-personal/macos/Brewfile
-company/macos/Brewfile
-~/.config/dotfiles/local/macos/Brewfile
+<public-repository>/my_setup/macos/Brewfile
+<company-repository>/macos/Brewfile             # 可选
 ```
 
-Homebrew 不设计 lockfile；需固定的语言版本由 mise/uv 管理。`brew bundle cleanup` 默认只预览，不得在通用 apply 中使用 `--force`。Mac App Store 只做本地清单，不自动安装或处理 Apple ID。
+local 不得保存 Brewfile 或软件增删清单。Homebrew 不设计 lockfile；需固定的语言版本由 personal/company 的 mise/uv 配置管理。`brew bundle cleanup` 默认只预览，不得在通用 apply 中使用 `--force`。Mac App Store 只做状态目录中的本地清单，不自动安装或处理 Apple ID。
 
 ## 8. 命令职责边界
 
 ### 8.1 配置安装器
 
-`install.sh` 只负责阶段 2 的配置来源、计划、备份、真实入口 symlink、company/local 分层、作为 Zsh 配置运行依赖的固定 revision Oh My Zsh/插件、验证和配置回滚：
+`install.sh` 只负责阶段 2 的配置来源、计划、备份、personal 真实入口 symlink、company/local 增量、作为 Zsh 配置运行依赖的固定 revision Oh My Zsh/插件、验证和配置回滚：
 
 ```text
 ./install.sh
@@ -244,7 +250,7 @@ Homebrew 不设计 lockfile；需固定的语言版本由 mise/uv 管理。`brew
 
 以下动作必须由用户显式选择、授权或亲自执行：
 
-- 选择阶段 0 的 public/company 目标仓库和仓库内路径。
+- 选择阶段 0 的公开仓库 checkout/root 和 company 仓库 checkout/root；公开仓库内个人配置目录固定为 `my_setup/`。
 - 创建远程仓库、授予公司服务访问权、改变仓库可见性和向远程 push。
 - 信任并执行公司 hook 或 mise 等配置中的动态执行能力。
 - 密钥轮换、明文密钥清除和 shell 历史定向删除。
@@ -255,12 +261,12 @@ Homebrew 不设计 lockfile；需固定的语言版本由 mise/uv 管理。`brew
 
 ## 11. 密钥与隐私
 
-- 密钥不得进入 public/company Git、Git 历史、诊断输出、日志、CI artifact 或普通长期备份。
+- 密钥不得进入公开/company Git、Git 历史、诊断输出、日志、CI artifact 或普通长期备份。
 - API key 默认保存在 macOS Keychain，只由命令 wrapper 临时注入；仓库不实现自定义密钥管理 CLI。
 - Keychain service 统一使用 `dotfiles:<VARIABLE_NAME>`；读取值时不得打印或持久化。
-- 只有工具无法临时注入时，才允许在 local-only `zsh/rc.zsh` 的独立标记区块保存明文例外；文件必须 `0600`，父目录必须 `0700`。
+- 只有工具无法临时注入时，才允许在 local `zsh/rc.zsh` 的独立标记区块保存明文例外；文件必须 `0600`，父目录必须 `0700`。
 - 旧历史扫描只记录变量类别、文件、命中数和不可逆脱敏指纹。必须先轮换密钥，再经独立授权定向删除命中记录。
-- public 候选的配置、注释和 sidecar 均不得包含公司名、内部域名、账号、设备标识或机器绝对路径。
+- personal 候选的配置、注释和 sidecar 均不得包含公司名、内部域名、账号、设备标识或机器绝对路径。
 
 ## 12. Git、供应链和文件安全
 
@@ -269,12 +275,12 @@ Homebrew 不设计 lockfile；需固定的语言版本由 mise/uv 管理。`brew
 - 已存在文件或工作树冲突必须停止并报告，不得自动换到 staging 或另一个默认目录。
 - 外部下载后执行的脚本和公司 hook 必须记录来源 revision 与 SHA-256；禁止不透明的 `curl | shell`。
 - 固定版本 Gitleaks 必须覆盖 tracked、untracked、ignored、暂存区、当前提交和完整历史；扫描失败时 fail closed。
-- 公开仓库采用 MIT License；company 和 local-only 内容不受该许可证覆盖。
+- 公开仓库采用 MIT License；company 和 local 内容不受该许可证覆盖。
 
 ## 13. 追溯、哈希与回滚原则
 
 - 普通流程状态使用 run-id、稳定 ID、Git diff/commit、备份路径和验证结果追踪，不对每条记录或可逆文件维护 SHA-256。
-- 阶段 0 只在两次预审批结束后，为整组最终产物生成一份 `stage0-summary.sha256`。
+- 阶段 0 只在两次预审批结束后，为整组可分享/company 候选及 local 脱敏元数据生成一份 `stage0-summary.sha256`；local 私有文件内容和 Keychain 值不得进入摘要输入。
 - 阶段 1 落库后使用 Git commit ID 接管内容身份。
 - 阶段 3 只为冻结的最终不可逆退役 manifest 生成 `retirement-manifest.sha256`。
 - 可逆配置修改必须先生成计划、备份和 manifest，再 apply；验证应覆盖目标类型、symlink 指向、权限、命令来源和 rollback 演练。
