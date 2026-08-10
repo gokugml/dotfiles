@@ -17,3 +17,5 @@ if [[ -r "$HOME/.config/dotfiles/local/zsh/profile.zsh" ]]; then
     print -u2 -- "dotfiles: local profile.zsh 加载失败"
 fi
 # <<< dotfiles: private profile configuration <<<
+
+echo 'eval "$(/opt/homebrew/bin/brew shellenv zsh)"'
