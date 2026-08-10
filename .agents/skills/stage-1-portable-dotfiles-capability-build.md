@@ -6,17 +6,17 @@
 
 ## 1. 阶段定位
 
-本阶段把 Stage 0 已确认的分析结果整理为可供其他用户和机器复用的仓库能力。核心交付是 `dump.sh`、统一 `install.sh`、配置目录、最小测试、pre-commit、双语 README 和 CI 发布门禁。
+本阶段把 Stage 0 已确认的分析结果整理为可供其他用户和机器复用的仓库能力。核心交付是 `dump.sh`、根目录统一 `install.sh`、三个内部能力安装模块、配置目录、最小测试、默认中文 README、独立英文 README 和 CI 发布门禁。
 
 本阶段建设能力，不在开发者真实 HOME 中安装配置或软件。
 
 ## 2. 目标
 
 1. 固化 `dump.sh` 的软件/tooling/plugin 只读导出能力，以及 Zsh Skill 的独立脱敏证据采集能力。
-2. 生成单一 `install.sh`，同时承担 Stage 2 安装和 Stage 3 退役入口。
+2. 生成根目录统一 `install.sh`，同时承担 Stage 2 安装和 Stage 3 退役入口；`zsh`、`tooling`、`macos` 各自提供一个只由根安装器编排的内部 `install.sh`。
 3. 建立 `my_setup/`、company 和 local 的轻量契约。
 4. 用最小 smoke test 验证关键路径，不建设额外管理 CLI。
-5. 保留 pre-commit、完整中英文 README 和 CI 发布门禁。
+5. 保留 pre-commit、分离且互链的完整中英文 README 和 CI 发布门禁。
 
 ## 3. 前置条件
 
@@ -34,19 +34,24 @@
 
 ```text
 dotfiles/
-├── README.md
+├── README.md                    # 默认中文文档
+├── README.en.md                 # 独立英文文档
 ├── LICENSE
 ├── dump.sh
 ├── install.sh
 ├── skills/
 ├── my_setup/
 │   ├── zsh/
-│   │   ├── .zprofile
-│   │   ├── .zshrc
+│   │   ├── install.sh
+│   │   ├── .zprofile          # Stage 2 根据已确认修复计划生成
+│   │   ├── .zshrc             # Stage 2 根据已确认修复计划生成
 │   │   ├── zsh-repair-plan.md
 │   │   └── plugins.toml
-│   ├── macos/Brewfile
+│   ├── macos/
+│   │   ├── install.sh
+│   │   └── Brewfile
 │   └── tooling/
+│       └── install.sh
 ├── tests/
 │   └── smoke.zsh
 ├── .githooks/pre-commit
@@ -65,7 +70,9 @@ company-dotfiles/
 └── tooling/
 ```
 
-目标结构之外不再建设额外管理 CLI、独立 migrate/retire 脚本、通用 schemas 目录、拆散的插件文件、大量场景 fixture 或长期状态目录。
+三个能力安装模块不是额外的用户命令面：它们被根安装器加载，只暴露带能力前缀的内部 plan/apply/verify 函数，直接执行时必须拒绝并引导用户使用根目录 `install.sh`。目标结构之外不再建设额外管理 CLI、独立 migrate/retire 脚本、通用 schemas 目录、拆散的插件文件、大量场景 fixture 或长期状态目录。
+
+Stage 1 不根据修复计划生成最终 `.zprofile` 或 `.zshrc`；这两个文件仍由 Stage 2 生成并经用户审查。Stage 1 安装器在它们缺失时必须以清楚的阻断信息停止，smoke test 则只在临时仓库中创建最小 Zsh fixture 验证安装能力。
 
 ## 5. `dump.sh`
 
@@ -89,7 +96,7 @@ company-dotfiles/
 - 只清理本次明确生成的候选文件，不清空 `tmp/` 中的未知内容；
 - 退出时清楚区分成功、部分证据缺失和安全失败。
 
-## 6. 统一 `install.sh`
+## 6. 根目录统一 `install.sh`
 
 命令面固定为：
 
@@ -101,6 +108,16 @@ company-dotfiles/
 ```
 
 无参数 `install.sh` 等于安装 apply。
+
+根安装器是唯一公开入口，负责参数解析、跨能力前置检查、汇总变更摘要、一次默认 `N` 的 `y/N` 确认、按顺序调用内部模块以及最终汇总验证。内部职责固定为：
+
+- `my_setup/zsh/install.sh`：Zsh 入口备份和 symlink、插件安装及 Zsh 验证；
+- `my_setup/tooling/install.sh`：mise、uv 等 tooling 安装及版本验证；
+- `my_setup/macos/install.sh`：Homebrew、personal/company Brewfile 安装及来源与架构验证。
+
+内部模块不得独立提示用户、重复确认、解析根命令面或自动调用其他模块；被直接执行时必须安全失败。普通安装仍只产生一次整体摘要和一次确认。
+
+根安装器的真实 apply 顺序固定为 `macos → tooling → zsh → pre-commit hook → verify`，避免软件安装失败时提前切换真实 Zsh 入口。
 
 ### 6.1 无参数安装
 
@@ -143,6 +160,8 @@ company-dotfiles/
 - company 最多一个 `zsh/company.zsh`；
 - local 最多一个 `parameters.zsh`；
 - `.zshrc` 固定按 company → personal → local 执行；
+- `.zshrc` 使用 `dotfiles: company`、`dotfiles: personal`、`dotfiles: local` 三个固定标记让安装器验证上述顺序；
+- `.zshrc` 为每个启用插件保留 `dotfiles: plugin <name>` 标记，并按合并后的 `load_order` 递增排列；
 - company 不依赖 personal 中后续才定义的 alias/function；
 - local 只保存不可公开参数，不保存软件选择。
 
@@ -168,7 +187,7 @@ personal/company 各自最多一份 `zsh/plugins.toml`。每个插件条目至�
 
 ## 8. README
 
-README 必须包含完整中文和完整英文正文，并保持：
+文档拆分为两份：根目录 `README.md` 是默认中文文档，`README.en.md` 是独立英文文档。两份文件都必须在标题后的靠前位置链接另一种语言，并保持：
 
 - 相同章节结构；
 - 相同命令示例；
@@ -192,7 +211,7 @@ README 必须包含完整中文和完整英文正文，并保持：
 - `zsh -n`；
 - public 密钥与公司信息扫描；
 - 禁止的 Intel 运行时路径；
-- README 中英文结构一致性。
+- `README.md` 与 `README.en.md` 的章节结构一致性及靠前互链。
 
 hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确失败或安装提示。
 
@@ -211,7 +230,7 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 - `retire` 只读、非 TTY 阻断和未知数据保护；
 - public 工作树密钥/公司信息扫描；
 - 使用固定版本扫描器检查公开仓库当前内容和完整 Git 历史；
-- README 中英文一致性。
+- `README.md` 与 `README.en.md` 的中英文一致性及靠前互链。
 
 发布必须等待 pre-commit 等价检查和 CI 通过。不得因完整 CI 而重新引入管理 CLI、多套 schema 或复杂 fixture。
 
@@ -219,12 +238,12 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 
 - [ ] 目标结构轻量且无被删除的旧组件；
 - [ ] `dump.sh` 只导出软件/tooling/plugin，Zsh 采集与导出 Review 已拆分为独立 Skill；
-- [ ] `install.sh` 具备安装、verify 和 retire 命令；
+- [ ] 根目录 `install.sh` 具备安装、verify 和 retire 命令，三个内部能力安装模块只由根入口编排；
 - [ ] 安装默认展示摘要并使用 `y/N`；
 - [ ] company/personal/local 加载顺序正确；
 - [ ] 插件已收敛为单一 `plugins.toml`；
 - [ ] local 密钥不会被脚本、测试或 CI 读取；
-- [ ] smoke test、pre-commit、双语 README 和 CI 通过；
+- [ ] smoke test、pre-commit、分离且互链的中英文 README 和 CI 通过；
 - [ ] 未修改开发者真实 HOME 或软件；
 
 完成后进入 [Stage 2](./stage-2-target-machine-configuration-and-software-migration/SKILL.md)。

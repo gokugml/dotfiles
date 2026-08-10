@@ -1,0 +1,440 @@
+#!/bin/zsh
+
+# Internal Zsh capability module. The repository-root install.sh is the only
+# public command and sources this file after defining the shared contract.
+
+if [[ "${DOTFILES_INSTALLER_ACTIVE:-0}" != 1 || "${ZSH_EVAL_CONTEXT:-}" != *:file* ]]; then
+  print -u2 -- 'my_setup/zsh/install.sh 是内部模块；请从仓库根目录运行 ./install.sh'
+  return 1 2>/dev/null || exit 1
+fi
+
+typeset -gA ZSH_PLUGIN_SOURCE
+typeset -gA ZSH_PLUGIN_REVISION
+typeset -gA ZSH_PLUGIN_ENABLED
+typeset -gA ZSH_PLUGIN_ORDER
+typeset -gA ZSH_PLUGIN_OWNER
+typeset -gA ZSH_PLUGIN_SEEN
+
+zsh_trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  print -r -- "$value"
+}
+
+zsh_store_plugin() {
+  local file="$1"
+  local owner="$2"
+  local name="$3"
+  local source="$4"
+  local revision="$5"
+  local enabled="$6"
+  local load_order="$7"
+  local seen_key="$owner:$name"
+
+  if [[ -z "$name" && -z "$source" && -z "$revision" && -z "$enabled" && -z "$load_order" ]]; then
+    return 0
+  fi
+  if [[ "$name" != [A-Za-z0-9._-]## ]]; then
+    print -u2 -- "zsh: ${file#$DOTFILES_REPO_ROOT/} 包含无效插件名"
+    return 1
+  fi
+  if [[ -z "$source" || "$source" == *[[:space:]'|']* ]]; then
+    print -u2 -- "zsh: 插件 $name 的 source 无效"
+    return 1
+  fi
+  if [[ "$source" != http://* && "$source" != https://* && "$source" != git@*:* \
+    && "$source" != oh-my-zsh/* ]]; then
+    print -u2 -- "zsh: 插件 $name 的 source 必须是 Git URL 或 oh-my-zsh 内部路径"
+    return 1
+  fi
+  if [[ "$revision" != [0-9a-fA-F]## || ${#revision} -ne 40 ]]; then
+    print -u2 -- "zsh: 插件 $name 必须固定 40 位 commit revision"
+    return 1
+  fi
+  if [[ "$enabled" != true && "$enabled" != false ]]; then
+    print -u2 -- "zsh: 插件 $name 的 enabled 必须为 true 或 false"
+    return 1
+  fi
+  if [[ "$load_order" != <-> ]]; then
+    print -u2 -- "zsh: 插件 $name 的 load_order 必须是非负整数"
+    return 1
+  fi
+  if [[ -n "${ZSH_PLUGIN_SEEN[$seen_key]:-}" ]]; then
+    print -u2 -- "zsh: ${file#$DOTFILES_REPO_ROOT/} 重复声明插件 $name"
+    return 1
+  fi
+
+  ZSH_PLUGIN_SEEN[$seen_key]=1
+  ZSH_PLUGIN_SOURCE[$name]="$source"
+  ZSH_PLUGIN_REVISION[$name]="${revision:l}"
+  ZSH_PLUGIN_ENABLED[$name]="$enabled"
+  ZSH_PLUGIN_ORDER[$name]="$load_order"
+  ZSH_PLUGIN_OWNER[$name]="$owner"
+}
+
+zsh_parse_plugins_file() {
+  local file="$1"
+  local owner="$2"
+  local line key value
+  local in_plugin=0
+  local name='' source='' revision='' enabled='' load_order=''
+
+  [[ -f "$file" && ! -L "$file" ]] || {
+    print -u2 -- "zsh: plugins.toml 缺失或不是普通文件：${file#$DOTFILES_REPO_ROOT/}"
+    return 1
+  }
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="$(zsh_trim "$line")"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+
+    if [[ "$line" == '[[plugins]]' ]]; then
+      if (( in_plugin )); then
+        zsh_store_plugin "$file" "$owner" "$name" "$source" "$revision" "$enabled" "$load_order" || return 1
+      fi
+      in_plugin=1
+      name=''
+      source=''
+      revision=''
+      enabled=''
+      load_order=''
+      continue
+    fi
+    if (( ! in_plugin )) || [[ "$line" != *=* ]]; then
+      print -u2 -- "zsh: ${file#$DOTFILES_REPO_ROOT/} 只允许 [[plugins]] 与固定字段"
+      return 1
+    fi
+
+    key="$(zsh_trim "${line%%=*}")"
+    value="$(zsh_trim "${line#*=}")"
+    case "$key" in
+      name|source|revision)
+        if [[ "$value" != \"*\" || ${#value} -lt 2 ]]; then
+          print -u2 -- "zsh: $key 必须是双引号字符串"
+          return 1
+        fi
+        value="${value[2,-2]}"
+        case "$key" in
+          name) name="$value" ;;
+          source) source="$value" ;;
+          revision) revision="$value" ;;
+        esac
+        ;;
+      enabled) enabled="$value" ;;
+      load_order) load_order="$value" ;;
+      *)
+        print -u2 -- "zsh: ${file#$DOTFILES_REPO_ROOT/} 包含未知字段 $key"
+        return 1
+        ;;
+    esac
+  done < "$file"
+
+  if (( ! in_plugin )); then
+    print -u2 -- "zsh: ${file#$DOTFILES_REPO_ROOT/} 没有插件声明"
+    return 1
+  fi
+  zsh_store_plugin "$file" "$owner" "$name" "$source" "$revision" "$enabled" "$load_order"
+}
+
+zsh_load_plugins() {
+  ZSH_PLUGIN_SOURCE=()
+  ZSH_PLUGIN_REVISION=()
+  ZSH_PLUGIN_ENABLED=()
+  ZSH_PLUGIN_ORDER=()
+  ZSH_PLUGIN_OWNER=()
+  ZSH_PLUGIN_SEEN=()
+
+  if [[ -n "$DOTFILES_COMPANY_DIR_RESOLVED" \
+    && -e "$DOTFILES_COMPANY_DIR_RESOLVED/zsh/plugins.toml" ]]; then
+    zsh_parse_plugins_file "$DOTFILES_COMPANY_DIR_RESOLVED/zsh/plugins.toml" company || return 1
+  fi
+  zsh_parse_plugins_file "$DOTFILES_PERSONAL_DIR/zsh/plugins.toml" personal || return 1
+}
+
+zsh_plugin_records() {
+  local name
+  for name in ${(k)ZSH_PLUGIN_SOURCE}; do
+    print -r -- "${(l:9::0:)ZSH_PLUGIN_ORDER[$name]}|$name|$ZSH_PLUGIN_SOURCE[$name]|$ZSH_PLUGIN_REVISION[$name]|$ZSH_PLUGIN_ENABLED[$name]|$ZSH_PLUGIN_OWNER[$name]"
+  done | LC_ALL=C sort
+}
+
+zsh_entry_plan() {
+  local target="$1"
+  local source="$2"
+
+  if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
+    print -- "- ${target:t}：symlink 已正确"
+  elif [[ -e "$target" || -L "$target" ]]; then
+    if [[ -d "$target" && ! -L "$target" ]]; then
+      print -u2 -- "zsh: $target 是目录，拒绝替换"
+      return 1
+    fi
+    print -- "- ${target:t}：备份现有入口后建立 symlink"
+  else
+    print -- "- ${target:t}：建立 symlink"
+  fi
+}
+
+zsh_plan() {
+  local profile="$DOTFILES_PERSONAL_DIR/zsh/.zprofile"
+  local rc="$DOTFILES_PERSONAL_DIR/zsh/.zshrc"
+  local record name source revision enabled owner target
+  typeset -i enabled_count=0
+  typeset -i blocked=0
+
+  for target in "$profile" "$rc"; do
+    if [[ ! -f "$target" || -L "$target" ]]; then
+      print -u2 -- "zsh: 缺少 Stage 2 生成的 ${target#$DOTFILES_REPO_ROOT/}"
+      blocked=1
+    elif ! /bin/zsh -n "$target" >/dev/null 2>&1; then
+      print -u2 -- "zsh: ${target#$DOTFILES_REPO_ROOT/} 语法错误"
+      blocked=1
+    fi
+  done
+
+  if (( blocked == 0 )); then
+    zsh_entry_plan "$DOTFILES_TARGET_HOME/.zprofile" "$profile" || blocked=1
+    zsh_entry_plan "$DOTFILES_TARGET_HOME/.zshrc" "$rc" || blocked=1
+  fi
+
+  if zsh_load_plugins; then
+    for record in ${(f)"$(zsh_plugin_records)"}; do
+      IFS='|' read -r _ name source revision enabled owner <<< "$record"
+      [[ "$enabled" == true ]] || continue
+      (( enabled_count += 1 ))
+      if [[ "$source" == oh-my-zsh/* ]]; then
+        target="$DOTFILES_PLUGIN_DIR/$source"
+      else
+        target="$DOTFILES_PLUGIN_DIR/$name"
+      fi
+      if [[ -e "$target" ]]; then
+        print -- "- plugin $name：校验/固定 $revision（$owner）"
+      else
+        print -- "- plugin $name：安装固定 revision $revision（$owner）"
+      fi
+    done
+    print -- "- 启用插件：$enabled_count 个；同名冲突由 personal 决定"
+  else
+    blocked=1
+  fi
+
+  (( blocked == 0 ))
+}
+
+zsh_backup_and_link() {
+  local target="$1"
+  local source="$2"
+  local stamp backup
+  typeset -i suffix=0
+
+  if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
+    return 0
+  fi
+  if [[ -e "$target" || -L "$target" ]]; then
+    if [[ -d "$target" && ! -L "$target" ]]; then
+      print -u2 -- "zsh: $target 是目录，拒绝替换"
+      return 1
+    fi
+    stamp="$(date '+%Y%m%d%H%M%S')"
+    backup="$target.dotfiles-backup.$stamp"
+    while [[ -e "$backup" || -L "$backup" ]]; do
+      (( suffix += 1 ))
+      backup="$target.dotfiles-backup.$stamp.$suffix"
+    done
+    if [[ -L "$target" ]]; then
+      command cp -P -- "$target" "$backup" || return 1
+    else
+      command cp -p -- "$target" "$backup" || return 1
+    fi
+    [[ -e "$backup" || -L "$backup" ]] || {
+      print -u2 -- "zsh: 无法验证入口副本 $backup"
+      return 1
+    }
+    command rm -f -- "$target" || return 1
+    print -- "zsh: 已创建副本 $backup"
+  fi
+  command ln -s -- "$source" "$target"
+}
+
+zsh_install_git_plugin() {
+  local name="$1"
+  local source="$2"
+  local revision="$3"
+  local target="$DOTFILES_PLUGIN_DIR/$name"
+  local current origin dirty
+
+  command mkdir -p -- "$DOTFILES_PLUGIN_DIR" || return 1
+  chmod 700 "$DOTFILES_PLUGIN_DIR" || return 1
+
+  if [[ ! -e "$target" ]]; then
+    git clone --filter=blob:none --no-checkout -- "$source" "$target" || return 1
+  elif [[ ! -d "$target/.git" ]]; then
+    print -u2 -- "zsh: 插件目标已存在但不是 Git 仓库：$target"
+    return 1
+  fi
+
+  origin="$(git -C "$target" remote get-url origin 2>/dev/null)" || return 1
+  if [[ "$origin" != "$source" ]]; then
+    print -u2 -- "zsh: 插件 $name 的现有 origin 与声明不一致"
+    return 1
+  fi
+  dirty="$(git -C "$target" status --porcelain)"
+  if [[ -n "$dirty" ]]; then
+    print -u2 -- "zsh: 插件 $name 存在本地修改，拒绝 checkout"
+    return 1
+  fi
+  if ! git -C "$target" cat-file -e "$revision^{commit}" 2>/dev/null; then
+    git -C "$target" fetch --depth=1 origin "$revision" || return 1
+  fi
+  git -C "$target" checkout --detach "$revision" >/dev/null || return 1
+  current="$(git -C "$target" rev-parse HEAD 2>/dev/null)" || return 1
+  [[ "$current" == "$revision" ]] || return 1
+}
+
+zsh_apply() {
+  local record name source revision enabled owner
+
+  zsh_load_plugins || return 1
+  for record in ${(f)"$(zsh_plugin_records)"}; do
+    IFS='|' read -r _ name source revision enabled owner <<< "$record"
+    [[ "$enabled" == true ]] || continue
+    if [[ "$source" == oh-my-zsh/* ]]; then
+      if [[ ! -d "$DOTFILES_PLUGIN_DIR/$source" ]]; then
+        print -u2 -- "zsh: 内部插件 $name 的父插件尚未安装"
+        return 1
+      fi
+    else
+      zsh_install_git_plugin "$name" "$source" "$revision" || return 1
+    fi
+  done
+
+  zsh_backup_and_link "$DOTFILES_TARGET_HOME/.zprofile" "$DOTFILES_PERSONAL_DIR/zsh/.zprofile" || return 1
+  zsh_backup_and_link "$DOTFILES_TARGET_HOME/.zshrc" "$DOTFILES_PERSONAL_DIR/zsh/.zshrc"
+}
+
+zsh_verify_load_order() {
+  local rc="$DOTFILES_PERSONAL_DIR/zsh/.zshrc"
+  local company_line personal_line local_line
+
+  company_line="$(grep -n -m1 'dotfiles: company' "$rc" 2>/dev/null | cut -d: -f1)"
+  personal_line="$(grep -n -m1 'dotfiles: personal' "$rc" 2>/dev/null | cut -d: -f1)"
+  local_line="$(grep -n -m1 'dotfiles: local' "$rc" 2>/dev/null | cut -d: -f1)"
+  if [[ -z "$company_line" || -z "$personal_line" || -z "$local_line" \
+    || "$company_line" -ge "$personal_line" || "$personal_line" -ge "$local_line" ]]; then
+    print -u2 -- 'verify: .zshrc 必须按 dotfiles: company → personal → local 标记顺序加载'
+    return 1
+  fi
+}
+
+zsh_verify_plugin_load_order() {
+  local rc="$DOTFILES_PERSONAL_DIR/zsh/.zshrc"
+  local record name source revision enabled owner marker_line
+  typeset -i previous_line=0
+
+  zsh_load_plugins || return 1
+  for record in ${(f)"$(zsh_plugin_records)"}; do
+    IFS='|' read -r _ name source revision enabled owner <<< "$record"
+    [[ "$enabled" == true ]] || continue
+    marker_line="$(grep -n -F -m1 -- "# dotfiles: plugin $name" "$rc" 2>/dev/null | cut -d: -f1)"
+    if [[ -z "$marker_line" || "$marker_line" -le "$previous_line" ]]; then
+      print -u2 -- "verify: .zshrc 缺少按 load_order 排列的插件标记：$name"
+      return 1
+    fi
+    previous_line="$marker_line"
+  done
+}
+
+zsh_verify_plugin() {
+  local name="$1"
+  local source="$2"
+  local revision="$3"
+  local target current origin dirty
+
+  if [[ "$source" == oh-my-zsh/* ]]; then
+    target="$DOTFILES_PLUGIN_DIR/$source"
+    [[ -d "$target" ]] || {
+      print -u2 -- "verify: 内部插件 $name 不存在"
+      return 1
+    }
+    return 0
+  fi
+
+  target="$DOTFILES_PLUGIN_DIR/$name"
+  [[ -d "$target/.git" ]] || {
+    print -u2 -- "verify: 插件 $name 未安装为 Git 仓库"
+    return 1
+  }
+  current="$(git -C "$target" rev-parse HEAD 2>/dev/null)" || return 1
+  origin="$(git -C "$target" remote get-url origin 2>/dev/null)" || return 1
+  dirty="$(git -C "$target" status --porcelain)"
+  if [[ "$current" != "$revision" || "$origin" != "$source" || -n "$dirty" ]]; then
+    print -u2 -- "verify: 插件 $name 的 revision、origin 或工作树不符合声明"
+    return 1
+  fi
+}
+
+zsh_verify() {
+  local profile="$DOTFILES_PERSONAL_DIR/zsh/.zprofile"
+  local rc="$DOTFILES_PERSONAL_DIR/zsh/.zshrc"
+  local record name source revision enabled owner target
+  typeset -i failed=0
+
+  for target in "$profile" "$rc"; do
+    if [[ ! -f "$target" || -L "$target" ]] || ! /bin/zsh -n "$target" >/dev/null 2>&1; then
+      print -u2 -- "verify: ${target#$DOTFILES_REPO_ROOT/} 缺失、类型错误或语法错误"
+      failed=1
+    fi
+  done
+  if grep -En '/usr/local|arch[[:space:]]+-x86_64|Rosetta|ZDOTDIR' "$profile" "$rc" >/dev/null 2>&1; then
+    print -u2 -- 'verify: personal Zsh 含禁止的 Intel/Rosetta/ZDOTDIR 标记'
+    failed=1
+  fi
+  zsh_verify_load_order || failed=1
+  zsh_verify_plugin_load_order || failed=1
+
+  if [[ ! -L "$DOTFILES_TARGET_HOME/.zprofile" \
+    || "$(readlink "$DOTFILES_TARGET_HOME/.zprofile" 2>/dev/null)" != "$profile" ]]; then
+    print -u2 -- 'verify: ~/.zprofile 未指向 personal .zprofile'
+    failed=1
+  fi
+  if [[ ! -L "$DOTFILES_TARGET_HOME/.zshrc" \
+    || "$(readlink "$DOTFILES_TARGET_HOME/.zshrc" 2>/dev/null)" != "$rc" ]]; then
+    print -u2 -- 'verify: ~/.zshrc 未指向 personal .zshrc'
+    failed=1
+  fi
+
+  if [[ -n "$DOTFILES_COMPANY_DIR_RESOLVED" \
+    && -e "$DOTFILES_COMPANY_DIR_RESOLVED/zsh/company.zsh" ]]; then
+    /bin/zsh -n "$DOTFILES_COMPANY_DIR_RESOLVED/zsh/company.zsh" >/dev/null 2>&1 || {
+      print -u2 -- 'verify: company.zsh 语法错误'
+      failed=1
+    }
+  fi
+
+  if zsh_load_plugins; then
+    for record in ${(f)"$(zsh_plugin_records)"}; do
+      IFS='|' read -r _ name source revision enabled owner <<< "$record"
+      [[ "$enabled" == true ]] || continue
+      zsh_verify_plugin "$name" "$source" "$revision" || failed=1
+    done
+  else
+    failed=1
+  fi
+
+  if (( failed == 0 )); then
+    env -u ZDOTDIR HOME="$DOTFILES_TARGET_HOME" /bin/zsh -l -c ':' >/dev/null 2>&1 || {
+      print -u2 -- 'verify: login shell 启动失败（输出已丢弃）'
+      failed=1
+    }
+    env -u ZDOTDIR HOME="$DOTFILES_TARGET_HOME" /bin/zsh -i -c ':' >/dev/null 2>&1 || {
+      print -u2 -- 'verify: interactive shell 启动失败（输出已丢弃）'
+      failed=1
+    }
+  fi
+
+  if (( failed == 0 )); then
+    print -- '✓ Zsh 语法、入口 symlink、加载顺序、启动场景与固定插件'
+  fi
+  (( failed == 0 ))
+}

@@ -15,10 +15,30 @@ fi
 
 readonly script_dir="${0:A:h}"
 readonly repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)"
+readonly dump_test_mode="${DOTFILES_DUMP_TEST_MODE:-0}"
 
 if [[ -z "$repo_root" || "$repo_root" != "$script_dir" ]]; then
   print -u2 -- 'dump.sh: 必须位于当前公开 Git 仓库根目录'
   exit 1
+fi
+
+if [[ "$dump_test_mode" != 0 && "$dump_test_mode" != 1 ]]; then
+  print -u2 -- 'dump.sh: DOTFILES_DUMP_TEST_MODE 只能为 0 或 1'
+  exit 1
+fi
+if [[ "$dump_test_mode" == 1 ]]; then
+  if [[ ! -d "$HOME" || -L "$HOME" || ! -O "$HOME" \
+    || ! -d "$repo_root" || -L "$repo_root" || ! -O "$repo_root" ]]; then
+    print -u2 -- 'dump.sh: 测试仓库与 HOME 必须是当前用户拥有的真实目录，且不得是 symlink'
+    exit 1
+  fi
+  case "${repo_root:A}:${HOME:A}" in
+    /private/tmp/*:/private/tmp/*|/tmp/*:/tmp/*) ;;
+    *)
+      print -u2 -- 'dump.sh: 测试模式只允许 /private/tmp 或 /tmp 下的隔离仓库和 HOME'
+      exit 1
+      ;;
+  esac
 fi
 
 readonly output_root="$repo_root/tmp"
@@ -378,9 +398,13 @@ native_brew_dump "$primary_brew"
   print -r -- '## Homebrew state'
   print
 } >> "$report"
-brew_summary 'Apple Silicon Homebrew' /opt/homebrew/bin/brew
-brew_summary 'Intel Homebrew' /usr/local/bin/brew
-secondary_brew_dumps "$primary_brew"
+if [[ "$dump_test_mode" == 1 ]]; then
+  brew_summary 'Isolated test Homebrew' "$primary_brew"
+else
+  brew_summary 'Apple Silicon Homebrew' /opt/homebrew/bin/brew
+  brew_summary 'Intel Homebrew' /usr/local/bin/brew
+  secondary_brew_dumps "$primary_brew"
+fi
 
 {
   print -r -- '## Runtime and tooling native state'

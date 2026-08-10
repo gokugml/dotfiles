@@ -1,0 +1,12 @@
+title = "Dotfiles public repository secret scan"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Synthetic values used only by isolated non-disclosure tests"
+stopwords = [
+  "fixture-active-secret",
+  "fixture-commented-secret",
+  "fixture-secret-value",
+]

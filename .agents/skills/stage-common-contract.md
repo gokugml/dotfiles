@@ -21,7 +21,7 @@
 
 ```text
 Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 → Review Skill 审阅导出文件 → 跨结果自检 → 用户一次确认
-  → Stage 1：建设 dump.sh、install.sh 与可复用仓库能力
+  → Stage 1：建设 dump.sh、根 install.sh、三个内部能力安装模块与可复用仓库能力
     → Stage 2：AI 生成仓库版 Zsh → install.sh 安装 → verify
       → Stage 3：install.sh retire 预览 → 用户确认 → 退役与验证
 ```
@@ -37,7 +37,7 @@ Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 �
 
 | 范围 | 保存位置 | 负责 | 不负责 |
 |---|---|---|---|
-| 公开仓库 | 用户当前 Git 仓库 | `dump.sh`、`install.sh`、Skills、文档、测试、pre-commit、CI 和 `my_setup/` | 公司内容、本机密钥 |
+| 公开仓库 | 用户当前 Git 仓库 | `dump.sh`、根 `install.sh`、三个内部能力安装模块、Skills、文档、测试、pre-commit、CI 和 `my_setup/` | 公司内容、本机密钥 |
 | personal | 公开仓库固定 `my_setup/` | 可分享的 Zsh、Brewfile、tooling、插件和软件期望状态 | 公司增量、本机密钥 |
 | company | 可选独立私有仓库 | 公司专属 Zsh、Brewfile、tooling 和插件增量 | 通用脚本、个人偏好、本机密钥 |
 | local | `~/.config/dotfiles/local/parameters.zsh` | 密钥值、账号、机器路径和不可公开参数 | Brewfile、软件清单、插件选择、普通共享配置 |
@@ -56,19 +56,24 @@ company 缺失时，personal + local 必须能够独立工作。local 文件缺�
 
 ```text
 dotfiles/
-├── README.md
+├── README.md            # 默认中文文档
+├── README.en.md         # 独立英文文档
 ├── dump.sh
 ├── install.sh
 ├── tmp/                 # Git ignored；Stage 0 临时候选树
 ├── skills/
 ├── my_setup/
 │   ├── zsh/
-│   │   ├── .zprofile
-│   │   ├── .zshrc
+│   │   ├── install.sh
+│   │   ├── .zprofile          # Stage 2 生成
+│   │   ├── .zshrc             # Stage 2 生成
 │   │   ├── zsh-repair-plan.md
 │   │   └── plugins.toml
-│   ├── macos/Brewfile
+│   ├── macos/
+│   │   ├── install.sh
+│   │   └── Brewfile
 │   └── tooling/
+│       └── install.sh
 ├── tests/
 ├── .githooks/pre-commit
 └── .github/workflows/
@@ -96,12 +101,16 @@ company-dotfiles/
 
 不存在实际内容时不创建空 company 文件。详细 tooling 文件由实际工具决定，不为统一目录外观创建空 schema 或占位文件。
 
+Stage 1 只建设可安装、可验证上述目标结构的能力；最终 `.zprofile` 和 `.zshrc` 仍由 Stage 2 根据已确认修复计划生成。二者缺失时根安装器必须阻断真实安装，Stage 1 测试只能在临时仓库中使用最小 fixture。
+
 ## 5. Zsh 运行时边界
 
 - 不接管 `~/.zshenv`，不设置 `ZDOTDIR`。
 - `~/.zprofile` symlink 到 `my_setup/zsh/.zprofile`。
 - `~/.zshrc` symlink 到 `my_setup/zsh/.zshrc`。
 - `.zshrc` 的受管加载顺序固定为 `company → personal → local`。
+- `.zshrc` 使用 `dotfiles: company`、`dotfiles: personal`、`dotfiles: local` 固定标记供安装器验证加载顺序。
+- `.zshrc` 为每个启用插件保留 `dotfiles: plugin <name>` 标记，并按合并后的 `load_order` 递增排列。
 - company 只有一个可选 `zsh/company.zsh`，必须能够在 personal 配置之前独立加载。
 - local 只有一个可选 `parameters.zsh`，在 personal 配置之后加载。
 - company 或 local 文件缺失时静默跳过；存在但语法错误时 `install.sh verify` 失败。
@@ -140,7 +149,8 @@ company-dotfiles/
 - `install.sh verify` 验证 Zsh、symlink、架构、软件来源和插件状态。
 - `install.sh retire` 属于 Stage 3，只读预览。
 - `install.sh retire --apply` 只在真实终端接受默认 `N` 的 `y/N` 确认。
-- 主流程只提供上列命令，不扩张额外管理入口或独立迁移脚本。
+- 根目录 `install.sh` 是唯一公开安装入口；`my_setup/zsh/install.sh`、`my_setup/tooling/install.sh`、`my_setup/macos/install.sh` 只作为被根安装器加载的内部能力模块，直接执行时安全失败。
+- 主流程只提供上列命令，不扩张额外用户命令入口或独立迁移脚本。
 
 ## 8. 写入与删除安全
 
@@ -180,4 +190,4 @@ company-dotfiles/
 - Zsh 修改建议只由 Zsh Skill 生成；按需读取其内置的 [Zsh 配置诊断与优化指南](./analyze-zsh-configuration/references/zshrc-diagnostics-guide.md)，不得复制回编排或 Review Skill。
 - 导出配置 Review Skill 只审阅 `dump.sh` 已导出的软件、tooling 和插件文件，不读取 Zsh 证据或修改 `zsh-repair-plan.md`。
 - 后续转化为真正 Skill 时，`SKILL.md` 只保留触发条件和核心工作流；确定性检查再沉淀为 scripts。
-- README 保持完整中文和英文正文，pre-commit 与 CI 负责验证两种语言的结构同步及基础安全。
+- `README.md` 保持完整中文正文并作为默认入口，`README.en.md` 保持完整英文正文；两份文件在标题后的靠前位置互相链接，pre-commit 与 CI 负责验证结构同步及基础安全。
