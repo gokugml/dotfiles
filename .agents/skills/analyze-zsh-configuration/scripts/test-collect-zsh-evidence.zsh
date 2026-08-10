@@ -9,6 +9,7 @@ readonly collector="$script_dir/collect-zsh-evidence.zsh"
 readonly test_root="$(mktemp -d /private/tmp/zsh-evidence-test.XXXXXX)"
 readonly fixture_home="$test_root/home"
 readonly fixture_repo="$test_root/repo"
+readonly fixture_repository_source="$fixture_repo/my_setup/zsh"
 readonly report="$fixture_repo/tmp/zsh-evidence.md"
 
 cleanup() {
@@ -43,10 +44,17 @@ assert_absent() {
   fi
 }
 
+assert_text_contains() {
+  local text="$1"
+  local expected="$2"
+  [[ "$text" == *"$expected"* ]] || fail "预检输出缺少：$expected"
+}
+
 mkdir -p -- \
   "$fixture_home/bin" \
   "$fixture_home/.nvm" \
   "$fixture_home/.oh-my-zsh" \
+  "$fixture_repository_source" \
   "$fixture_repo"
 touch -- \
   "$fixture_home/bin/pnpm" \
@@ -76,18 +84,50 @@ chmod 700 "$fixture_home/bin/pnpm"
   print -r -- '# export ARCHFLAGS="-arch x86_64"'
 } > "$fixture_home/.zshrc"
 
+{
+  print -r -- 'export PATH="$HOME/bin:$PATH"'
+} > "$fixture_repository_source/zprofile"
+
+{
+  print -r -- 'export REPOSITORY_API_KEY="fixture-repository-secret"'
+  print -r -- 'autoload -Uz compinit'
+  print -r -- 'compinit'
+} > "$fixture_repository_source/zshrc"
+
 git -C "$fixture_repo" init -q
 {
   print -r -- 'tmp/'
 } > "$fixture_repo/.gitignore"
 
+if (
+  cd "$fixture_repo" || exit 1
+  ZSH_ANALYSIS_TEST_HOME="$fixture_home" "$collector" >/dev/null 2>&1
+); then
+  fail '未显式选择来源时采集器不应成功'
+fi
+
+preflight_output="$({
+  cd "$fixture_repo" || exit 1
+  ZSH_ANALYSIS_TEST_HOME="$fixture_home" \
+    "$collector" --source live-home --files zprofile,zshrc --preflight
+})" || fail 'live-home 预检失败'
+assert_text_contains "$preflight_output" '- source-origin: live-home'
+assert_text_contains "$preflight_output" '- selected-files: zprofile,zshrc'
+assert_text_contains "$preflight_output" '- input-map: .zprofile <- .zprofile kind=file'
+assert_text_contains "$preflight_output" '- report-written: no'
+[[ ! -e "$report" ]] || fail '预检不得写入证据报告'
+
 (
   cd "$fixture_repo" || exit 1
   PATH='/usr/local/bin:/usr/local/bin:/usr/bin:/bin' \
     ZSH_ANALYSIS_TEST_HOME="$fixture_home" \
-    "$collector" >/dev/null
+    "$collector" --source live-home --files zprofile,zshrc >/dev/null
 ) || fail '采集器执行失败'
 
+assert_contains '- source-origin: live-home'
+assert_contains '- source-root-category: live-home'
+assert_contains '- selected-files: zprofile,zshrc'
+assert_contains '- source-input-name: .zprofile'
 assert_contains '- collector-process-architecture:'
 assert_contains '- startup-performance: not-measured'
 assert_contains '- startup-files-sourced: no'
@@ -107,5 +147,50 @@ assert_absent 'fixture-active-secret'
 assert_absent 'fixture-commented-secret'
 assert_absent '/Users/example/private'
 assert_absent "$fixture_home"
+
+preflight_output="$({
+  cd "$fixture_repo" || exit 1
+  ZSH_ANALYSIS_TEST_HOME="$fixture_home" \
+    "$collector" --source repository --source-dir my_setup/zsh --files zprofile,zshrc --preflight
+})" || fail 'repository 预检失败'
+assert_text_contains "$preflight_output" '- source-origin: repository'
+assert_text_contains "$preflight_output" '- source-root-category: current-repository'
+assert_text_contains "$preflight_output" '- input-map: .zprofile <- zprofile kind=file'
+assert_text_contains "$preflight_output" '- input-map: .zshrc <- zshrc kind=file'
+
+(
+  cd "$fixture_repo" || exit 1
+  PATH='/usr/local/bin:/usr/local/bin:/usr/bin:/bin' \
+    ZSH_ANALYSIS_TEST_HOME="$fixture_home" \
+    "$collector" --source repository --source-dir my_setup/zsh --files zprofile,zshrc >/dev/null
+) || fail 'repository 采集失败'
+
+assert_contains '- source-origin: repository'
+assert_contains '- source-root-category: current-repository'
+assert_contains '- selected-files: zprofile,zshrc'
+assert_contains '- source-input-name: zprofile'
+assert_contains '- source-input-name: zshrc'
+assert_contains 'name=REPOSITORY_API_KEY scope=exported secret-like=yes'
+assert_absent 'fixture-repository-secret'
+assert_absent '### .zshenv'
+assert_absent "$fixture_repository_source"
+
+touch "$fixture_repository_source/.zshrc"
+if (
+  cd "$fixture_repo" || exit 1
+  ZSH_ANALYSIS_TEST_HOME="$fixture_home" \
+    "$collector" --source repository --source-dir my_setup/zsh --files zshrc --preflight >/dev/null 2>&1
+); then
+  fail '同名点文件与非点文件并存时必须拒绝歧义'
+fi
+rm -f -- "$fixture_repository_source/.zshrc"
+
+if (
+  cd "$fixture_repo" || exit 1
+  ZSH_ANALYSIS_TEST_HOME="$fixture_home" \
+    "$collector" --source repository --source-dir "$fixture_home" --files zshrc --preflight >/dev/null 2>&1
+); then
+  fail 'repository 来源目录不得离开当前仓库'
+fi
 
 print -r -- 'test-collect-zsh-evidence.zsh: 通过'

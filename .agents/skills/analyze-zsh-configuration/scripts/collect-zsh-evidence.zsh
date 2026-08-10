@@ -7,26 +7,208 @@ emulate -L zsh
 setopt NO_UNSET PIPE_FAIL NULL_GLOB
 umask 077
 
-if (( $# != 0 )); then
-  print -u2 -- '用法：collect-zsh-evidence.zsh'
-  exit 1
-fi
-
 readonly repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
 readonly current_dir="${PWD:A}"
-readonly source_home="${ZSH_ANALYSIS_TEST_HOME:-$HOME}"
 
 if [[ -z "$repo_root" || "$repo_root" != "$current_dir" ]]; then
   print -u2 -- 'collect-zsh-evidence.zsh: 必须从当前公开 Git 仓库根目录运行'
   exit 1
 fi
-if [[ -n "${ZSH_ANALYSIS_TEST_HOME:-}" && "$source_home" != /private/tmp/* ]]; then
+
+usage() {
+  print -u2 -- '用法：'
+  print -u2 -- '  collect-zsh-evidence.zsh --source live-home [--files zshenv,zprofile,zshrc,zlogin] [--preflight]'
+  print -u2 -- '  collect-zsh-evidence.zsh --source repository --source-dir <repo-relative-dir> [--files zprofile,zshrc] [--preflight]'
+}
+
+source_mode=''
+source_dir_argument=''
+startup_files_argument='zshenv,zprofile,zshrc,zlogin'
+preflight_only='no'
+
+while (( $# > 0 )); do
+  case "$1" in
+    --source)
+      (( $# >= 2 )) || { usage; exit 1; }
+      source_mode="$2"
+      shift 2
+      ;;
+    --source-dir)
+      (( $# >= 2 )) || { usage; exit 1; }
+      source_dir_argument="$2"
+      shift 2
+      ;;
+    --files)
+      (( $# >= 2 )) || { usage; exit 1; }
+      startup_files_argument="$2"
+      shift 2
+      ;;
+    --preflight)
+      preflight_only='yes'
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      print -u2 -- "collect-zsh-evidence.zsh: 未知参数：$1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -z "$source_mode" ]]; then
+  print -u2 -- 'collect-zsh-evidence.zsh: 必须显式选择 --source live-home 或 --source repository'
+  usage
+  exit 1
+fi
+
+readonly semantic_home="${ZSH_ANALYSIS_TEST_HOME:-$HOME}"
+if [[ -n "${ZSH_ANALYSIS_TEST_HOME:-}" && "$semantic_home" != /private/tmp/* ]]; then
   print -u2 -- 'collect-zsh-evidence.zsh: ZSH_ANALYSIS_TEST_HOME 仅允许指向 /private/tmp/ 下的测试 fixture'
   exit 1
 fi
 
+source_origin=''
+source_root_category=''
+startup_root=''
+case "$source_mode" in
+  live-home)
+    if [[ -n "$source_dir_argument" ]]; then
+      print -u2 -- 'collect-zsh-evidence.zsh: live-home 模式不接受 --source-dir'
+      exit 1
+    fi
+    source_origin='live-home'
+    source_root_category='live-home'
+    startup_root="$semantic_home"
+    ;;
+  repository)
+    if [[ -z "$source_dir_argument" ]]; then
+      print -u2 -- 'collect-zsh-evidence.zsh: repository 模式必须提供 --source-dir'
+      exit 1
+    fi
+    if [[ ! -d "$source_dir_argument" || -L "$source_dir_argument" ]]; then
+      print -u2 -- 'collect-zsh-evidence.zsh: --source-dir 必须是仓库内的真实目录，不得是 symlink'
+      exit 1
+    fi
+    startup_root="${source_dir_argument:A}"
+    case "$startup_root" in
+      "$repo_root"|"$repo_root"/*) ;;
+      *)
+        print -u2 -- 'collect-zsh-evidence.zsh: --source-dir 解析后必须位于当前 Git 仓库内'
+        exit 1
+        ;;
+    esac
+    source_origin='repository'
+    source_root_category='current-repository'
+    ;;
+  *)
+    print -u2 -- "collect-zsh-evidence.zsh: 不支持的 --source：$source_mode"
+    usage
+    exit 1
+    ;;
+esac
+
+typeset -a startup_files
+typeset -A selected_names
+startup_files=("${(@s:,:)startup_files_argument}")
+if (( ${#startup_files[@]} == 0 )); then
+  print -u2 -- 'collect-zsh-evidence.zsh: --files 不得为空'
+  exit 1
+fi
+for startup_file in "${startup_files[@]}"; do
+  startup_file="${startup_file#.}"
+  case "$startup_file" in
+    zshenv|zprofile|zshrc|zlogin) ;;
+    *)
+      print -u2 -- "collect-zsh-evidence.zsh: --files 包含不支持的名称：$startup_file"
+      exit 1
+      ;;
+  esac
+  if [[ -n "${selected_names[$startup_file]:-}" ]]; then
+    print -u2 -- "collect-zsh-evidence.zsh: --files 包含重复名称：$startup_file"
+    exit 1
+  fi
+  selected_names[$startup_file]=yes
+done
+startup_files=()
+for startup_file in zshenv zprofile zshrc zlogin; do
+  [[ -n "${selected_names[$startup_file]:-}" ]] && startup_files+=("$startup_file")
+done
+
+readonly source_origin source_root_category startup_root semantic_home
+
 readonly output_root="$repo_root/tmp"
 readonly report="$output_root/zsh-evidence.md"
+
+typeset -A startup_paths
+typeset -A startup_input_names
+
+resolve_startup_paths() {
+  local startup_file plain_candidate dotted_candidate selected_candidate resolved_candidate
+
+  for startup_file in "${startup_files[@]}"; do
+    if [[ "$source_origin" == live-home ]]; then
+      selected_candidate="$startup_root/.$startup_file"
+    else
+      plain_candidate="$startup_root/$startup_file"
+      dotted_candidate="$startup_root/.$startup_file"
+      if [[ ( -e "$plain_candidate" || -L "$plain_candidate" ) \
+        && ( -e "$dotted_candidate" || -L "$dotted_candidate" ) ]]; then
+        print -u2 -- "collect-zsh-evidence.zsh: repository 模式中 $startup_file 与 .$startup_file 同时存在，无法确定输入"
+        exit 1
+      elif [[ -e "$plain_candidate" || -L "$plain_candidate" ]]; then
+        selected_candidate="$plain_candidate"
+      elif [[ -e "$dotted_candidate" || -L "$dotted_candidate" ]]; then
+        selected_candidate="$dotted_candidate"
+      else
+        selected_candidate="$plain_candidate"
+      fi
+
+      if [[ -L "$selected_candidate" ]]; then
+        resolved_candidate="${selected_candidate:A}"
+        case "$resolved_candidate" in
+          "$repo_root"|"$repo_root"/*) ;;
+          *)
+            print -u2 -- "collect-zsh-evidence.zsh: repository 模式中 .$startup_file 的 symlink 目标不得离开当前仓库"
+            exit 1
+            ;;
+        esac
+      fi
+    fi
+
+    startup_paths[$startup_file]="$selected_candidate"
+    startup_input_names[$startup_file]="${selected_candidate:t}"
+  done
+}
+
+input_kind() {
+  local file="$1"
+  if [[ -L "$file" ]]; then
+    print -r -- 'symlink'
+  elif [[ -f "$file" ]]; then
+    print -r -- 'file'
+  elif [[ -e "$file" ]]; then
+    print -r -- 'other'
+  else
+    print -r -- 'missing'
+  fi
+}
+
+print_preflight() {
+  local startup_file
+
+  print -r -- '- preflight: pass'
+  print -r -- "- source-origin: $source_origin"
+  print -r -- "- source-root-category: $source_root_category"
+  print -r -- "- selected-files: ${(j:,:)startup_files}"
+  for startup_file in "${startup_files[@]}"; do
+    print -r -- "- input-map: .$startup_file <- ${startup_input_names[$startup_file]} kind=$(input_kind "${startup_paths[$startup_file]}")"
+  done
+  print -r -- '- report-written: no'
+}
 
 cleanup_report() {
   command rm -f -- "$report"
@@ -63,10 +245,10 @@ prepare_output() {
 classify_path() {
   local value="$1"
   case "$value" in
-    "$source_home/.local/bin"|"$source_home/.cargo/bin")
-      print -r -- "${value/#$source_home/\$HOME}"
+    "$semantic_home/.local/bin"|"$semantic_home/.cargo/bin")
+      print -r -- "${value/#$semantic_home/\$HOME}"
       ;;
-    "$source_home"/*|/Users/*)
+    "$semantic_home"/*|/Users/*)
       print -r -- '$HOME/<redacted>'
       ;;
     /opt/homebrew/*|/usr/*|/bin|/bin/*|/sbin|/sbin/*)
@@ -222,14 +404,14 @@ home_variable_targets() {
     target_kind='unknown'
     case "$rhs" in
       '$HOME/'*)
-        candidate="$source_home/${rhs#\$HOME/}"
+        candidate="$semantic_home/${rhs#\$HOME/}"
         path_category='$HOME/<redacted>'
         ;;
       '${HOME}/'*)
-        candidate="$source_home/${rhs#\$\{HOME\}/}"
+        candidate="$semantic_home/${rhs#\$\{HOME\}/}"
         path_category='$HOME/<redacted>'
         ;;
-      "$source_home"|"$source_home"/*|/Users/*)
+      "$semantic_home"|"$semantic_home"/*|/Users/*)
         candidate="$rhs"
         path_category='$HOME/<redacted>'
         ;;
@@ -374,7 +556,7 @@ zsh_file_signals() {
 
 zsh_file_summary() {
   local file="$1"
-  local label="${file:t}"
+  local label="$2"
   local kind='missing'
   local target='-'
   local permissions='-'
@@ -423,6 +605,7 @@ zsh_file_summary() {
   fi
 
   print -r -- "### $label" >> "$report"
+  print -r -- "- source-input-name: ${file:t}" >> "$report"
   print -r -- "- load-context: $load_context" >> "$report"
   print -r -- "- kind: $kind" >> "$report"
   print -r -- "- permissions: $permissions" >> "$report"
@@ -443,7 +626,8 @@ zsh_file_summary() {
 }
 
 safety_check() {
-  if grep -Fq "$source_home" "$report" \
+  if grep -Fq "$semantic_home" "$report" \
+    || grep -Fq "$startup_root" "$report" \
     || grep -Eq '/Users/[^/[:space:]"'\'']+' "$report" \
     || grep -Eqi '[[:alnum:]._%+-]+@[[:alnum:].-]+\.[[:alpha:]]{2,}' "$report" \
     || grep -Eqi 'AKIA[[:alnum:]]{16}|sk-[[:alnum:]_-]{20,}|BEGIN (RSA |OPENSSH )?PRIVATE KEY' "$report"; then
@@ -453,12 +637,23 @@ safety_check() {
   fi
 }
 
+resolve_startup_paths
+
+if [[ "$preflight_only" == yes ]]; then
+  print_preflight
+  exit 0
+fi
+
 prepare_output
 
 {
   print -r -- '# Stage 0 Zsh evidence'
   print
   print -r -- '- scope: sanitized structural signals and allowlisted read-only runtime facts'
+  print -r -- "- source-origin: $source_origin"
+  print -r -- "- source-root-category: $source_root_category"
+  print -r -- "- selected-files: ${(j:,:)startup_files}"
+  print -r -- '- runtime-origin: collector-process'
   print -r -- '- values-and-bodies: not-collected'
   print -r -- '- local-parameters-and-keychain: not-read'
   print -r -- '- interactive-or-login-shell-started: no'
@@ -472,8 +667,8 @@ print_runtime_facts >> "$report"
   print
 } >> "$report"
 
-for startup_file in .zshenv .zprofile .zshrc .zlogin; do
-  zsh_file_summary "$source_home/$startup_file"
+for startup_file in "${startup_files[@]}"; do
+  zsh_file_summary "${startup_paths[$startup_file]}" ".$startup_file"
 done
 
 {
