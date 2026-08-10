@@ -1,6 +1,6 @@
 ---
 name: stage-0-source-machine-analysis-and-export
-description: 编排源机器 Stage 0：运行 dump.sh 导出软件/tooling/plugin 候选，调用独立 Zsh 分析 Skill 生成文件修改建议，再调用独立导出 Review Skill 完成 AI 审阅、自检和一次用户确认，最后只写入获准草稿。用于用户要求“分析当前 Zsh 并 dump 本地配置”、盘点源 Mac 或为 Apple Silicon dotfiles 迁移准备候选配置时；不直接承担 Zsh 诊断或导出文件逐项 Review，也不安装、退役、commit 或 push。
+description: 编排源机器 Stage 0：运行 dump.sh 导出软件/tooling/plugin 候选，调用独立 Zsh 分析 Skill 生成文件修改建议，再调用独立导出 Review Skill 为每个工具先给出一句话描述并完成 AI 审阅、自检和一次用户确认，最后只写入获准草稿。用于用户要求“分析当前 Zsh 并 dump 本地配置”、盘点源 Mac 或为 macOS dotfiles 迁移准备候选配置时；不直接承担 Zsh 诊断或导出文件逐项 Review，也不安装、退役、commit 或 push。
 ---
 
 # Stage 0：源机器分析与配置导出编排
@@ -23,7 +23,7 @@ dump.sh → Zsh 分析 Skill → 导出配置 Review Skill
 - 读取并执行 [`$analyze-zsh-configuration`](../analyze-zsh-configuration/SKILL.md)，让它采集脱敏 Zsh 证据并生成修改建议。
 - 运行仓库根目录的 `./dump.sh`，只导出软件、tooling 和插件证据及候选配置。
 - 读取并执行 [`$review-exported-dotfiles`](../review-exported-dotfiles/SKILL.md)，让它只审阅 `dump.sh` 已导出的文件。
-- 读取[共用契约](../stage-common-contract.md)和[领域词汇](../../CONTEXT.md)，统一目录、所有权与安全边界。
+- 读取[共用契约](../stage-common-contract.md)和[领域词汇](../../../CONTEXT.md)，统一目录、所有权与安全边界。
 
 不要在本 Skill 里复制两个子 Skill 的分析规则。任何职责冲突按“Zsh 文件建议归 Zsh Skill，导出候选配置归 Review Skill，确认与正式写入归本 Skill”处理。
 
@@ -96,17 +96,17 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 
 完整执行 `$review-exported-dotfiles`。只允许它读取 `tmp/dump.md` 并编辑导出范围内的 Brewfile、tooling 和 `plugins.toml`；确认 `tmp/zsh-evidence.md` 与两个 `zsh-repair-plan.md` 在 Review 前后没有变化。
 
-取得候选文件清单、逐项调整摘要、manual 项、证据缺口和 Review 自检结果。
+取得候选文件清单、逐项调整摘要、manual 项、证据缺口和 Review 自检结果。逐项摘要中每个工具必须先给出 Review 已写入的一句话描述，再给出修改级别和本次建议。
 
 ### 5. 跨结果自检
 
 合并两个子 Skill 的结果并检查：
 
-- Zsh 建议中的工具所有权、Intel→ARM 替代关系与导出候选一致。
+- Zsh 建议中的工具所有权、Homebrew 架构和已确认替代关系与导出候选一致。
 - personal/company 无重复或所有权冲突，company 内容未进入 public。
 - public 输出不含本机绝对路径、邮箱、账号、敏感值或私有/内部/带凭证的远程地址；允许配置所需且已审阅的公开插件 source。
 - Zsh Skill 只生成修复计划，Review Skill 只修改导出候选，均未越权。
-- tooling 版本、插件 revision 和每个直接期望项目的六字段 `AI-REVIEW` 完整。
+- tooling 版本、插件 revision 和每个直接期望项目的六字段 `AI-REVIEW` 完整，首字段是一句话工具描述。
 - 未经审阅的机器快照没有直接成为正式配置；未知项均标记 `manual`。
 - 正式目录、真实 HOME、软件、服务和 Git 历史尚未被本次流程修改。
 
@@ -117,11 +117,11 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 展示：
 
 1. Zsh 修改建议摘要和证据缺口；
-2. 导出配置的逐项调整摘要和 manual 项；
+2. 导出配置的逐项调整摘要和 manual 项；每个工具先显示一句话描述，再显示修改级别和建议；
 3. public/company 正式目标；
 4. 正式目录到候选目录的全部新增、修改和删除 diff；
 5. local 参数类别，但不显示值；
-6. Stage 2 将生成、安装或验证的内容；
+6. Stage 1 将生成或更新的 Zsh 目标，以及 Stage 2 将安装或验证的内容；
 7. Stage 3 的退役建议；
 8. 两个子 Skill 与跨结果自检结论。
 

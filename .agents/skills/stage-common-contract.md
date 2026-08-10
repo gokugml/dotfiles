@@ -1,7 +1,7 @@
-# Apple Silicon Dotfiles 四阶段共用契约
+# macOS Dotfiles 四阶段共用契约
 
 > 状态：轻量共用需求<br>
-> 日期：2026-08-09<br>
+> 日期：2026-08-10<br>
 > 适用范围：Stage 0–3
 
 ## 1. 目的与权威顺序
@@ -11,19 +11,22 @@
 - [Stage 0：源机器分析与配置导出编排 Skill](./stage-0-source-machine-analysis-and-export/SKILL.md)
 - [Zsh 配置分析与修改建议 Skill](./analyze-zsh-configuration/SKILL.md)
 - [导出配置 AI Review Skill](./review-exported-dotfiles/SKILL.md)
-- [Stage 1：轻量 Dotfiles 能力建设](./stage-1-portable-dotfiles-capability-build.md)
+- [Stage 1：应用 Zsh 修复计划 Skill](./stage-1-apply-zsh-repair-plan/SKILL.md)
 - [Stage 2：目标机器配置与软件迁移 Skill](./stage-2-target-machine-configuration-and-software-migration/SKILL.md)
 - [Stage 3：旧 Intel 软件退役 Skill](./stage-3-intel-homebrew-retirement/SKILL.md)
+- [`install.sh` 与轻量 Dotfiles 能力建设计划](./install-sh-plan.md)
 
-[四阶段流程图](./steps.excalidraw) 是阶段职责和功能范围的首要来源。本契约用于补充安全与跨阶段一致性，不得扩张或改变图中的主流程。领域词汇以 [CONTEXT.md](../CONTEXT.md) 为准。
+[四阶段流程图](./steps.excalidraw) 是阶段职责和功能范围的首要来源。本契约用于补充安全与跨阶段一致性，不得扩张或改变图中的主流程。领域词汇以 [CONTEXT.md](../../CONTEXT.md) 为准。
 
 ## 2. 四阶段主线
 
 ```text
-Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 → Review Skill 审阅导出文件 → 跨结果自检 → 用户一次确认
-  → Stage 1：建设 dump.sh、根 install.sh、三个内部能力安装模块与可复用仓库能力
-    → Stage 2：AI 生成仓库版 Zsh → install.sh 安装 → verify
-      → Stage 3：install.sh retire 预览 → 用户确认 → 退役与验证
+install.sh plan：独立建设 dump.sh、根 install.sh、三个内部能力安装模块与可复用仓库能力
+
+Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 → Review Skill 先给工具一句话描述并审阅 → 跨结果自检 → 用户一次确认
+  → Stage 1：应用已确认 Zsh 修复计划 → 用户确认完整 diff → 写入显式目标或默认仓库目标
+    → Stage 2：按原生机器架构运行 install.sh → verify
+      → Stage 3：仅 Apple Silicon 上运行 install.sh retire 预览 → 用户确认 → 退役与验证
 ```
 
 ### 2.1 所有 Skill 的执行前计划门
@@ -38,16 +41,17 @@ Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 �
 4. 风险、不可自动恢复项、验证方式和停止条件；
 5. 明确不会执行的越界事项，以及后续仍需单独确认的阶段门禁。
 
-展示后必须停止并等待用户明确确认；空白、含糊回复或只回答局部问题不视为授权。用户确认只授权已展示范围，不能替代 Stage 0 正式草稿写入确认、Stage 2 Zsh diff 与安装器确认、Stage 3 删除确认，也不授权 commit、push 或范围外变更。
+展示后必须停止并等待用户明确确认；空白、含糊回复或只回答局部问题不视为授权。用户确认只授权已展示范围，不能替代 Stage 0 正式草稿写入确认、Stage 1 Zsh diff 确认、Stage 2 安装器确认、Stage 3 删除确认，也不授权 commit、push 或范围外变更。
 
 若本 Skill 由上级 Stage Skill 编排，且上级计划已逐项覆盖本 Skill 的读写范围、可能影响和验证并已获确认，可以继承这次初始计划确认，不重复打断用户。执行前重新检查输入与工作树；范围、风险或状态发生实质变化时，先展示更新后的完整计划并再次等待确认。
 
 阶段之间只保留以下边界：
 
 1. Stage 0 的草稿未经用户确认，不写入 personal/company 目标文件。
-2. Stage 1 的脚本、pre-commit 和 CI 未验证，不用于真实机器安装。
-3. Stage 2 安装与验证未完成，不进入 Stage 3。
-4. Stage 3 不由 Stage 2 自动触发。
+2. Stage 1 的最新完整 Zsh diff 未经确认，不写入目标，也不进入 Stage 2。
+3. [`install-sh-plan.md`](./install-sh-plan.md) 定义的脚本、pre-commit 和 CI 能力未实现或未验证，不用于真实机器安装。
+4. Stage 2 安装与验证未完成，不进入 Stage 3。
+5. Stage 3 只适用于 Apple Silicon，且不由 Stage 2 自动触发。
 
 ## 3. 仓库和配置职责
 
@@ -81,8 +85,8 @@ dotfiles/
 ├── my_setup/
 │   ├── zsh/
 │   │   ├── install.sh
-│   │   ├── .zprofile          # Stage 2 生成
-│   │   ├── .zshrc             # Stage 2 生成
+│   │   ├── .zprofile          # Stage 1 生成或更新
+│   │   ├── .zshrc             # Stage 1 生成或更新
 │   │   ├── zsh-repair-plan.md
 │   │   └── plugins.toml
 │   ├── macos/
@@ -117,7 +121,7 @@ company-dotfiles/
 
 不存在实际内容时不创建空 company 文件。详细 tooling 文件由实际工具决定，不为统一目录外观创建空 schema 或占位文件。
 
-Stage 1 只建设可安装、可验证上述目标结构的能力；最终 `.zprofile` 和 `.zshrc` 仍由 Stage 2 根据已确认修复计划生成。二者缺失时根安装器必须阻断真实安装，Stage 1 测试只能在临时仓库中使用最小 fixture。
+Stage 1 根据已确认修复计划生成或更新最终 `.zprofile`、`.zshrc` 和可选 `company.zsh`；用户显式提供目标文件时优先更新这些目标，否则使用上述默认仓库位置。Stage 2 只接受与安装器固定来源一致的仓库版 Zsh；显式目标在仓库外时不得擅自复制或覆盖。必要仓库文件缺失时根安装器必须阻断真实安装，安装器 smoke test 只能在临时仓库中使用最小 fixture。
 
 ## 5. Zsh 运行时边界
 
@@ -130,7 +134,8 @@ Stage 1 只建设可安装、可验证上述目标结构的能力；最终 `.zpr
 - company 只有一个可选 `zsh/company.zsh`，必须能够在 personal 配置之前独立加载。
 - local 只有一个可选 `parameters.zsh`，在 personal 配置之后加载。
 - company 或 local 文件缺失时静默跳过；存在但语法错误时 `install.sh verify` 失败。
-- 日常配置不得包含 Intel Homebrew PATH、Rosetta fallback 或 ARM→Intel wrapper。
+- Stage 1 以目标现有内容为基线做最小修改，尽可能保留修复计划未涉及的 Oh My Zsh 官方模板注释、分区、选项和初始化形态；不得为了模板升级而整文件替换。
+- 日常配置只激活当前机器原生 Homebrew：Intel 使用 `/usr/local`，Apple Silicon 使用 `/opt/homebrew`；不得同时激活另一架构前缀，不得包含 Rosetta fallback 或 ARM→Intel wrapper。
 
 `parameters.zsh` 可以直接保存密钥值和其他不可公开参数。默认安全要求：
 
@@ -176,7 +181,7 @@ Stage 1 只建设可安装、可验证上述目标结构的能力；最终 `.zpr
 - Stage 0 只清理自己生成的 `tmp/zsh-evidence.md`、`tmp/dump.md`、`tmp/my_setup/`、执行期间的 `tmp/.runtime/` 和明确生成的可选 `tmp/company/`，不得清空未知临时内容。
 - `dump.sh` 必须覆盖子进程的临时目录和可重定向缓存位置；只读使用 Homebrew 已有 metadata cache 时必须禁用 refresh、自动更新和 description 查询，使原生工具采集不会写入仓库外目录。
 - 服务、数据库和 GUI 应用数据只检测并报告，不自动迁移。
-- 未处理服务数据、未知 Intel 项、项目级依赖或未验证 ARM 替代不得删除。
+- 未处理服务数据、未知 Intel 项、项目级依赖或未验证的原生架构替代不得删除。
 - 不递归删除 `/usr/local`，不整体改变其 owner。
 - 不透明的 `curl | shell` 不得作为安装或退役实现。
 
@@ -191,9 +196,10 @@ Stage 1 只建设可安装、可验证上述目标结构的能力；最终 `.zpr
 - symlink 指向 `my_setup/zsh/`；
 - 加载顺序为 company → personal → local；
 - local 权限正确且未被 Git 跟踪；
-- PATH 无活动 Intel Homebrew 路径；
+- Homebrew 与 PATH 符合原生硬件架构：Intel 使用 `/usr/local`，Apple Silicon 使用 `/opt/homebrew`，另一架构前缀不活跃；
+- Apple Silicon 的 Rosetta 会话不会回退使用 Intel Homebrew；
 - Brewfile、mise/uv 和 `plugins.toml` 可解析；
-- 导出配置 Review Skill 范围内的每个直接期望项目都有功能、最佳实践、修改级别、建议、归属和验证评论；
+- 导出配置 Review Skill 范围内的每个直接期望项目都有一句话描述、最佳实践、修改级别、建议、归属和验证评论；Stage 0 摘要先显示该描述再显示建议；
 - 已安装命令的实际路径、版本和架构符合期望；
 - `install.sh` 再次执行不会重复破坏已有配置；
 - retire 预览不包含未知项目和未处理数据。

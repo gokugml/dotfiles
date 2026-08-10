@@ -1,6 +1,6 @@
 ---
 name: review-exported-dotfiles
-description: 对当前 Git 仓库 tmp/ 中由 dump.sh 已导出的软件、tooling 和插件证据及候选配置执行 AI Review，调整期望项目，按 personal/company/retire/manual 分类，并补齐相邻的 AI-REVIEW 或 AI-RETIRE 评论。用于用户要求审阅、整理或批准前检查已导出的 Brewfile、mise/uv 配置、runtime/tool 清单或 plugins.toml 时；不用于运行采集、分析真实 Zsh 文件、生成 zsh-repair-plan、安装软件或写入正式目录。
+description: 对当前 Git 仓库 tmp/ 中由 dump.sh 已导出的软件、tooling 和插件证据及候选配置执行 AI Review，先为每个直接期望工具给出一句话描述，再调整期望项目、按 personal/company/retire/manual 分类，并补齐相邻的 AI-REVIEW 或 AI-RETIRE 评论。用于用户要求审阅、整理或批准前检查已导出的 Brewfile、mise/uv 配置、runtime/tool 清单或 plugins.toml 时；不用于运行采集、分析真实 Zsh 文件、生成 zsh-repair-plan、安装软件或写入正式目录。
 ---
 
 # 导出配置 AI Review
@@ -73,10 +73,10 @@ tmp/.runtime/**
 
 ### 4. 补齐逐项 AI 评论
 
-在每个有效直接期望项目紧邻位置，使用该文件支持的注释语法分别写出六个 `AI-REVIEW` 字段：
+在每个有效直接期望项目紧邻位置，使用该文件支持的注释语法分别写出六个 `AI-REVIEW` 字段。第一项必须是无需依赖后续字段即可理解的一句话工具描述：
 
 ```text
-功能：项目解决什么问题
+一句话描述：<name> 是什么工具，以及它主要解决什么问题
 最佳实践：为何采用当前管理器、来源或固定版本
 修改级别：保留、新增、替换、升级或降级
 建议：本次具体处理
@@ -104,4 +104,4 @@ AI-RETIRE: 项目=<name> | 原因=<reason> | 替代=<replacement-or-none> | 归�
 - 未经审阅的机器快照没有直接成为正式期望状态；所有未知项均标记 `manual`。
 - 正式目录、真实 HOME、软件、服务和 Git 历史均未修改。
 
-完成后把候选文件清单、逐项调整摘要、manual 项、证据缺口和自检结果交回 `$stage-0-source-machine-analysis-and-export`。不要请求最终写入确认，不要把候选复制到正式目录，不要 commit 或 push。
+完成后把候选文件清单、逐项调整摘要、manual 项、证据缺口和自检结果交回 `$stage-0-source-machine-analysis-and-export`。逐项摘要必须先原样呈现对应工具的一句话描述，再给出修改级别和本次建议；不要让 Stage 0 根据工具名重新生成描述。不要请求最终写入确认，不要把候选复制到正式目录，不要 commit 或 push。

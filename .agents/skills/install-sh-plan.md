@@ -1,14 +1,14 @@
-# Stage 1：轻量 Dotfiles 能力建设需求
+# install.sh 与轻量 Dotfiles 能力建设计划
 
-> 状态：轻量阶段需求<br>
-> 日期：2026-08-09<br>
+> 状态：独立能力需求，不占用 Stage 编号<br>
+> 日期：2026-08-10<br>
 > 执行位置：Stage 0 选定的公开仓库与可选 company 仓库
 
 ## 1. 阶段定位
 
-本阶段把 Stage 0 已确认的分析结果整理为可供其他用户和机器复用的仓库能力。核心交付是 `dump.sh`、根目录统一 `install.sh`、三个内部能力安装模块、配置目录、最小测试、默认中文 README、独立英文 README 和 CI 发布门禁。
+本计划建设可供其他用户和机器复用的仓库能力。核心交付是 `dump.sh`、根目录统一 `install.sh`、三个内部能力安装模块、配置目录、最小测试、默认中文 README、独立英文 README 和 CI 发布门禁。
 
-本阶段建设能力，不在开发者真实 HOME 中安装配置或软件。
+本计划只描述能力建设，不属于 Stage 0–3 主流程，也不在开发者真实 HOME 中安装配置或软件。主流程中的最终 Zsh 文件由 Stage 1 Skill 生成，真实安装由 Stage 2 调用本计划定义的 `install.sh` 完成。
 
 ## 2. 目标
 
@@ -30,7 +30,7 @@
 
 ### 3.1 执行前计划门
 
-未来 Stage 1 Skill 被触发后，先只读检查 Stage 0 获准输入、public/company 工作树、现有脚本/配置/测试/文档、Stage 2/3 接口和当前验证状态；不得在盘点阶段编辑文件、运行会写入候选的采集器、安装依赖或修改真实 HOME/软件。随后向用户展示完整计划，至少包含：
+实现或更新本计划前，先只读检查 Stage 0/1 获准输入、public/company 工作树、现有脚本/配置/测试/文档、Stage 2/3 接口和当前验证状态；不得在盘点阶段编辑文件、运行会写入候选的采集器、安装依赖或修改真实 HOME/软件。随后向用户展示完整计划，至少包含：
 
 - 将新增、修改或删除的精确仓库路径和模块接口；
 - 根 `install.sh` 与三个内部 `install.sh` 的预期行为变化；
@@ -38,7 +38,7 @@
 - 可能发生的网络或系统影响、风险、停止条件和验证方式；
 - 明确不会执行的真实安装、退役、commit、push 和范围外清理。
 
-展示后停止并等待用户明确确认，再开始编辑。执行前重新检查工作树；目标结构、输入、风险或影响范围发生实质变化时，先更新完整计划并再次等待确认。初始计划确认只授权展示范围内的 Stage 1 仓库变更，不授权 Stage 2/3 动作；任何工具自身的安全确认继续保留。
+展示后停止并等待用户明确确认，再开始编辑。执行前重新检查工作树；目标结构、输入、风险或影响范围发生实质变化时，先更新完整计划并再次等待确认。初始计划确认只授权展示范围内的仓库能力变更，不授权 Stage 1 写入 Zsh 目标或 Stage 2/3 动作；任何工具自身的安全确认继续保留。
 
 ## 4. 目标结构
 
@@ -55,8 +55,8 @@ dotfiles/
 ├── my_setup/
 │   ├── zsh/
 │   │   ├── install.sh
-│   │   ├── .zprofile          # Stage 2 根据已确认修复计划生成
-│   │   ├── .zshrc             # Stage 2 根据已确认修复计划生成
+│   │   ├── .zprofile          # Stage 1 根据已确认修复计划生成
+│   │   ├── .zshrc             # Stage 1 根据已确认修复计划生成
 │   │   ├── zsh-repair-plan.md
 │   │   └── plugins.toml
 │   ├── macos/
@@ -84,7 +84,7 @@ company-dotfiles/
 
 三个能力安装模块不是额外的用户命令面：它们被根安装器加载，只暴露带能力前缀的内部 plan/apply/verify 函数，直接执行时必须拒绝并引导用户使用根目录 `install.sh`。目标结构之外不再建设额外管理 CLI、独立 migrate/retire 脚本、通用 schemas 目录、拆散的插件文件、大量场景 fixture 或长期状态目录。
 
-Stage 1 不根据修复计划生成最终 `.zprofile` 或 `.zshrc`；这两个文件仍由 Stage 2 生成并经用户审查。Stage 1 安装器在它们缺失时必须以清楚的阻断信息停止，smoke test 则只在临时仓库中创建最小 Zsh fixture 验证安装能力。
+本计划及其安装器不根据修复计划生成最终 `.zprofile`、`.zshrc` 或 `company.zsh`；这些文件由 [`$stage-1-apply-zsh-repair-plan`](./stage-1-apply-zsh-repair-plan/SKILL.md) 生成或更新并经用户审查。安装器在必要文件缺失时必须以清楚的阻断信息停止，smoke test 只能在临时仓库中创建最小 Zsh fixture 验证安装能力。
 
 ## 5. `dump.sh`
 
@@ -103,7 +103,7 @@ Stage 1 不根据修复计划生成最终 `.zprofile` 或 `.zshrc`；这两个�
 - 输出目录与 `my_setup/` 和可选 company 目标结构对齐，便于 AI 就地审阅；
 - 有可回放原生 Dump 时优先使用；只有结构化 List/Status 时经脱敏写入 `tmp/dump.md`，由 AI 转成目标配置；
 - 强制把子进程临时文件和可重定向缓存写入执行期间的 `tmp/.runtime/`，结束前清理，不继承仓库外 `TMPDIR`；Homebrew 只读使用已有 metadata cache 时禁用 refresh、自动更新和 description 查询；
-- 导出完成后由 `review-exported-dotfiles` Skill 调整候选条目，并为每个直接期望项目补齐功能、最佳实践、修改级别、建议、归属和验证评论；
+- 导出完成后由 `review-exported-dotfiles` Skill 调整候选条目，并为每个直接期望项目补齐一句话描述、最佳实践、修改级别、建议、归属和验证评论；
 - 不读取 local 密钥值，不修改 HOME，不调用 `install.sh`；
 - 只清理本次明确生成的候选文件，不清空 `tmp/` 中的未知内容；
 - 退出时清楚区分成功、部分证据缺失和安全失败。
@@ -136,13 +136,13 @@ Stage 1 不根据修复计划生成最终 `.zprofile` 或 `.zshrc`；这两个�
 执行时：
 
 1. 验证当前仓库、`my_setup/` 和可选 company 路径；
-2. 检查原生 `arm64`、本地 Zsh 入口和 local 权限；
+2. 检查 macOS 原生硬件架构、当前进程是否运行在 Rosetta 下、本地 Zsh 入口和 local 权限；
 3. 计算 Zsh backup/symlink、Brewfile、tooling、插件变更；
 4. 展示简短摘要并以默认 `N` 的 `y/N` 确认；
 5. 为已有本地 `.zsh` 文件或 symlink 创建副本；
 6. 建立指向 `my_setup/zsh/` 的 `~/.zprofile` 和 `~/.zshrc` symlink；
 7. 为当前公开仓库配置受管的 `core.hooksPath=.githooks`；
-8. 安装 personal/company Brewfile、tooling、mise/uv 和固定 revision 插件；
+8. Intel Mac 使用 `/usr/local` Homebrew，Apple Silicon 原生会话使用 `/opt/homebrew` Homebrew，安装 personal/company Brewfile、tooling、mise/uv 和固定 revision 插件；
 9. 调用同一脚本的验证逻辑。
 
 安装器不得打印、复制或持久化 `parameters.zsh` 内容；只允许检查文件类型、owner、权限和无输出语法。
@@ -157,7 +157,8 @@ Stage 1 不根据修复计划生成最终 `.zprofile` 或 `.zshrc`；这两个�
 - local `0700/0600` 权限及未被 Git 跟踪；
 - Brewfile、tooling 和 `plugins.toml` 语法；
 - 命令实际路径、版本和架构；
-- PATH 中没有活动 Intel Homebrew；
+- Homebrew 与命令路径符合当前机器原生架构：Intel 使用 `/usr/local`，Apple Silicon 使用 `/opt/homebrew`，且没有活动的另一架构 Homebrew 前缀；
+- Apple Silicon 的 Rosetta 会话被阻断，不因进程显示 `x86_64` 而改用 Intel Homebrew；
 - 再次安装不会重复破坏 Zsh 入口。
 
 ### 6.3 退役入口
@@ -208,12 +209,13 @@ personal/company 各自最多一份 `zsh/plugins.toml`。每个插件条目至�
 
 至少解释：
 
-1. 四阶段流程；
-2. Stage 0 分别使用 Zsh 分析 Skill、`dump.sh` 和导出配置 Review Skill；
-3. 无参数 `install.sh` 会在确认后安装；
-4. local 可以保存密钥值但永不进入 Git；
-5. `retire` 不会被普通安装触发；
-6. 服务和数据需要人工处理。
+1. 四阶段流程，以及本计划是阶段外的安装能力建设需求；
+2. Stage 0 分别使用 Zsh 分析 Skill、`dump.sh` 和导出配置 Review Skill，并先为每个工具给出一句话描述；
+3. Stage 1 应用 Zsh 修复计划并优先更新用户显式目标；
+4. Stage 2 按原生硬件架构选择 Intel `/usr/local` 或 Apple Silicon `/opt/homebrew`，无参数 `install.sh` 会在确认后安装；
+5. local 可以保存密钥值但永不进入 Git；
+6. Stage 3 只适用于 Apple Silicon，且 `retire` 不会被普通安装触发；
+7. 服务和数据需要人工处理。
 
 ## 9. pre-commit
 
@@ -222,7 +224,7 @@ personal/company 各自最多一份 `zsh/plugins.toml`。每个插件条目至�
 - Markdown 和 shell 基础格式；
 - `zsh -n`；
 - public 密钥与公司信息扫描；
-- 禁止的 Intel 运行时路径；
+- 与目标机器原生架构不匹配的 Homebrew 运行时路径，以及 Apple Silicon 上的 Rosetta fallback；
 - `README.md` 与 `README.en.md` 的章节结构一致性及靠前互链。
 
 hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确失败或安装提示。
@@ -235,6 +237,7 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 - Zsh 证据采集脚本不 source 启动文件、不输出值，只写 `tmp/zsh-evidence.md`；
 - Zsh 和脚本语法；
 - 安装摘要与默认 `N` 行为；
+- Intel `/usr/local` 与 Apple Silicon `/opt/homebrew` 的路径选择，以及 Apple Silicon Rosetta 会话阻断；
 - 临时 HOME 中的 Zsh 副本和 symlink；
 - 安装幂等与 `verify`；
 - personal/company 插件和软件配置合并；
@@ -258,10 +261,8 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 - [ ] smoke test、pre-commit、分离且互链的中英文 README 和 CI 通过；
 - [ ] 未修改开发者真实 HOME 或软件；
 
-完成后进入 [Stage 2](./stage-2-target-machine-configuration-and-software-migration/SKILL.md)。
+这套能力必须在 [Stage 2](./stage-2-target-machine-configuration-and-software-migration/SKILL.md) 真实安装前完成实现和验证；它不改变 `Stage 0 → Stage 1 → Stage 2 → Stage 3` 的主流程。
 
-## 12. 未来 Skill 接口
+## 12. 计划边界
 
-未来 Skill 名：`stage-1-portable-dotfiles-capability-build`。
-
-Skill 只负责建设或更新上述轻量仓库能力。它不得进入真实 HOME 执行 Stage 2，也不得扩张出新的管理 CLI、状态系统或独立迁移脚本。
+本文件是 `install.sh` 与相邻轻量仓库能力的实现计划，不是 Stage Skill。按本计划建设或更新能力时，不得进入真实 HOME 执行 Stage 1/2，也不得扩张出新的管理 CLI、状态系统或独立迁移脚本。

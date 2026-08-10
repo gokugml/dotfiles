@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stage 1：应用 Zsh 修复计划"
+  short_description: "将已确认的 Zsh 修复计划应用到指定或仓库目标文件"
+  default_prompt: "使用 $stage-1-apply-zsh-repair-plan 将已确认的 Zsh 修复计划应用到目标配置文件并展示可审查 diff。"

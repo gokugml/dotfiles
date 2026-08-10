@@ -1,46 +1,66 @@
 ---
 name: stage-2-target-machine-configuration-and-software-migration
-description: 编排 Apple Silicon 目标机器 Stage 2：根据 Stage 0 已确认的 Zsh 修复计划和软件/插件配置生成 public/company 仓库版 Zsh，先让用户审查 diff，再运行无参数 install.sh 安装 personal/company 的 ARM Homebrew、mise/uv tooling 与固定 revision 插件，最后运行 install.sh verify。用于用户要求在源机器或新 Mac 上应用 Stage 0 分析结果、迁移 Zsh 与已声明软件或执行 Stage 2 时；不得直接编辑真实 ~/.zprofile 或 ~/.zshrc、读取 local 密钥值、自动迁移服务数据、进入 Stage 3、commit 或 push。
+description: 编排 macOS 目标机器 Stage 2：读取 Stage 1 已确认的仓库版 Zsh 和软件/插件配置，按机器原生硬件架构选择 Intel `/usr/local` 或 Apple Silicon `/opt/homebrew` 路径，运行无参数 install.sh 安装并建立受管 Zsh 入口，最后运行 install.sh verify。用于用户要求应用已确认配置、迁移 Zsh 与软件或执行 Stage 2 时；不生成或修改 Zsh 文件，不在 Apple Silicon 的 Rosetta 会话中回退到 Intel 路径，也不读取 local 密钥值、自动迁移服务数据、进入 Stage 3、commit 或 push。
 ---
 
-# Stage 2：目标机器配置与软件迁移
+# Stage 2：目标机器配置与软件安装
 
-把已确认的分析结果应用到 Apple Silicon 目标机器，严格执行：
+把 Stage 1 已确认的仓库配置应用到当前 macOS 目标机器：
 
 ```text
-生成仓库版 Zsh → 用户确认 public/company diff
-  → ./install.sh → 脚本内 y/N 确认 → ./install.sh verify
+确认 Stage 1 输出与原生架构 → ./install.sh
+  → 脚本内 y/N 确认 → ./install.sh verify
 ```
 
-完成后停在“Zsh 与已声明 ARM 软件安装完成”，不要自动进入退役。
+本阶段不再生成、修复或审查 `.zprofile`、`.zshrc`、`company.zsh`。这些职责只属于 `$stage-1-apply-zsh-repair-plan`。
 
 ## 执行前计划门
 
-先只读检查 public/company 仓库、工作树、Stage 0 修复计划和已确认配置、现有仓库版 Zsh、目标架构、工具可用性及 local 路径元数据；不得读取 local 内容、生成 Zsh 草稿或运行安装器。随后向用户展示完整计划：将创建或修改的仓库文件、可能产生的真实 Zsh 副本和 symlink、可能安装的 Homebrew/tooling/plugin、hook 变更、网络与磁盘影响、服务/数据人工项、验证和失败停止点，以及明确不会执行的 Stage 3、commit、push。展示后停止并等待用户明确确认，再进入执行工作流。
+先只读检查 public/company 仓库、工作树、Stage 1 交接、仓库版 Zsh、已确认软件/插件配置、当前机器原生硬件架构、进程架构、Homebrew 路径、安装器能力和 local 路径元数据；不要读取 local 内容、生成 Zsh 草稿或运行安装器。
 
-执行前重新检查输入与工作树；范围、软件集合、company 目标或系统状态发生实质变化时，先更新计划并再次等待确认。初始计划确认只允许按计划生成草稿和进入后续审查，不替代第 3 步 Zsh diff 确认或 `install.sh` 自身的 `y/N`，也不授权退役。
+随后展示完整计划：
+
+- Stage 1 已确认的仓库目标及当前 diff；
+- 检测到的原生硬件、进程状态、预期 Homebrew 前缀和判定证据；
+- `install.sh` 可能产生的 Zsh 入口副本、symlink、软件/tooling/plugin、hook、网络和磁盘影响；
+- 服务/数据人工事项、验证、失败停止点，以及不会执行的 Zsh 生成、Stage 3、commit 和 push。
+
+展示后停止并等待明确确认，再进入安装工作流。执行前重新检查输入、工作树和架构；范围、软件集合、company 目标、Stage 1 输出或系统状态发生实质变化时，更新计划并再次等待确认。初始确认只授权进入安装器，不替代 `install.sh` 自身默认 `N` 的 `y/N`。
 
 ## 读取权威输入
 
 开始前读取：
 
 - [四阶段共用契约](../stage-common-contract.md)和[领域词汇](../../../CONTEXT.md)；
-- public 仓库的 `my_setup/zsh/zsh-repair-plan.md`；
-- 可选 company 仓库的 `zsh/zsh-repair-plan.md`；
+- [`$stage-1-apply-zsh-repair-plan`](../stage-1-apply-zsh-repair-plan/SKILL.md) 的完成交接；
+- public 仓库 `my_setup/zsh/.zprofile`、`my_setup/zsh/.zshrc` 和可选 company `zsh/company.zsh`；
 - Stage 0 已确认的软件、tooling 和 `plugins.toml` 配置；
-- public/company 仓库中已有的 Zsh 文件；
-- 目标机器的只读 Zsh 结构证据，但不读取 local 参数内容。
+- 已按 [`install-sh-plan.md`](../install-sh-plan.md) 实现并验证的根 `install.sh` 与内部模块；
+- 目标机器的只读架构、路径和 Zsh 入口元数据，但不读取 local 参数内容。
 
-把 public 仓库解析为包含 `dump.sh`、`install.sh` 和 `my_setup/` 的当前 Git 仓库。只有确有 company 增量时才解析唯一的已授权 company 仓库；不能唯一定位时，把歧义集中成一次提问。
+Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 的安装器只管理上述仓库版 Zsh。Stage 1 只更新了仓库外显式目标、或这些目标与安装器固定来源不一致时，报告映射缺口并停止；不要把文件复制到默认仓库位置，也不要让安装器覆盖显式目标。
+
+## 判定机器架构和 Homebrew 路径
+
+以机器原生硬件为准，不以当前进程表面显示的 `x86_64` 直接选择 Intel 路径：
+
+1. 确认系统是 macOS。
+2. 使用系统硬件事实（例如 `sysctl -in hw.optional.arm64`）区分 Apple Silicon 与 Intel。
+3. 同时记录 `uname -m`、`arch` 和 `sysctl -in sysctl.proc_translated`（字段存在时），识别 Rosetta。
+4. Intel Mac 的 Homebrew 前缀固定为 `/usr/local`，入口为 `/usr/local/bin/brew`。
+5. Apple Silicon 的 Homebrew 前缀固定为 `/opt/homebrew`，入口为 `/opt/homebrew/bin/brew`。
+6. Apple Silicon 上检测到 Rosetta 或非原生 ARM 进程时，允许完成只读计划，但在真实安装前停止并要求从原生 ARM 会话重试；不得因此选择 `/usr/local` Homebrew。
+
+要求安装器即时验证所选 `brew --prefix`、关键命令实际路径和二进制架构。硬件事实矛盾、两个 Homebrew 同时活跃、入口缺失或当前 `install.sh` 仍硬编码为另一架构时，停止并报告 [`install-sh-plan.md`](../install-sh-plan.md) 尚未满足的能力缺口，不在本 Skill 内修改安装器。
 
 ## 遵守硬边界
 
-- 只在原生 `arm64` 会话中执行真实写入；证据不足时只生成草稿和问题摘要，不运行安装。
+- 不生成、编辑或重写任何仓库版或显式目标 Zsh 文件；发现内容问题时返回 Stage 1。
 - 不直接编辑、替换或重写真实 `~/.zprofile`、`~/.zshrc`；真实入口只允许由获准后的 `install.sh` 管理。
-- 不读取、显示、复制、记录或持久化 `~/.config/dotfiles/local/parameters.zsh` 的内容。只检查路径、文件类型、权限和无输出语法结果。
+- 不读取、显示、复制、记录或持久化 `~/.config/dotfiles/local/parameters.zsh` 内容，只检查路径、文件类型、权限和无输出语法结果。
 - 不把公司内容、本机绝对路径、账号或密钥写入 public 仓库。
-- 不覆盖与本次 Zsh 草稿重叠的用户未确认修改。确认后输入或 diff 发生变化时，重新展示完整最新 diff 并再次确认。
-- 不启停服务，不迁移数据库、Homebrew service 或 GUI 应用数据，不清理未知软件、项目 runtime 或 Intel 数据目录。
+- 不覆盖与安装范围重叠的用户未确认修改；输入发生变化时重新计划。
+- 不启停服务，不迁移数据库、Homebrew service 或 GUI 应用数据，不清理未知软件、项目 runtime 或另一架构的数据目录。
 - 不调用 `install.sh retire` 或 `install.sh retire --apply`，不自动执行 Stage 3。
 - 不 commit 或 push。
 
@@ -49,61 +69,17 @@ description: 编排 Apple Silicon 目标机器 Stage 2：根据 Stage 0 已确�
 ### 1. 预检
 
 1. 检查 public 与可选 company 仓库的 `git status --short`，把已有变更视为用户内容。
-2. 确认 Stage 1 的测试、pre-commit 和 CI 已完成，当前 checkout 包含 `dump.sh`、`install.sh`、`my_setup/` 和 Stage 0 修复计划。
-3. 检查所有已确认 personal/company Brewfile、tooling 与插件配置存在且可解析。
-4. 检查目标会话架构。非原生 `arm64` 时允许继续生成仓库草稿，但在安装前停止。
-5. 记录 local 文件是否存在及其权限，不读取内容。
+2. 确认 Stage 1 已完成且最新 Zsh diff 已获用户确认；所有仓库版 Zsh 文件存在并与交接一致。
+3. 确认 `install.sh` 能力的测试、pre-commit 和 CI 已完成，根安装器及三个内部模块存在。
+4. 检查所有已确认 personal/company Brewfile、tooling 与插件配置存在且可解析。
+5. 判定原生硬件、Rosetta 状态、预期 Homebrew 前缀和安装器兼容性。
+6. 记录 local 文件是否存在及其权限，不读取内容。
 
-前置条件缺失时，集中报告缺口。只有不影响仓库草稿正确性的缺口才允许继续生成草稿；任何影响真实安装安全性的缺口都必须阻止 `install.sh`。
+任何影响安装安全或来源唯一性的缺口都必须阻止 `install.sh`。不要在 Stage 2 生成文件来绕过缺口。
 
-### 2. 生成仓库版 Zsh
+### 2. 运行安装器
 
-根据已确认修复计划生成或更新：
-
-```text
-my_setup/zsh/.zprofile
-my_setup/zsh/.zshrc
-<company-repository>/zsh/company.zsh   # 仅有 company 增量时
-```
-
-保持 `.zprofile` 最小、线性且 ARM-only。在 `.zshrc` 中固定受管顺序：
-
-```text
-可选 company/zsh/company.zsh
-  → personal 主配置
-    → 可选 ~/.config/dotfiles/local/parameters.zsh
-```
-
-由此维持 `company < personal < local` 的覆盖优先级，并满足：
-
-- company 只包含公司增量，可在 personal 之前独立加载，不依赖 personal 后续定义的 alias、function 或变量，也不包含密钥值；
-- personal 提供完整默认体验，独占 Oh My Zsh 和补全初始化，不包含公司信息、本机路径、密钥、活动 Intel PATH 或 Rosetta fallback；
-- company 或 local 缺失时静默跳过，存在但语法错误时让验证失败；
-- local 始终最后加载，仓库文件中不写示例密钥值。
-
-### 3. 自检并展示 Zsh diff
-
-在请求确认前：
-
-1. 对生成的 `.zprofile`、`.zshrc` 和可选 `company.zsh` 运行 `zsh -n`。
-2. 检查 company → personal → local 顺序以及 Oh My Zsh/补全初始化唯一性。
-3. 扫描 public diff 中的密钥、公司标识、本机绝对路径、Intel Homebrew PATH 和 Rosetta fallback。
-4. 检查未触碰真实 HOME、软件、服务和应用数据。
-5. 集中展示 public/company Zsh 的完整 diff、证据缺口、目标仓库和自检结果。
-
-随后只给出以下选择并停止等待：
-
-```text
-1. 确认当前 Zsh diff，并继续运行 ./install.sh
-2. 要求调整仓库草稿并重新审查
-3. 取消本次 Stage 2
-```
-
-明确说明：选择 1 只授权进入安装器；真实系统写入仍受 `install.sh` 内默认 `N` 的 `y/N` 确认保护。选择 2 时只修改仓库草稿，重新运行全部自检并展示完整最新 diff。选择 3 时保留可审查的仓库草稿，不运行安装。
-
-### 4. 运行安装器
-
-只有用户确认最新 Zsh diff 且写模式仍满足全部前置条件时，才从 public 仓库根目录在真实终端运行：
+只有执行计划获确认、Stage 1 输出未变化、架构判定明确、当前会话原生且安装器支持预期前缀时，才从 public 仓库根目录在真实终端运行：
 
 ```text
 ./install.sh
@@ -111,7 +87,7 @@ my_setup/zsh/.zshrc
 
 不要添加参数，不要代替用户输入 `y`，不要绕过或预先回答脚本确认。检查脚本在任何写入前即时展示：
 
-- public 和可选 company 来源；
+- 原生硬件、进程状态、所选 Homebrew 路径和 public/company 来源；
 - Zsh 入口、现有文件或 symlink 的副本计划；
 - personal/company Brewfile 合并结果；
 - tooling、mise/uv 和固定 revision 插件变更；
@@ -119,11 +95,11 @@ my_setup/zsh/.zshrc
 - local 路径和权限状态，但不显示内容；
 - 服务、数据库或应用数据的人工事项。
 
-让脚本使用默认 `N` 的一次 `y/N` 集中确认。若 ARM Homebrew 等基础工具缺失，要求脚本另行展示来源和额外影响并再次确认；禁止不透明的 `curl | shell`。
+让脚本使用默认 `N` 的一次 `y/N` 集中确认。若对应架构 Homebrew 等基础工具缺失，要求脚本另行展示官方来源和额外影响并再次确认；禁止不透明的 `curl | shell`。
 
-确认后，让 `install.sh` 自己按契约完成副本、symlink、local 权限、`core.hooksPath`、Brewfile 合并、ARM 软件、mise/uv/tooling 和插件安装。不要在本 Skill 中复刻或绕过这些确定性步骤。
+确认后，让 `install.sh` 自己按契约完成副本、symlink、local 权限、`core.hooksPath`、Brewfile 合并、软件、mise/uv/tooling 和插件安装。不要在本 Skill 中复刻或绕过确定性步骤。
 
-### 5. 验证目标机器
+### 3. 验证目标机器
 
 安装器成功返回后运行：
 
@@ -137,36 +113,40 @@ my_setup/zsh/.zshrc
 - `~/.zprofile` 和 `~/.zshrc` symlink 指向 public `my_setup/zsh/`；
 - company → personal → local 顺序正确，personal 独占 Oh My Zsh/补全初始化；
 - local 父目录为 `0700`、文件为 `0600`，未被 Git 跟踪且内容未泄露；
-- PATH 没有重复的活动 Intel Homebrew，Homebrew、mise、uv 和插件命令来自预期路径；
-- 关键二进制为 ARM 或受支持的 Universal；
+- Intel Mac 的 Homebrew 和受管命令来自 `/usr/local`，Apple Silicon 来自 `/opt/homebrew`，没有活动的另一架构 Homebrew 前缀；
+- Apple Silicon 的关键二进制为 ARM 或受支持的 Universal；Intel 的关键二进制与 Intel 原生架构匹配；
+- mise、uv、插件和其他命令来自预期路径与版本；
 - 再次运行安装不会覆盖已有副本或重复破坏 symlink；
 - 服务和数据人工事项仍被如实报告。
 
 性能结果只作为建议，不阻止基础交付。
 
-### 6. 报告并停止
+### 4. 报告并停止
 
-报告仓库 Zsh 文件、真实入口 symlink、已创建副本、软件/tooling/插件结果、验证结论、人工服务或数据事项和未解决缺口。不要自动继续 Stage 3。
+报告原生硬件与所选前缀、仓库 Zsh 来源、真实入口 symlink、已创建副本、软件/tooling/插件结果、验证结论、人工服务或数据事项和未解决缺口。
+
+在 Apple Silicon 上明确说明 Stage 3 仍需用户单独触发；在 Intel Mac 上明确说明 Stage 3 不适用。不要自动继续 Stage 3。
 
 ## 处理失败
 
-- Zsh 草稿生成或自检失败：保留仓库草稿，报告问题，不运行安装。
-- 用户拒绝 Zsh diff 或安装摘要：不执行真实系统变更。
+- Stage 1 输出缺失、变化或验证失败：返回 Stage 1，不在本阶段修复 Zsh。
+- 显式目标与安装器来源不一致：报告精确映射缺口并停止。
+- 架构、Rosetta 或 Homebrew 前缀判定失败：不运行安装器，不猜测路径。
+- 用户拒绝安装摘要：不执行真实系统变更。
 - Zsh 副本创建失败：停止，不替换真实入口。
 - 软件部分安装后验证失败：报告实际状态和人工修复建议，不自动卸载。
-- Zsh 验证失败：报告副本位置和失败项并停止，不擅自恢复或覆盖。
 - 服务或数据尚未处理：允许完成配置和软件安装，但明确标记这些项目不得进入 Stage 3 删除清单。
 
 ## 完成判定
 
 只有以下条件全部成立，才报告 Stage 2 完成：
 
-- 用户已确认最新 public/company Zsh diff；
-- 加载顺序为 company → personal → local，local 权限正确且内容未被采集；
-- 旧 Zsh 文件或 symlink 已创建副本，两个真实入口指向 `my_setup/zsh/`；
-- personal/company 软件、tooling 和插件已安装；
-- `./install.sh verify` 通过；
+- Stage 1 最新仓库版 Zsh diff 已确认且安装来源唯一；
+- 原生硬件、进程状态和 Homebrew 前缀判定明确；
+- 用户已在 `install.sh` 内确认真实写入；
+- Zsh 入口副本和 symlink、local 权限、软件/tooling/plugin 安装符合契约；
+- `./install.sh verify` 通过当前架构的全部检查；
 - 服务和数据只被报告，没有自动迁移；
-- 没有执行 Stage 3、commit 或 push。
+- 没有生成 Zsh、执行 Stage 3、commit 或 push。
 
-若用户在任一确认处取消，按实际状态报告“Stage 2 已取消”或“安装未获确认”，不要把草稿或部分安装标为完成。
+用户在任一确认处取消时，按实际状态报告“Stage 2 已取消”或“安装未获确认”，不要把未安装或部分安装标为完成。
