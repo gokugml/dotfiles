@@ -1,4 +1,4 @@
 interface:
   display_name: "Stage 3 旧 Intel 软件安全退役"
   short_description: "安全编排旧 Intel 软件预览、确认、退役与最终验证"
-  default_prompt: "使用 $stage-3-intel-homebrew-retirement 预览并安全退役已被 ARM 替代或明确淘汰的旧 Intel 软件。"
+  default_prompt: "使用 $stage-3-intel-homebrew-retirement：先只读盘点全部必要输入与 Stage 2 现状，展示完整执行计划并等待我确认，再预览并保留精确删除确认，安全退役旧 Intel 软件。"

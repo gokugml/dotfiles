@@ -1,4 +1,4 @@
 interface:
   display_name: "Stage 2 目标机配置与软件迁移"
   short_description: "生成可审查 Zsh，安装 ARM 软件并完成目标机验证"
-  default_prompt: "使用 $stage-2-target-machine-configuration-and-software-migration 将已确认的分析结果应用到目标机，并在每个写入边界前请求确认。"
+  default_prompt: "使用 $stage-2-target-machine-configuration-and-software-migration：先只读盘点全部必要输入与目标机现状，展示完整执行计划并等待我确认，再生成可审查 Zsh、运行安装器并保留每个写入边界的确认。"

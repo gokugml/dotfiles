@@ -1,4 +1,4 @@
 interface:
   display_name: "导出配置 AI Review"
   short_description: "审阅仓库内已导出的候选配置并补齐结构化 AI 评论与归属"
-  default_prompt: "使用 $review-exported-dotfiles 审阅当前仓库 tmp/ 中的导出候选配置。"
+  default_prompt: "使用 $review-exported-dotfiles：先只读盘点允许的候选文件与现状，展示执行计划并等待我确认，再审阅当前仓库 tmp/ 中的导出候选配置。"

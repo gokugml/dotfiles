@@ -44,7 +44,7 @@ assert_absent() {
 
 quick_checks() {
   local file output zh_sections en_sections
-  local -a repository_files shell_files markdown_files public_files
+  local -a repository_files shell_files markdown_files public_files plan_gate_files skill_interface_files
 
   repository_files=("${(@f)$(git -C "$repo_root" ls-files --cached --others --exclude-standard)}")
   (( ${#repository_files} > 0 )) || fail '无法列出仓库文件'
@@ -60,6 +60,10 @@ quick_checks() {
       README.md|README.en.md|dump.sh|install.sh|my_setup/*|.githooks/*)
         public_files+=("$file")
         ;;
+    esac
+    case "$file" in
+      .agents/skills/*/SKILL.md) plan_gate_files+=("$file") ;;
+      .agents/skills/*/agents/openai.yaml) skill_interface_files+=("$file") ;;
     esac
   done
 
@@ -80,6 +84,26 @@ quick_checks() {
     || fail '默认中文 README 靠前位置缺少英文文档链接'
   head -n 8 "$repo_root/README.en.md" | grep -Fq '(README.md)' \
     || fail '英文 README 靠前位置缺少中文文档链接'
+
+  (( ${#plan_gate_files} > 0 )) || fail '仓库中未发现 Skill'
+  plan_gate_files+=(
+    '.agents/skills/stage-1-portable-dotfiles-capability-build.md'
+    '.agents/skills/stage-common-contract.md'
+  )
+  for file in "${plan_gate_files[@]}"; do
+    grep -Fq '执行前计划门' "$repo_root/$file" \
+      || fail "Skill 缺少执行前计划门：$file"
+    grep -Fq '等待用户明确确认' "$repo_root/$file" \
+      || fail "Skill 计划门缺少明确确认：$file"
+  done
+
+  (( ${#skill_interface_files} > 0 )) || fail '仓库中未发现 Skill UI 元数据'
+  for file in "${skill_interface_files[@]}"; do
+    grep -Fq '先只读盘点' "$repo_root/$file" \
+      || fail "Skill 默认提示未要求先只读盘点：$file"
+    grep -Fq '等待我确认' "$repo_root/$file" \
+      || fail "Skill 默认提示未要求计划确认：$file"
+  done
 
   if grep -En 'AKIA[[:alnum:]]{16}|sk-[[:alnum:]_-]{20,}|BEGIN (RSA |OPENSSH )?PRIVATE KEY' \
     "${(@)public_files/#/$repo_root/}" >/dev/null 2>&1; then
