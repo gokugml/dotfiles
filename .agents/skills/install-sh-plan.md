@@ -6,7 +6,7 @@
 
 ## 1. 阶段定位
 
-本计划建设可供其他用户和机器复用的仓库能力。核心交付是 `dump.sh`、根目录统一 `install.sh`、三个内部能力安装模块、配置目录、最小测试、默认中文 README、独立英文 README 和 CI 发布门禁。
+本计划建设可供其他用户和机器复用的仓库能力。核心交付是 `dump.sh`、根目录统一 `install.sh`、三个内部能力安装模块、配置目录、最小测试、默认中文 README、独立英文 README，以及只进入最终报告的 pre-commit/CI 状态。
 
 本计划只描述能力建设，不属于 Stage 0–3 主流程，也不在开发者真实 HOME 中安装配置或软件。主流程中的最终 Zsh 文件由 Stage 1 Skill 生成，真实安装由 Stage 2 调用本计划定义的 `install.sh` 完成。
 
@@ -16,7 +16,7 @@
 2. 生成根目录统一 `install.sh`，同时承担 Stage 2 安装和 Stage 3 退役入口；`zsh`、`tooling`、`macos` 各自提供一个只由根安装器编排的内部 `install.sh`。
 3. 建立 `my_setup/`、shared 和 local 的轻量契约。
 4. 用最小 smoke test 验证关键路径，不建设额外管理 CLI。
-5. 保留 pre-commit、分离且互链的完整中英文 README 和 CI 发布门禁。
+5. 保留 pre-commit、分离且互链的完整中英文 README 和 CI 检查，但不把 CI 状态作为 Stage 2 安装或完成门禁。
 
 ## 3. 前置条件
 
@@ -82,7 +82,14 @@ shared-dotfiles/
 └── tooling/
 ```
 
-三个能力安装模块不是额外的用户命令面：它们被根安装器加载，只暴露带能力前缀的内部 plan/apply/verify 函数，直接执行时必须拒绝并引导用户使用根目录 `install.sh`。目标结构之外不再建设额外管理 CLI、独立 migrate/retire 脚本、通用 schemas 目录、拆散的插件文件、大量场景 fixture 或长期状态目录。
+安装器受管的本机状态：
+
+```text
+${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/
+└── intel_to_be_retired.tsv   # Apple Silicon 上残留 Intel 软件/路径的 Stage 2 → Stage 3 交接
+```
+
+三个能力安装模块不是额外的用户命令面：它们被根安装器加载，只暴露带能力前缀的内部 plan/apply/verify 函数，直接执行时必须拒绝并引导用户使用根目录 `install.sh`。除上述精确交接文件外，不再建设额外管理 CLI、独立 migrate/retire 脚本、通用 schemas 目录、拆散的插件文件、大量场景 fixture 或长期状态目录。
 
 本计划及其安装器不根据修复计划生成最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 或 `shared.zsh`；这些文件由 [`$stage-1-apply-zsh-repair-plan`](./stage-1-apply-zsh-repair-plan/SKILL.md) 生成或更新并经用户审查。安装器必须接受 `zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中恰好一套完整来源；两套并存、跨组混搭或文件残缺时，在确认和写入前清楚阻断，不猜优先级，也不创建另一套副本。smoke test 只能在临时仓库中创建最小 Zsh fixture 验证安装能力。
 
@@ -121,11 +128,11 @@ shared-dotfiles/
 
 无参数 `install.sh` 等于安装 apply。
 
-根安装器是唯一公开入口，负责参数解析、跨能力前置检查、汇总变更摘要、一次默认 `N` 的 `y/N` 确认、按顺序调用内部模块以及最终汇总验证。内部职责固定为：
+根安装器是唯一公开入口，负责参数解析、跨能力前置检查、汇总每个精确目标的变更摘要、一次默认 `N` 的 `y/N` 确认、按顺序调用内部模块以及最终汇总验证。内部职责固定为：
 
 - `my_setup/zsh/install.sh`：Zsh 入口备份和 symlink、插件安装及 Zsh 验证；
 - `my_setup/tooling/install.sh`：mise、uv 等 tooling 安装及版本验证；
-- `my_setup/macos/install.sh`：Homebrew、personal/shared Brewfile 安装及来源与架构验证。
+- `my_setup/macos/install.sh`：Homebrew、personal/shared Brewfile 安装、来源与架构验证，以及 Apple Silicon 上残留 Intel 项的确定性交接清单。
 
 内部模块不得独立提示用户、重复确认、解析根命令面或自动调用其他模块；被直接执行时必须安全失败。普通安装仍只产生一次整体摘要和一次确认。
 
@@ -137,19 +144,19 @@ shared-dotfiles/
 
 1. 验证当前仓库、`my_setup/` 和可选 shared 路径；
 2. 检查 macOS 原生硬件架构、当前进程是否运行在 Rosetta 下、本地 Zsh 入口和 local 权限；
-3. 计算 Zsh backup/symlink、Brewfile、tooling、插件变更；
+3. 计算并展示 Zsh 与 tooling 配置 symlink、Brewfile、mise/uv runtime、插件和 hook 的每个精确目标；
 4. 展示简短摘要并以默认 `N` 的 `y/N` 确认；
 5. 为已有本地 `.zsh` 文件或 symlink 创建副本；
 6. 将已选仓库组分别作为来源，建立固定 HOME 入口 `~/.zprofile` 和 `~/.zshrc` symlink；
 7. 为当前公开仓库配置受管的 `core.hooksPath=.githooks`；
 8. Intel Mac 使用 `/usr/local` Homebrew，Apple Silicon 原生会话使用 `/opt/homebrew` Homebrew，安装 personal/shared Brewfile、tooling、mise/uv 和固定 revision 插件；
-9. 调用同一脚本的验证逻辑。
+9. 调用同一脚本的验证逻辑，确认全部声明项安装到当前系统原生目标；Apple Silicon 上若仍有 Intel 残留，原子生成 `intel_to_be_retired.tsv`。
 
 安装器不得打印、复制或持久化 `parameters.zsh`、`integrations.zsh` 内容；只允许检查文件类型、owner、权限和无输出语法。
 
 ### 6.2 验证
 
-`./install.sh verify` 至少检查：
+`./install.sh verify` 输出两个独立结论。A“安装完整性”至少检查：
 
 - Zsh 语法和两种常见启动场景；
 - symlink 目标；
@@ -157,13 +164,24 @@ shared-dotfiles/
 - local `0700/0600` 权限及未被 Git 跟踪；
 - Brewfile、tooling 和 `plugins.toml` 语法；
 - 命令实际路径、版本和架构；
-- Homebrew 与命令路径符合当前机器原生架构：Intel 使用 `/usr/local`，Apple Silicon 使用 `/opt/homebrew`，且没有活动的另一架构 Homebrew 前缀；
+- Homebrew 与全部受管命令/配置路径符合当前机器原生架构：Intel 使用 `/usr/local`，Apple Silicon 使用 `/opt/homebrew`；另一架构路径可以残留，但不得成为受管命令或 symlink 的最终目标；
 - Apple Silicon 的 Rosetta 会话被阻断，不因进程显示 `x86_64` 而改用 Intel Homebrew；
-- 再次安装不会重复破坏 Zsh 入口。
+- 安装摘要中每个 Zsh/tooling symlink、Brewfile 项、mise/uv runtime 和固定 revision 插件都在精确目标存在且来源、版本、revision 与架构正确；
+- 再次安装不会重复破坏 Zsh 入口或其他受管 symlink。
+
+B“Intel 退役交接”仅适用于 Apple Silicon：
+
+- 如果只读盘点发现仍存在 Intel Homebrew 项、全局 runtime/plugin、解析到 `/usr/local` 的旧命令或残留 PATH 条目，确定性生成 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`；
+- 父目录为 `0700`、文件为 `0600`，使用安装器固定标记、原子替换和稳定排序；固定 TSV 字段为 `kind`、`manager`、`name`、`version`、`path`、`architecture`、`reason`；
+- 只记录管理器清单、命令解析和已知全局根能够确认的精确项目/路径，不递归枚举 `/usr/local`；service/data、项目依赖和未知项必须标为保留或待人工处理；
+- 清单是 Stage 3 线索而非删除授权。Intel 残留本身不使安装完整性失败；清单无法安全生成时 B 失败，并阻止 Stage 2 完成；
+- 没有 Intel 残留时不保留旧候选清单，只能删除或清空带安装器固定标记的旧文件，未知同名文件必须阻断；Intel Mac 不生成清单。
+
+`verify` 除原子维护上述本机状态文件外不得产生安装、卸载或其他配置写入。
 
 ### 6.3 退役入口
 
-`install.sh` 同时实现 Stage 3 的 `retire` 和 `retire --apply`，但不得从普通安装自动进入退役。具体行为以 [Stage 3 Skill](./stage-3-intel-homebrew-retirement/SKILL.md) 为准。
+`install.sh` 同时实现 Stage 3 的 `retire` 和 `retire --apply`，但不得从普通安装自动进入退役。Stage 3 可以读取 `intel_to_be_retired.tsv` 作为参考，仍须实时重新盘点并逐项验证；具体行为以 [Stage 3 Skill](./stage-3-intel-homebrew-retirement/SKILL.md) 为准。
 
 ## 7. 配置文件约定
 
@@ -214,7 +232,7 @@ personal/shared 各自最多一份 `zsh/plugins.toml`。每个插件条目至少
 1. 四阶段流程，以及本计划是阶段外的安装能力建设需求；
 2. Stage 0 分别使用 Zsh 分析 Skill、`dump.sh` 和导出配置 Review Skill，并先为每个工具给出一句话描述；
 3. Stage 1 应用 Zsh 修复计划并优先更新用户显式目标；
-4. Stage 2 按原生硬件架构选择 Intel `/usr/local` 或 Apple Silicon `/opt/homebrew`，无参数 `install.sh` 会在确认后安装；
+4. Stage 2 按原生硬件架构选择 Intel `/usr/local` 或 Apple Silicon `/opt/homebrew`，把所有摘要目标安装完毕；Apple Silicon 的 Intel 残留进入本机 `intel_to_be_retired.tsv`，不阻止原生安装完成；
 5. local parameters 可以保存密钥值，local integrations 可以保存第三方功能块，二者都永不进入 Git；
 6. Stage 3 只适用于 Apple Silicon，且 `retire` 不会被普通安装触发；
 7. 服务和数据需要人工处理。
@@ -231,7 +249,7 @@ personal/shared 各自最多一份 `zsh/plugins.toml`。每个插件条目至少
 
 hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确失败或安装提示。
 
-## 10. 测试与 CI 发布门禁
+## 10. 测试与 CI 状态报告
 
 本地只保留最小 `tests/smoke.zsh`，CI 可以复用同一验证入口。CI 至少覆盖：
 
@@ -242,6 +260,7 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 - Intel `/usr/local` 与 Apple Silicon `/opt/homebrew` 的路径选择，以及 Apple Silicon Rosetta 会话阻断；
 - 临时 HOME 中的 Zsh 副本和 symlink；
 - 安装幂等与 `verify`；
+- A 安装完整性与 B `intel_to_be_retired.tsv` 的生成、权限、稳定 schema、原子更新、无残留时清理和“不构成删除授权”边界；
 - personal/shared 插件和软件配置合并；
 - local 两个可选文件的权限、语法及不读取正文；
 - 源/目标 Zsh 功能块清单和缺块失败回归测试；
@@ -250,22 +269,22 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 - 使用固定版本扫描器检查公开仓库当前内容和完整 Git 历史；
 - `README.md` 与 `README.en.md` 的中英文一致性及靠前互链。
 
-发布必须等待 pre-commit 等价检查和 CI 通过。不得因完整 CI 而重新引入管理 CLI、多套 schema 或复杂 fixture。
+在 Stage 2 前后采集 smoke、pre-commit 与 CI 的最近状态并写入最终报告。缺失、未运行或失败的 CI 是需要跟进的仓库质量信号，但不得阻止 Stage 2 展示安装计划、运行安装器或在 A/B 验证通过后报告完成。不得因完整 CI 而重新引入管理 CLI、多套 schema 或复杂 fixture。
 
 ## 11. 完成条件
 
 - [ ] 目标结构轻量且无被删除的旧组件；
 - [ ] `dump.sh` 只导出软件/tooling/plugin，Zsh 采集与导出 Review 已拆分为独立 Skill；
-- [ ] 根目录 `install.sh` 具备安装、verify 和 retire 命令，三个内部能力安装模块只由根入口编排；
+- [ ] 根目录 `install.sh` 具备安装、A/B verify 和 retire 命令，三个内部能力安装模块只由根入口编排；
 - [ ] 安装默认展示摘要并使用 `y/N`；
 - [ ] shared/personal/local 加载顺序正确；
 - [ ] 插件已收敛为单一 `plugins.toml`；
 - [ ] local 密钥不会被脚本、测试或 CI 读取；
-- [ ] smoke test、pre-commit、分离且互链的中英文 README 和 CI 通过；
+- [ ] smoke test、pre-commit、分离且互链的中英文 README 和 CI 状态可采集并进入最终报告；CI 结果不是 Stage 2 阻断条件；
 - [ ] 未修改开发者真实 HOME 或软件；
 
-这套能力必须在 [Stage 2](./stage-2-target-machine-configuration-and-software-migration/SKILL.md) 真实安装前完成实现和验证；它不改变 `Stage 0 → Stage 1 → Stage 2 → Stage 3` 的主流程。
+根安装器与三个内部模块必须具备当前机器所需的精确目标安装、A/B verify 和安全交接能力后，才用于 [Stage 2](./stage-2-target-machine-configuration-and-software-migration/SKILL.md) 真实安装；CI 状态不参与这一判定。它不改变 `Stage 0 → Stage 1 → Stage 2 → Stage 3` 的主流程。
 
 ## 12. 计划边界
 
-本文件是 `install.sh` 与相邻轻量仓库能力的实现计划，不是 Stage Skill。按本计划建设或更新能力时，不得进入真实 HOME 执行 Stage 1/2，也不得扩张出新的管理 CLI、状态系统或独立迁移脚本。
+本文件是 `install.sh` 与相邻轻量仓库能力的实现计划，不是 Stage Skill。按本计划建设或更新能力时，不得进入真实 HOME 执行 Stage 1/2，也不得扩张出新的管理 CLI、超出 `intel_to_be_retired.tsv` 的状态系统或独立迁移脚本。

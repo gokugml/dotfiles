@@ -1,15 +1,16 @@
 ---
 name: stage-2-target-machine-configuration-and-software-migration
-description: 编排 macOS 目标机器 Stage 2：读取 Stage 1 已确认、使用 `zprofile`/`zshrc` 或 `.zprofile`/`.zshrc` 中唯一完整一组命名的仓库版 Zsh 和软件/插件配置，按机器原生硬件架构选择 Intel `/usr/local` 或 Apple Silicon `/opt/homebrew` 路径，运行无参数 install.sh 安装并建立受管 Zsh 入口，最后运行 install.sh verify。用于用户要求应用已确认配置、迁移 Zsh 与软件或执行 Stage 2 时；不生成、改名或复制 Zsh 文件，不在 Apple Silicon 的 Rosetta 会话中回退到 Intel 路径，也不读取 local 密钥值、自动迁移服务数据、进入 Stage 3、commit 或 push。
+description: 编排 macOS 目标机器 Stage 2：读取状态为 `Stage 1 已应用` 的修复计划交接，解析唯一完整的仓库版 Zsh 来源，把根 `install.sh` 声明的全部 Zsh/tooling 配置 symlink、Homebrew 软件、mise/uv runtime 和固定插件安装到当前系统原生架构对应的目标路径，并运行 `install.sh verify` 验证安装完整性。Apple Silicon 上若仍存在 Intel 软件或路径，verify 生成本机 `intel_to_be_retired.tsv` 交接清单供 Stage 3 重新核验；残留 Intel 项本身不阻止 Stage 2，但受管目标未安装到原生路径仍会失败。用于应用已确认配置、迁移 Zsh 与软件或执行 Stage 2；不生成或修复 Zsh，不读取 local 密钥值，不自动迁移服务数据、进入 Stage 3、commit 或 push，CI 状态只在最终报告中呈现而不作为门禁。
 ---
 
 # Stage 2：目标机器配置与软件安装
 
-把 Stage 1 已确认的仓库配置应用到当前 macOS 目标机器：
+把 Stage 1 已应用的仓库配置完整安装到当前 macOS 原生目标路径：
 
 ```text
 确认 Stage 1 输出与原生架构 → ./install.sh
   → 脚本内 y/N 确认 → ./install.sh verify
+  → 安装完整性 + 可选 intel_to_be_retired.tsv 交接
 ```
 
 本阶段不再生成、修复或审查 `zprofile`/`.zprofile`、`zshrc`/`.zshrc`、`shared.zsh`。这些职责只属于 `$stage-1-apply-zsh-repair-plan`。
@@ -20,10 +21,11 @@ description: 编排 macOS 目标机器 Stage 2：读取 Stage 1 已确认、使�
 
 随后展示完整计划：
 
-- Stage 1 已确认的仓库目标及当前 diff；
+- Stage 1 已应用的仓库目标、所采用修复计划的状态字段及当前 diff；
 - 检测到的原生硬件、进程状态、预期 Homebrew 前缀和判定证据；
-- `install.sh` 可能产生的 Zsh 入口副本、symlink、软件/tooling/plugin、hook、网络和磁盘影响；
-- 服务/数据人工事项、验证、失败停止点，以及不会执行的 Zsh 生成、Stage 3、commit 和 push。
+- `install.sh` 要建立的每个精确 symlink 与配置目标，以及软件/tooling/plugin 的原生安装目标、hook、网络和磁盘影响；
+- Apple Silicon 上 `intel_to_be_retired.tsv` 的生成位置、字段、权限和 Stage 3 仅参考语义；
+- 服务/数据人工事项、验证、失败停止点、测试与 CI 当前状态，以及不会执行的 Zsh 生成、Stage 3、commit 和 push。
 
 展示后停止并等待用户明确确认，再进入安装工作流。执行前重新检查输入、工作树和架构；范围、软件集合、shared 目标、Stage 1 输出或系统状态发生实质变化时，更新计划并再次等待确认。初始确认只授权进入安装器，不替代 `install.sh` 自身默认 `N` 的 `y/N`。
 
@@ -32,7 +34,7 @@ description: 编排 macOS 目标机器 Stage 2：读取 Stage 1 已确认、使�
 开始前读取：
 
 - [四阶段共用契约](../stage-common-contract.md)和[领域词汇](../../../CONTEXT.md)；
-- [`$stage-1-apply-zsh-repair-plan`](../stage-1-apply-zsh-repair-plan/SKILL.md) 的完成交接；
+- [`$stage-1-apply-zsh-repair-plan`](../stage-1-apply-zsh-repair-plan/SKILL.md) 的完成交接；实际采用的每份 `zsh-repair-plan.md` 必须只有一个 `> 状态：Stage 1 已应用`；
 - public 仓库 `my_setup/zsh/zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中 Stage 1 已选且唯一完整的一组，以及可选 shared `zsh/shared.zsh`；
 - Stage 0 已确认的软件、tooling 和 `plugins.toml` 配置；
 - 已按 [`install-sh-plan.md`](../install-sh-plan.md) 实现并验证的根 `install.sh` 与内部模块；
@@ -74,7 +76,9 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 5. Apple Silicon 的 Homebrew 前缀固定为 `/opt/homebrew`，入口为 `/opt/homebrew/bin/brew`。
 6. Apple Silicon 上检测到 Rosetta 或非原生 ARM 进程时，允许完成只读计划，但在真实安装前停止并要求从原生 ARM 会话重试；不得因此选择 `/usr/local` Homebrew。
 
-要求安装器即时验证所选 `brew --prefix`、关键命令实际路径和二进制架构。硬件事实矛盾、两个 Homebrew 同时活跃、入口缺失或当前 `install.sh` 仍硬编码为另一架构时，停止并报告 [`install-sh-plan.md`](../install-sh-plan.md) 尚未满足的能力缺口，不在本 Skill 内修改安装器。
+要求安装器即时验证所选原生 `brew --prefix`、全部受管目标的实际路径和关键二进制架构。硬件事实矛盾、原生入口缺失、受管命令最终仍解析到另一架构，或当前 `install.sh` 不能使用当前系统原生目标路径时，停止并报告 [`install-sh-plan.md`](../install-sh-plan.md) 尚未满足的能力缺口，不在本 Skill 内修改安装器。
+
+另一架构 Homebrew、软件或 PATH 条目仍存在不再单独阻止 Stage 2：只要全部声明式受管目标已经安装到当前系统原生路径且运行时优先解析到原生目标，就把 Apple Silicon 上的 Intel 残留写入 `intel_to_be_retired.tsv`，留待 Stage 3 重新核验。不得因此在 Stage 2 删除、禁用或改写 Intel 项。
 
 ## 遵守硬边界
 
@@ -84,6 +88,7 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 - 不把 shared 仓库专属内容、本机绝对路径、账号或密钥写入 public 仓库。
 - 不覆盖与安装范围重叠的用户未确认修改；输入发生变化时重新计划。
 - 不启停服务，不迁移数据库、Homebrew service 或 GUI 应用数据，不清理未知软件、项目 runtime 或另一架构的数据目录。
+- 本机软件路径和盘点结果只允许写入安装器受管的 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`；不得写入 public/shared 仓库或其他长期状态，该文件也不是删除授权。
 - 不调用 `install.sh retire` 或 `install.sh retire --apply`，不自动执行 Stage 3。
 - 不 commit 或 push。
 
@@ -92,8 +97,8 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 ### 1. 预检
 
 1. 检查 public 与可选 shared 仓库的 `git status --short`，把已有变更视为用户内容。
-2. 确认 Stage 1 已完成且最新 Zsh diff 已获用户确认；`my_setup/zsh/` 中恰好存在交接所选的一套完整 Zsh 来源，且没有另一套或混搭残留。
-3. 确认 `install.sh` 能力的测试、pre-commit 和 CI 已完成，根安装器及三个内部模块存在。
+2. 确认实际采用的修复计划状态为唯一的 `Stage 1 已应用`，且最新 Zsh diff 已获用户确认；`my_setup/zsh/` 中恰好存在交接所选的一套完整 Zsh 来源，且没有另一套或混搭残留。
+3. 确认根安装器及三个内部模块存在，并能列出当前系统上全部受管 symlink、软件、tooling、runtime 和插件的精确目标；记录测试、pre-commit 和 CI 状态。CI 缺失、未运行或失败只进入最终报告，不得阻止计划、安装或 Stage 2 完成。
 4. 检查所有已确认 personal/shared Brewfile、tooling 与插件配置存在且可解析；缺少工具版本、命令来源或目录语义时运行允许的只读查询。
 5. 通过只读系统查询判定原生硬件、Rosetta 状态、预期 Homebrew 前缀和安装器兼容性。
 6. 记录 local `parameters.zsh`、`integrations.zsh` 是否存在及其权限，不读取内容。
@@ -122,6 +127,8 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 
 确认后，让 `install.sh` 自己按契约完成副本、symlink、local 权限、`core.hooksPath`、Brewfile 合并、软件、mise/uv/tooling 和插件安装。不要在本 Skill 中复刻或绕过确定性步骤。
 
+安装器必须以“全部声明目标到位”为完成方向，而不是以“目标机器没有旧软件”为前置条件：对每个计划项记录目标路径、安装/链接结果和后续验证证据；另一架构残留只进入退役交接，不参与本阶段删除。
+
 ### 3. 验证目标机器
 
 安装器成功返回后运行：
@@ -130,29 +137,53 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 ./install.sh verify
 ```
 
-确认验证至少覆盖：
+把 verify 分成两个独立结论：
+
+### A. 安装完整性
+
+确认 `install.sh` 在当前系统定义的目标路径中完成全部声明项，至少覆盖：
 
 - 所有启用 Zsh 文件通过 `zsh -n`，login 与 interactive shell 无加载错误；
 - `~/.zprofile` 和 `~/.zshrc` symlink 分别精确指向已选的 public `zprofile`/`zshrc` 或 `.zprofile`/`.zshrc`；
 - integrations pre → shared → personal → parameters → integrations post 阶段正确，personal 独占 Oh My Zsh/补全初始化；
 - local 父目录为 `0700`，存在的 `parameters.zsh`、`integrations.zsh` 为 `0600`，未被 Git 跟踪且内容未泄露；
-- Intel Mac 的 Homebrew 和受管命令来自 `/usr/local`，Apple Silicon 来自 `/opt/homebrew`，没有活动的另一架构 Homebrew 前缀；
+- Intel Mac 的 Homebrew 和全部受管命令来自 `/usr/local`；Apple Silicon 的 Homebrew 和全部受管命令来自 `/opt/homebrew`。另一架构路径可以仍然存在，但不得成为任一受管命令或 symlink 的最终目标；
 - Apple Silicon 的关键二进制为 ARM 或受支持的 Universal；Intel 的关键二进制与 Intel 原生架构匹配；
-- mise、uv、插件和其他命令来自预期路径与版本；
+- 每个安装器计划中的 Zsh/tooling 配置 symlink、mise/uv runtime、Brewfile 项、插件和其他命令都存在于摘要声明的精确目标，且版本、revision、来源和架构符合配置；
 - 再次运行安装不会覆盖已有副本或重复破坏 symlink；
 - 服务和数据人工事项仍被如实报告。
+
+只要任一声明项没有安装到当前系统的精确目标，A 失败，Stage 2 不得标为完成。旧 Intel 项存在但没有被受管目标使用，不使 A 失败。
+
+### B. Intel 退役交接
+
+仅在 Apple Silicon 上，verify 同时盘点仍存在的 Intel 软件和路径，并确定性维护：
+
+```text
+${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv
+```
+
+- 父目录权限为 `0700`，文件权限为 `0600`，不得被 public/shared Git 跟踪；使用临时文件加原子替换，不能在日志中泄露 local 参数或凭证。
+- 文件必须带安装器固定标记，并按稳定顺序使用 TSV 字段：`kind`、`manager`、`name`、`version`、`path`、`architecture`、`reason`。字段中的换行和制表符必须拒绝或安全编码。
+- 只列通过只读管理器清单、命令解析或已知全局 runtime/plugin 根确认的精确项目与路径；允许记录 `/usr/local/bin` 等残留 PATH 条目，但不得递归枚举整个 `/usr/local`，也不得把未知目录推断为可删除软件。
+- service/data、项目依赖和未知项可以进入清单，但 `reason` 必须明确标为保留/待人工处理；任何行都只是 Stage 3 输入线索，不是删除授权或 ARM 替代完成证明。
+- 有 Intel 残留时，清单成功生成是 B 通过的必要条件；无法安全创建、权限不正确或内容无法确定性解析时，B 失败。
+- 没有 Intel 残留时不得留下误导性的旧候选；只允许删除或清空带安装器固定标记的旧清单，遇到未知同名文件时停止并报告，不得覆盖。
+- Intel Mac 不生成该清单，并明确报告 Stage 3 不适用。
+
+Stage 2 只有 A 通过，且 Apple Silicon 上 B 为“已生成”或“无 Intel 残留”时才完成。清单由 Stage 3 重新盘点、逐项验证并分类后才能用于退役预览。
 
 性能结果只作为建议，不阻止基础交付。
 
 ### 4. 报告并停止
 
-报告原生硬件与所选前缀、仓库 Zsh 来源、真实入口 symlink、已创建副本、软件/tooling/插件结果、验证结论、人工服务或数据事项和未解决缺口。
+报告原生硬件与所选前缀、仓库 Zsh 来源、真实入口和 tooling symlink、已创建副本、每项软件/tooling/plugin 的目标与结果、A/B 两类验证结论、`intel_to_be_retired.tsv` 路径与条目摘要、人工服务或数据事项、测试/pre-commit/CI 状态和未解决缺口。CI 只报告，不改变 Stage 2 结论。
 
 在 Apple Silicon 上明确说明 Stage 3 仍需用户单独触发；在 Intel Mac 上明确说明 Stage 3 不适用。不要自动继续 Stage 3。
 
 ## 处理失败
 
-- Stage 1 输出缺失、变化或验证失败：返回 Stage 1，不在本阶段修复 Zsh。
+- Stage 1 输出缺失、变化、所采用修复计划不是唯一 `Stage 1 已应用` 状态或验证失败：返回 Stage 1，不在本阶段修复 Zsh。
 - 两套仓库 Zsh 来源同时存在、命名混搭或文件残缺：在确认前报告精确冲突并停止；不猜优先级，不创建别名、副本或另一套文件。
 - Stage 1 显式目标位于仓库外：报告精确映射缺口并停止，不擅自复制到 `my_setup/zsh/`。
 - 架构、Rosetta 或 Homebrew 前缀判定失败：不运行安装器，不猜测路径。
@@ -160,18 +191,20 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 - 用户拒绝安装摘要：不执行真实系统变更。
 - Zsh 副本创建失败：停止，不替换真实入口。
 - 软件部分安装后验证失败：报告实际状态和人工修复建议，不自动卸载。
+- 原生目标全部安装但 Intel 清单生成失败：保留已安装结果，报告 A 已通过、B 失败及精确状态文件问题；不自动删除 Intel 项，也不进入 Stage 3。
 - 服务或数据尚未处理：允许完成配置和软件安装，但明确标记这些项目不得进入 Stage 3 删除清单。
 
 ## 完成判定
 
 只有以下条件全部成立，才报告 Stage 2 完成：
 
-- Stage 1 最新仓库版 Zsh diff 已确认，安装器已解析出唯一完整命名组且与 Stage 1 交接一致；
+- Stage 1 最新仓库版 Zsh diff 已确认，实际采用的修复计划状态为唯一 `Stage 1 已应用`，安装器已解析出唯一完整命名组且与 Stage 1 交接一致；
 - 原生硬件、进程状态和 Homebrew 前缀判定明确；
 - 用户已在 `install.sh` 内确认真实写入；
-- Zsh 入口副本和 symlink、local 权限、软件/tooling/plugin 安装符合契约；
-- `./install.sh verify` 通过当前架构的全部检查；
+- 安装器摘要中的全部 Zsh/tooling symlink、local 权限、Brewfile 软件、mise/uv runtime 和 plugin 都已安装到当前系统定义的精确原生目标；
+- `./install.sh verify` 的 A 安装完整性通过；Apple Silicon 上 B 已生成合规的 `intel_to_be_retired.tsv`，或确认没有 Intel 残留；
 - 服务和数据只被报告，没有自动迁移；
+- 测试、pre-commit 和 CI 状态已如实进入最终报告，但 CI 状态未被用作阻断条件；
 - 没有生成 Zsh、执行 Stage 3、commit 或 push。
 
 用户在任一确认处取消时，按实际状态报告“Stage 2 已取消”或“安装未获确认”，不要把未安装或部分安装标为完成。

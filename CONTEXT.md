@@ -24,6 +24,10 @@ _避免使用_：本地配置层、机器配置
 单台机器可选的 `~/.config/dotfiles/local/integrations.zsh`，保存由第三方安装器追加且不能公开的 Zsh 功能块，并通过四个 pre/post 阶段加载。
 _避免使用_：第四配置层、本机软件清单
 
+**Intel 退役交接清单（Intel Retirement Handoff）**：
+Stage 2 在 Apple Silicon 上由 `install.sh verify` 生成的本机 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`，记录仍存在的 Intel 软件与精确路径供 Stage 3 重新盘点。它不是声明式配置或删除授权。
+_避免使用_：退役批准清单、自动删除列表
+
 **活动配置（Active Configuration）**：
 第三方 pre 钩子、共享配置、个人配置、本机私有参数和第三方 post 钩子按固定阶段加载后的运行时结果。
 _避免使用_：public-shared-local 三层栈
@@ -50,10 +54,10 @@ Stage 1 通过独立 Skill 把已确认的 `zsh-repair-plan.md` 应用到用户�
 通过独立 Review Skill 审阅当前仓库 `tmp/` 中由 `dump.sh` 已导出的 Brewfile、tooling 和插件候选，补充结构化 AI 评论。它不运行采集、不分析 Zsh 文件、不执行正式写入。
 
 **安装（Install）**：
-Stage 2 通过无参数 `install.sh` 从 `my_setup/zsh/` 中唯一完整的无前置点或有前置点来源组备份并建立固定的 HOME Zsh 入口 symlink，再按当前机器原生硬件架构安装 personal/shared 声明的配置与软件。Apple Silicon 的 Rosetta 会话不得回退使用 Intel Homebrew。
+Stage 2 通过无参数 `install.sh` 从 `my_setup/zsh/` 中唯一完整的无前置点或有前置点来源组备份并建立固定的 HOME Zsh 入口 symlink，再按当前机器原生硬件架构把 personal/shared 声明的全部配置、软件、runtime 和插件安装到精确目标。Apple Silicon 的 Rosetta 会话不得回退使用 Intel Homebrew；旧 Intel 项可以保留，但须进入 Intel 退役交接清单且不得成为受管目标。
 
 **退役（Retire）**：
-Stage 3 只在 Apple Silicon 上通过 `install.sh retire` 预览，并通过 `install.sh retire --apply` 删除已有 ARM 替代或已明确淘汰的旧 Intel 软件；Intel Mac 不进入 Stage 3。
+Stage 3 只在 Apple Silicon 上读取 Intel 退役交接清单作为线索，通过 `install.sh retire` 实时重新盘点和预览，并通过 `install.sh retire --apply` 删除已有 ARM 替代或已明确淘汰的旧 Intel 软件；Intel Mac 不进入 Stage 3。
 
 ## Core mappings
 
@@ -64,5 +68,6 @@ Stage 3 只在 Apple Silicon 上通过 `install.sh retire` 预览，并通过 `i
 | 共享配置 | 可选的独立 shared 仓库 |
 | 本机私有参数 | `~/.config/dotfiles/local/parameters.zsh` |
 | 本机功能集成 | `~/.config/dotfiles/local/integrations.zsh`（可选） |
+| Intel 退役交接清单 | `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`（Apple Silicon 可选） |
 
 声明式 Zsh 覆盖顺序固定为 `shared → personal → parameters`，因此覆盖优先级为 `shared < personal < parameters`；`integrations.zsh` 通过 `zprofile-pre/post` 与 `zshrc-pre/post` 阶段钩子加载，不参与覆盖层命名。

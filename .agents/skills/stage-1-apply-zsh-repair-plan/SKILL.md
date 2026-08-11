@@ -1,6 +1,6 @@
 ---
 name: stage-1-apply-zsh-repair-plan
-description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应用为可审查的 `zprofile`、`zshrc`、可选 `shared.zsh` 和本机 `integrations.zsh`；优先更新用户显式目标，否则先确认无前置点或有前置点命名。以最小修改保留 Oh My Zsh 模板，并用确定性清单逐块比较源 `.zprofile`/`.zshrc` 与目标及本机 integrations，缺块、内容变化、阶段错误或顺序回归时阻止完成。用于应用 zsh-repair-plan、保全 Kiro/Docker/gcloud/kimi 等软件追加块、生成或修复目标 Zsh 文件，或进入 Dotfiles Stage 1 时；不用于重新诊断源 Zsh、建立 HOME symlink、安装软件、运行 Stage 2/3、commit 或 push。
+description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应用为可审查的 `zprofile`、`zshrc`、可选 `shared.zsh` 和本机 `integrations.zsh`；优先更新用户显式目标，否则先确认无前置点或有前置点命名。以最小修改保留 Oh My Zsh 模板，并用确定性清单逐块比较源 `.zprofile`/`.zshrc` 与目标及本机 integrations；全部写入与验证完成后，把实际采用的 `zsh-repair-plan.md` 状态从 Stage 0 候选/已确认更新为 `Stage 1 已应用`。用于应用 zsh-repair-plan、保全 Kiro/Docker/gcloud/kimi 等软件追加块、生成或修复目标 Zsh 文件，或进入 Dotfiles Stage 1 时；不用于重新诊断源 Zsh、建立 HOME symlink、安装软件、运行 Stage 2/3、commit 或 push。
 ---
 
 # Stage 1：应用 Zsh 修复计划
@@ -9,7 +9,8 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 
 ```text
 确认文件名 → 核对源功能块清单 → 确认计划与目标 → 生成候选
-  → 源/目标/local 覆盖比较 → 用户确认完整 diff → 写入 → 再比较并停止
+  → 源/目标/local 覆盖比较 → 用户确认完整 diff → 写入 → 再比较
+  → 更新所采用修复计划的状态 → 验证交接并停止
 ```
 
 ## 文件名确认门
@@ -30,6 +31,7 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 完成文件名确认后，只读检查修复计划、用户显式目标、已选默认仓库目标、工作树、已有 Zsh 文件和可选 shared 仓库；不要生成候选或编辑文件。随后展示：
 
 - 将读取的修复计划及其确认状态；
+- 每份实际采用的 `zsh-repair-plan.md` 当前状态、兼容的旧标题状态，以及成功后统一更新为 `> 状态：Stage 1 已应用` 的精确 diff；
 - Stage 0 使用的源 `.zprofile`/`.zshrc` 精确映射、功能块清单和当前快照是否仍匹配；
 - 每个 `zprofile`/`.zprofile`、`zshrc`/`.zshrc`、`shared.zsh` 的精确目标、命名选择和选择依据；
 - 是否创建或修改固定本机文件 `~/.config/dotfiles/local/integrations.zsh`、`parameters.zsh`，已有文件的备份路径规则和只展示脱敏结构 diff 的原因；
@@ -74,6 +76,20 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 5. Stage 0 证据来源对应的源文件；`live-home` 固定映射为当前 `$HOME/.zprofile` 与 `$HOME/.zshrc`，其他来源必须由用户显式提供精确源路径。
 
 只应用已经过 Stage 0 确认，或由用户显式提供并明确要求执行的计划。计划仍是候选、互相冲突、缺少必要目标、缺少功能块保全清单或无法区分 personal/shared 时，集中提问，不自行补写需求。不得重新诊断真实 Zsh；只允许确定性功能块工具读取已确认源文件并输出安全清单、私有候选和覆盖结果，AI 不直接读取源块正文、变量值或内容摘要，也不得把实施时的新判断伪装成 Stage 0 证据。
+
+## 管理修复计划状态
+
+把每份实际采用的 personal/shared `zsh-repair-plan.md` 作为 Stage 1 交接的一部分，不修改未被本次应用使用的计划。状态字段使用靠近标题的单行 Markdown 引用：
+
+```text
+> 状态：Stage 1 已应用
+```
+
+- 把 `> 状态：Stage 0 候选`、`> 状态：Stage 0 已确认`，以及旧标题 `Zsh 修复计划候选（Stage 0）` 识别为 Stage 0 状态；旧标题在获准 diff 中规范为普通 `Zsh 修复计划` 标题和独立状态字段，避免标题与状态互相矛盾。
+- 生成候选时把状态迁移纳入用户审查的完整 diff，但在目标 Zsh、获准 local 文件和功能块覆盖验证全部通过前，不得把状态写成 `Stage 1 已应用`。
+- 所有与该计划关联的目标验证通过后，再原子更新状态；状态文件并发变化、写入失败、最终状态不唯一或实际 diff 与获准 diff 不一致时，Stage 1 不得报告完成。
+- 用户取消、目标写入失败或最终验证失败时保留原状态，不得用 `Stage 1 已应用` 掩盖候选或部分完成结果。
+- 已是 `Stage 1 已应用` 但目标、源基线或计划正文后来发生变化时，把它视为交接失效，重新审查完整 diff；不得只沿用旧状态。
 
 ## 解析精确目标
 
@@ -149,7 +165,7 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 4. 扫描 public 候选中的密钥模式、shared 仓库专属标识、本机绝对路径、与已确认目标架构不匹配的 Homebrew 前缀和 Rosetta fallback。
 5. 对比原文件，确认 Oh My Zsh 模板和用户配置只发生必要变化。
 6. 运行功能块工具的 `compare`，逐块比较源 `.zprofile` + `.zshrc` 与目标 `zprofile` + `zshrc` + 私有 integrations 候选。只有 `preserved-target`、已校验阶段 loader 的 `migrated-local` 或精确获准的 `approved-retired` 通过；`missing`、`content-changed`、`phase-changed`、`order-changed`、`missing-loader` 均阻止展示可写 diff。
-7. 展示每个仓库目标的完整 diff，以及私有文件按变量名/块 ID/阶段/顺序/数量生成的脱敏结构 diff；不得显示私有正文、值或内容摘要。一起展示目标类型、候选验证、模板保留摘要、功能块覆盖表和未解决缺口。
+7. 展示每个仓库目标和每份实际采用的 `zsh-repair-plan.md` 状态迁移完整 diff，以及私有文件按变量名/块 ID/阶段/顺序/数量生成的脱敏结构 diff；不得显示私有正文、值或内容摘要。一起展示目标类型、候选验证、模板保留摘要、功能块覆盖表和未解决缺口。
 
 随后只给出以下选择并停止等待：
 
@@ -169,8 +185,9 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 
 - 再次运行 `zsh -n` 和全部静态边界检查；
 - 针对实际落盘文件再次运行同一源/目标/local 功能块 `compare`；任一块缺失、变化、错序或 loader 阶段错误都报告失败，不得标为完成；
+- 只有上述验证通过后，才把每份实际采用的 `zsh-repair-plan.md` 原子更新为唯一的 `> 状态：Stage 1 已应用`；旧标题同时按已确认 diff 去掉 Stage 0 候选字样；
 - 确认实际 diff 与获准 diff 完全一致；
-- 报告更新的目标、最终文件命名方案、模板保留情况、计划覆盖结果和证据缺口；
+- 报告更新的目标、最终文件命名方案、模板保留情况、计划覆盖结果、每份修复计划的最终状态和证据缺口；
 - 停在“Zsh 修复计划已应用”，不要运行 `install.sh` 或自动进入 Stage 2。
 
 不要修改真实 Zsh 入口的 symlink，不在真实 HOME 安装 Oh My Zsh、插件、Homebrew 或 tooling，不让 AI 读取 local 正文，不 commit 或 push。
@@ -187,6 +204,7 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 - 源 `.zprofile` + `.zshrc` 的每个功能块都由最终目标文件或正确阶段加载的 `integrations.zsh` 精确覆盖，或有用户明确批准的精确 retire 记录；
 - 修改过的既有 `integrations.zsh`/`parameters.zsh` 均已先完成 `0600` 同目录备份，且 local 父目录为 `0700`；
 - Oh My Zsh 模板来自本次获准运行的官方最新安装工具，官方 commit 已记录；用户配置已保留，所有偏离都有获准理由；
+- 每份实际采用的 `zsh-repair-plan.md` 都只含一个 `> 状态：Stage 1 已应用`，且状态迁移包含在用户确认的完整 diff 中；
 - 没有建立 symlink、在真实 HOME 安装软件、退役、commit 或 push。
 
 若用户取消、目标变化或验证失败，按实际状态报告，不把候选或部分写入标为完成。
