@@ -1,6 +1,6 @@
 ---
 name: stage-1-apply-zsh-repair-plan
-description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应用为可审查的 `.zprofile`、`.zshrc` 和可选 `company.zsh`，优先更新用户显式指定的目标文件，否则写入当前仓库的默认 Zsh 目标；以最小修改尽可能保留现有 Oh My Zsh 官方模板结构和配置。用于用户要求执行、应用或落地 zsh-repair-plan，生成或修复目标 Zsh 文件，或进入 Dotfiles Stage 1 时；不用于分析源 Zsh、生成修复建议、建立 HOME symlink、安装软件、运行 Stage 2/3、commit 或 push。
+description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应用为可审查的 `zprofile`、`zshrc` 和可选 `company.zsh`；优先更新用户显式指定的目标文件，否则在实施前让用户确认使用默认无前置点名称 `zprofile`/`zshrc`，还是 `.zprofile`/`.zshrc`。以最小修改尽可能保留现有 Oh My Zsh 官方模板结构和配置。用于用户要求执行、应用或落地 zsh-repair-plan，生成或修复目标 Zsh 文件，或进入 Dotfiles Stage 1 时；不用于分析源 Zsh、生成修复建议、建立 HOME symlink、安装软件、运行 Stage 2/3、commit 或 push。
 ---
 
 # Stage 1：应用 Zsh 修复计划
@@ -8,16 +8,29 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 把已确认的修改建议转换为精确的目标文件变更：
 
 ```text
-确认计划与目标 → 生成候选 → 语法和边界自检
+确认文件名 → 确认计划与目标 → 生成候选 → 语法和边界自检
   → 用户确认完整 diff → 写入精确目标 → 再验证并停止
 ```
 
+## 文件名确认门
+
+用户没有显式提供精确目标路径时，在展示实施计划或生成候选前，先只读识别可能的默认目录，然后只询问以下选择并停止等待：
+
+```text
+1. 使用默认文件名 zshrc 和 zprofile（无前置点）
+2. 使用 .zshrc 和 .zprofile（有前置点）
+```
+
+不得根据仓库现有文件、修复计划中的逻辑名称、Shell 惯例或下游安装器要求代替用户选择。选择 1 时默认目标为 `my_setup/zsh/zshrc` 和 `my_setup/zsh/zprofile`；选择 2 时默认目标为 `my_setup/zsh/.zshrc` 和 `my_setup/zsh/.zprofile`。记录本次选择并在后续计划、diff、写入和交接中始终使用同一组名称。
+
+用户已经显式提供一个或多个精确目标路径时，不要要求其改名，也不要对已提供目标重复询问命名方案。只提供部分目标而修复计划还需要其他文件时，先询问缺失文件的精确路径；不要把命名选择自动套用到缺失目标。
+
 ## 执行前计划门
 
-先只读检查修复计划、用户显式目标、默认仓库目标、工作树、已有 Zsh 文件和可选 company 仓库；不要生成候选或编辑文件。随后展示：
+完成文件名确认后，只读检查修复计划、用户显式目标、已选默认仓库目标、工作树、已有 Zsh 文件和可选 company 仓库；不要生成候选或编辑文件。随后展示：
 
 - 将读取的修复计划及其确认状态；
-- 每个 `.zprofile`、`.zshrc`、`company.zsh` 的精确目标和选择依据；
+- 每个 `zprofile`/`.zprofile`、`zshrc`/`.zshrc`、`company.zsh` 的精确目标、命名选择和选择依据；
 - 修复计划涉及 Homebrew/PATH 时的目标架构或可移植判定；
 - 将保留的现有内容、计划修改的逻辑区域及 Oh My Zsh 模板处理方式；
 - 候选与临时文件范围、验证命令、敏感信息风险和失败停止点；
@@ -40,9 +53,9 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 
 目标选择规则固定为：
 
-1. 用户显式提供目标 `.zshrc`、`.zprofile` 或 `company.zsh` 时，更新这些文件；不要同时另建默认仓库副本。
+1. 用户显式提供目标 `zshrc`/`.zshrc`、`zprofile`/`.zprofile` 或 `company.zsh` 时，更新这些文件；不要同时另建默认仓库副本，也不要改名。
 2. 用户只提供部分目标时，只修改获准文件。修复计划还要求其他文件时，先报告缺口并询问目标，不猜测默认位置。
-3. 用户没有提供目标时，使用当前公开仓库的 `my_setup/zsh/.zshrc`、`my_setup/zsh/.zprofile`，以及确有 company 增量时唯一已授权 company 仓库的 `zsh/company.zsh`。
+3. 用户没有提供目标时，先完成文件名确认门。默认使用当前公开仓库的 `my_setup/zsh/zshrc`、`my_setup/zsh/zprofile`；只有用户选择有前置点方案时才使用 `my_setup/zsh/.zshrc`、`my_setup/zsh/.zprofile`。确有 company 增量时仍使用唯一已授权 company 仓库的 `zsh/company.zsh`。
 4. 计划中的“目标文件”是逻辑建议；当前请求中显式提供的目标路径优先。
 
 记录目标是否存在、是否为普通文件、是否为 symlink、是否有未提交修改。不要跟随未披露的 symlink 写入；只有用户显式提供并确认解析后的真实目标时才允许更新。不得因为检测到 `~/.zshrc` 或 `~/.zprofile` 就把它当作目标；真实 HOME 文件只有作为用户显式目标并通过两次确认时才在本阶段更新，本 Skill 仍不建立或替换 symlink。
@@ -51,7 +64,7 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 
 根据修复计划分别更新目标，遵守：
 
-- 把跨进程静态环境放入 `.zprofile`，把交互行为放入 `.zshrc`；不接管 `.zshenv`，不设置 `ZDOTDIR`。
+- 把跨进程静态环境放入已选的 `zprofile` 或 `.zprofile`，把交互行为放入已选的 `zshrc` 或 `.zshrc`；不接管 `.zshenv`，不设置 `ZDOTDIR`。
 - 修复 Homebrew/PATH 时使用计划已确认的目标架构；不要把执行 Stage 1 的当前进程架构自动当成目标。计划要求跨机器复用时使用只激活原生前缀的可移植判断；目标架构未确认时停止询问。
 - 以目标现有内容为基线做局部修改；不要为了格式统一重写整份文件，不改变计划未覆盖的用户配置。
 - personal 提供完整默认体验并独占 Oh My Zsh 与补全初始化；company 只保存可在 personal 之前独立加载的公司增量；local 只在最后按固定路径加载。
@@ -64,12 +77,12 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 
 ## 尽可能保留 Oh My Zsh 模板
 
-把现有目标 `.zshrc` 视为首要模板基线：
+把现有目标 `zshrc` 或 `.zshrc` 视为首要模板基线：
 
 - 保留修复计划未要求改变的官方模板注释、分区顺序、变量示例、主题配置、`plugins=(...)` 位置和 `source $ZSH/oh-my-zsh.sh` 初始化形态。
 - 优先在模板预留位置内更新 `ZSH`、主题、插件和用户配置；只插入满足 company/personal/local 契约所需的最小受管块。
 - 保证 Oh My Zsh 和补全只初始化一次；修复重复 `compinit`、重复 source 或错误顺序时，只移除已确认冲突的片段。
-- 不为了追随新版本模板而联网、整文件替换或删除用户自定义注释。新建 `.zshrc` 时，优先使用用户提供或仓库已有且已确认的 Oh My Zsh 模板；没有模板时使用最小兼容结构，并在 diff 摘要中说明。
+- 不为了追随新版本模板而联网、整文件替换或删除用户自定义注释。新建 `zshrc` 或 `.zshrc` 时，优先使用用户提供或仓库已有且已确认的 Oh My Zsh 模板；没有模板时使用最小兼容结构，并在 diff 摘要中说明。
 - 修复计划或安全边界与模板冲突时，以获准计划和安全边界为准，并逐项列出偏离模板的原因。
 
 “尽可能保留”必须通过修改前后对照验证：列出保留的模板区块、必要变更和非必要格式变化；存在非必要变化时继续收窄 diff。
@@ -103,7 +116,7 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 
 - 再次运行 `zsh -n` 和全部静态边界检查；
 - 确认实际 diff 与获准 diff 完全一致；
-- 报告更新的目标、模板保留情况、计划覆盖结果和证据缺口；
+- 报告更新的目标、最终文件命名方案、模板保留情况、计划覆盖结果和证据缺口；
 - 停在“Zsh 修复计划已应用”，不要运行 `install.sh` 或自动进入 Stage 2。
 
 不要修改真实 Zsh 入口的 symlink，不安装 Oh My Zsh、插件、Homebrew 或 tooling，不读取 local 内容，不 commit 或 push。
@@ -113,6 +126,7 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 只有以下条件全部成立，才报告 Stage 1 完成：
 
 - 修复计划已确认且每个目标来源明确；
+- 无显式目标时，用户已明确选择无前置点或有前置点命名方案；
 - 用户已确认最新完整 diff；
 - 只更新了显式目标或没有显式目标时的默认仓库目标；
 - 所有写入文件通过语法和边界检查；
