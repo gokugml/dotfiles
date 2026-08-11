@@ -6,7 +6,7 @@
 
 ## 概览
 
-这个公开仓库保存可分享的个人配置和迁移能力，用于把经过确认的 Zsh、Homebrew、mise、uv 与 Zsh 插件迁移到 Apple Silicon Mac。公司增量放在可选的独立私有仓库，本机密钥只放在仓库外的 local 文件。
+这个公开仓库保存可分享的个人配置和迁移能力，用于把经过确认的 Zsh、Homebrew、mise、uv 与 Zsh 插件迁移到 Apple Silicon Mac。与他人共用的配置增量放在可选的独立 shared 仓库，本机密钥只放在仓库外的 local 文件。
 
 Stage 1 根据已确认的 `zsh-repair-plan.md` 应用并审查仓库版 Zsh，可使用无前置点的 `zprofile` + `zshrc`，也可使用有前置点的 `.zprofile` + `.zshrc`。Stage 2 不生成这些文件；安装器从 `my_setup/zsh/` 中解析唯一完整的一组来源，再建立固定的 HOME 启动入口。
 
@@ -56,10 +56,10 @@ dotfiles/
 
 无参数安装的执行顺序是 `macos → tooling → zsh → pre-commit hook → verify`。如果 Apple Silicon Homebrew 缺失，脚本会阻断并要求先人工审查、安装官方 Homebrew；它不会执行不透明的 `curl | shell`。
 
-可选 company 仓库必须由 Stage 2 唯一确认，并在调用根安装器时以绝对路径传入：
+可选 shared 仓库必须由 Stage 2 唯一确认，并在调用根安装器时以绝对路径传入：
 
 ```zsh
-DOTFILES_COMPANY_DIR=/absolute/path/to/company-dotfiles ./install.sh
+DOTFILES_SHARED_DIR=/absolute/path/to/shared-dotfiles ./install.sh
 ```
 
 <!-- section:configuration -->
@@ -67,16 +67,16 @@ DOTFILES_COMPANY_DIR=/absolute/path/to/company-dotfiles ./install.sh
 ## 配置约定
 
 - personal 固定保存在公开仓库的 `my_setup/`。
-- company 是可选的独立 Git 工作树，只保存公司增量。
+- shared 是可选的独立 Git 工作树，只保存与他人共用的配置增量。
 - local 固定为 `~/.config/dotfiles/local/parameters.zsh`，只保存密钥值、账号和单机路径，不保存软件或插件选择。
 - personal Zsh 仓库来源必须恰好完整存在一组：`my_setup/zsh/zprofile` + `zshrc`，或 `my_setup/zsh/.zprofile` + `.zshrc`。两套并存、跨组混搭或文件残缺都会在安装确认和写入前阻断；安装器不会猜优先级或创建另一套副本。
 - HOME 端始终使用 `~/.zprofile` 和 `~/.zshrc`，分别 symlink 到已解析的同组仓库来源。
-- `.zshrc` 使用 `dotfiles: company → dotfiles: personal → dotfiles: local` 三个标记维持加载顺序和 `company < personal < local` 覆盖优先级。
+- `.zshrc` 使用 `dotfiles: shared → dotfiles: personal → dotfiles: local` 三个标记维持加载顺序和 `shared < personal < local` 覆盖优先级。
 - 每个启用插件在 `.zshrc` 中使用 `dotfiles: plugin <name>` 标记，并按合并后的 `load_order` 递增排列。
-- personal/company 各自最多一份 `zsh/plugins.toml`；插件固定 40 位 commit，相同名称由 personal 决定。
-- personal/company 分别声明 Brewfile 和 tooling；相同 Homebrew 项目由 personal 决定。
+- personal/shared 各自最多一份 `zsh/plugins.toml`；插件固定 40 位 commit，相同名称由 personal 决定。
+- personal/shared 分别声明 Brewfile 和 tooling；相同 Homebrew 项目由 personal 决定。
 
-mise 配置通过受管 symlink 进入 `~/.config/mise/conf.d/`，company 文件名前缀为 `10-`，personal 为 `20-`。uv 的 personal `uv.toml` 通过受管 symlink 成为用户级配置，已确认的 `.python-versions` 由安装器显式交给 `uv python install`。
+mise 配置通过受管 symlink 进入 `~/.config/mise/conf.d/`，shared 文件名前缀为 `10-`，personal 为 `20-`。uv 的 personal `uv.toml` 通过受管 symlink 成为用户级配置，已确认的 `.python-versions` 由安装器显式交给 `uv python install`。
 
 <!-- section:safety -->
 
@@ -85,7 +85,7 @@ mise 配置通过受管 symlink 进入 `~/.config/mise/conf.d/`，company 文件
 - 安装器只在原生 macOS `arm64` 会话执行真实安装；测试模式只允许 `/private/tmp` 或 `/tmp` 下的隔离 HOME。
 - 替换现有 `.zprofile` 或 `.zshrc` 前，会创建保留文件类型或 symlink 目标的带时间戳副本。
 - `parameters.zsh` 的父目录权限必须为 `0700`，文件权限必须为 `0600`。脚本不会显示、复制、记录、持久化或哈希其内容，只执行无输出语法检查和正常 shell 加载。
-- public 输出不得包含公司信息、密钥或本机绝对路径。
+- public 输出不得包含 shared 仓库专属信息、密钥或本机绝对路径。
 - 服务、数据库、Homebrew service 和 GUI 应用数据只报告、人工处理，不自动启停、迁移或删除。
 - retire 只处理同时具备明确 ARM 替代路径、版本/架构证据且没有 service/data 记录的精确 Intel formula；未知项目、项目依赖、NVM、Python Framework、全局 runtime、旧插件和整个 `/usr/local` 默认保留。
 
@@ -99,7 +99,7 @@ mise 配置通过受管 symlink 进入 `~/.config/mise/conf.d/`，company 文件
 .githooks/pre-commit
 ```
 
-完整 smoke 使用临时仓库和临时 HOME 验证无前置点与有前置点两种仓库来源、歧义/混搭阻断、默认 `N`、副本、symlink、幂等、company/personal 合并、local 不泄露、retire 只读以及非 TTY 阻断。快速模式执行语法、Markdown、中英文文档章节结构、安全边界和 Intel 路径扫描。
+完整 smoke 使用临时仓库和临时 HOME 验证无前置点与有前置点两种仓库来源、歧义/混搭阻断、默认 `N`、副本、symlink、幂等、shared/personal 合并、local 不泄露、retire 只读以及非 TTY 阻断。快速模式执行语法、Markdown、中英文文档章节结构、安全边界和 Intel 路径扫描。
 
 pre-commit 不安装依赖。它要求 `gitleaks 8.30.0` 已由 Stage 2 的 mise 配置安装，并扫描当前公开工作树；CI 还会使用同一固定版本扫描当前内容和完整 Git 历史。只有快速检查、完整 smoke 和 CI 全部通过后才能发布。
 

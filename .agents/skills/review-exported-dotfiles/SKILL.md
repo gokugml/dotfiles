@@ -1,6 +1,6 @@
 ---
 name: review-exported-dotfiles
-description: 对当前 Git 仓库 tmp/ 中由 dump.sh 已导出的软件、tooling 和插件证据及候选配置执行 AI Review，先为每个直接期望工具给出一句话描述，再调整期望项目、按 personal/company/retire/manual 分类，并补齐相邻的 AI-REVIEW 或 AI-RETIRE 评论。用于用户要求审阅、整理或批准前检查已导出的 Brewfile、mise/uv 配置、runtime/tool 清单或 plugins.toml 时；不用于运行采集、分析真实 Zsh 文件、生成 zsh-repair-plan、安装软件或写入正式目录。
+description: 对当前 Git 仓库 tmp/ 中由 dump.sh 已导出的软件、tooling 和插件证据及候选配置执行 AI Review，先为每个直接期望工具给出一句话描述，再调整期望项目、按 personal/shared/retire/manual 分类，并补齐相邻的 AI-REVIEW 或 AI-RETIRE 评论。用于用户要求审阅、整理或批准前检查已导出的 Brewfile、mise/uv 配置、runtime/tool 清单或 plugins.toml 时；不用于运行采集、分析真实 Zsh 文件、生成 zsh-repair-plan、安装软件或写入正式目录。
 ---
 
 # 导出配置 AI Review
@@ -9,7 +9,7 @@ description: 对当前 Git 仓库 tmp/ 中由 dump.sh 已导出的软件、tooli
 
 ## 执行前计划门
 
-先只读检查仓库根、工作树、允许的候选文件清单、`tmp/dump.md` 和正式目标的当前状态，不编辑任何候选。随后向用户展示计划：将审阅和可能修改的精确候选路径、可能新增/移除的声明类型、personal/company/retire/manual 分类影响、安全扫描、验证方式，以及明确不会运行采集、读取 Zsh/local 内容、写入正式目录或修改软件。展示后停止并等待用户明确确认，再进入执行流程。
+先只读检查仓库根、工作树、允许的候选文件清单、`tmp/dump.md` 和正式目标的当前状态，不编辑任何候选。随后向用户展示计划：将审阅和可能修改的精确候选路径、可能新增/移除的声明类型、personal/shared/retire/manual 分类影响、安全扫描、验证方式，以及明确不会运行采集、读取 Zsh/local 内容、写入正式目录或修改软件。展示后停止并等待用户明确确认，再进入执行流程。
 
 若由 Stage 0 编排且其已获确认的初始计划逐项覆盖上述范围，可以继承该确认而不重复询问。确认后执行前重新检查候选与工作树；范围、证据或风险发生实质变化时，先更新计划并再次等待确认。初始计划确认不授权正式目录写入、commit、push、安装或退役。
 
@@ -22,9 +22,9 @@ tmp/dump.md                              # 只读证据
 tmp/my_setup/macos/Brewfile
 tmp/my_setup/tooling/**
 tmp/my_setup/zsh/plugins.toml
-tmp/company/macos/Brewfile               # 仅存在公司增量时
-tmp/company/tooling/**
-tmp/company/zsh/plugins.toml
+tmp/shared/macos/Brewfile                # 仅存在共享增量时
+tmp/shared/tooling/**
+tmp/shared/zsh/plugins.toml
 ```
 
 明确排除：
@@ -32,7 +32,7 @@ tmp/company/zsh/plugins.toml
 ```text
 tmp/zsh-evidence.md
 tmp/my_setup/zsh/zsh-repair-plan.md
-tmp/company/zsh/zsh-repair-plan.md
+tmp/shared/zsh/zsh-repair-plan.md
 tmp/.runtime/**
 真实 HOME、Keychain、shell 历史和完整环境
 ```
@@ -66,8 +66,8 @@ tmp/.runtime/**
 
 - Brewfile 只保留希望安装或继续保留的直接期望项目；移除传递依赖、一次性工具和无法确认的机器快照项。
 - tooling 使用明确版本；禁止 `latest`、浮动 tag 和无法复现的版本范围。
-- personal/company 各自最多一份 `plugins.toml`；每个插件写明 source、固定 tag/commit、enabled 和加载顺序。
-- 完全相同的 personal/company 项去重；company 只保存公司增量，local 不参与软件、版本或插件选择。
+- personal/shared 各自最多一份 `plugins.toml`；每个插件写明 source、固定 tag/commit、enabled 和加载顺序。
+- 完全相同的 personal/shared 项去重；shared 只保存共享增量，local 不参与软件、版本或插件选择。
 - 已有 ARM 替代或明确淘汰的 Intel 项不保留活动配置行，改写为同一文件内的 `AI-RETIRE` 评论。
 - 服务、数据库、GUI 应用数据、未知 Intel 项和未验证替代关系只进入 `manual` 结果，不自动迁移或删除。
 
@@ -80,7 +80,7 @@ tmp/.runtime/**
 最佳实践：为何采用当前管理器、来源或固定版本
 修改级别：保留、新增、替换、升级或降级
 建议：本次具体处理
-归属：personal 或 company
+归属：personal 或 shared
 验证方式：Stage 2 可执行的最小验证
 ```
 
@@ -90,15 +90,15 @@ tmp/.runtime/**
 AI-RETIRE: 项目=<name> | 原因=<reason> | 替代=<replacement-or-none> | 归属=retire | 验证=<check>
 ```
 
-保持评论与有效配置一致，并确保 Brewfile、TOML 和版本文件仍可由原生工具解析。不要在评论中写入本机绝对路径、公司信息、账号、远程地址或敏感值。
+保持评论与有效配置一致，并确保 Brewfile、TOML 和版本文件仍可由原生工具解析。不要在评论中写入本机绝对路径、shared 仓库专属信息、账号、远程地址或敏感值。
 
 ### 5. 自检并交接
 
 检查：
 
 - 只修改了允许的导出候选路径，Zsh 证据和修复计划保持不变。
-- public 候选不含公司信息、本机绝对路径、邮箱、凭证模式或敏感值；company 未误入 public。
-- personal/company 无明显重复、管理器争用或版本所有权冲突。
+- public 候选不含 shared 仓库专属信息、本机绝对路径、邮箱、凭证模式或敏感值；shared 未误入 public。
+- personal/shared 无明显重复、管理器争用或版本所有权冲突。
 - tooling 版本和插件 revision 固定；每个直接期望项目都有完整、相邻且一致的六字段评论。
 - 每个替代/移除项目只有 `AI-RETIRE` 评论，没有活动配置行。
 - 未经审阅的机器快照没有直接成为正式期望状态；所有未知项均标记 `manual`。

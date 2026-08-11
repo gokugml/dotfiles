@@ -431,7 +431,7 @@ Keychain 是可选增强，不是当前 `install.sh` 的前置条件。
 ```text
 公开仓库根：通用能力
 公开仓库 my_setup/：personal 配置
-独立 company 仓库：可选公司增量
+独立 shared 仓库：可选共享增量
 ~/.config/dotfiles/local/parameters.zsh：本机密钥和私有参数
 ```
 
@@ -445,12 +445,12 @@ Keychain 是可选增强，不是当前 `install.sh` 的前置条件。
 `my_setup/` 不应包含：
 
 - 用户名和绑定具体账户的主目录路径；
-- 公司域名、内部仓库地址、客户名称或组织路径；
+- shared 仓库专属域名、内部仓库地址、客户名称或组织路径；
 - API key、cookie、访问令牌和带凭证的 URL；
 - 某台机器独有的应用数据目录；
 - 未脱敏的诊断输出、shell 历史或完整环境变量。
 
-`.zshrc` 的加载顺序是 company → personal → local。company 和 local 缺失时，personal 仍应正常启动。
+`.zshrc` 的加载顺序是 shared → personal → local。shared 和 local 缺失时，personal 仍应正常启动。
 
 ## 13. 安装脚本与本地副本
 

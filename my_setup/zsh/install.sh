@@ -148,9 +148,9 @@ zsh_load_plugins() {
   ZSH_PLUGIN_OWNER=()
   ZSH_PLUGIN_SEEN=()
 
-  if [[ -n "$DOTFILES_COMPANY_DIR_RESOLVED" \
-    && -e "$DOTFILES_COMPANY_DIR_RESOLVED/zsh/plugins.toml" ]]; then
-    zsh_parse_plugins_file "$DOTFILES_COMPANY_DIR_RESOLVED/zsh/plugins.toml" company || return 1
+  if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" \
+    && -e "$DOTFILES_SHARED_DIR_RESOLVED/zsh/plugins.toml" ]]; then
+    zsh_parse_plugins_file "$DOTFILES_SHARED_DIR_RESOLVED/zsh/plugins.toml" shared || return 1
   fi
   zsh_parse_plugins_file "$DOTFILES_PERSONAL_DIR/zsh/plugins.toml" personal || return 1
 }
@@ -366,14 +366,14 @@ zsh_apply() {
 
 zsh_verify_load_order() {
   local rc="$1"
-  local company_line personal_line local_line
+  local shared_line personal_line local_line
 
-  company_line="$(grep -n -m1 'dotfiles: company' "$rc" 2>/dev/null | cut -d: -f1)"
+  shared_line="$(grep -n -m1 'dotfiles: shared' "$rc" 2>/dev/null | cut -d: -f1)"
   personal_line="$(grep -n -m1 'dotfiles: personal' "$rc" 2>/dev/null | cut -d: -f1)"
   local_line="$(grep -n -m1 'dotfiles: local' "$rc" 2>/dev/null | cut -d: -f1)"
-  if [[ -z "$company_line" || -z "$personal_line" || -z "$local_line" \
-    || "$company_line" -ge "$personal_line" || "$personal_line" -ge "$local_line" ]]; then
-    print -u2 -- 'verify: .zshrc 必须按 dotfiles: company → personal → local 标记顺序加载'
+  if [[ -z "$shared_line" || -z "$personal_line" || -z "$local_line" \
+    || "$shared_line" -ge "$personal_line" || "$personal_line" -ge "$local_line" ]]; then
+    print -u2 -- 'verify: .zshrc 必须按 dotfiles: shared → personal → local 标记顺序加载'
     return 1
   fi
 }
@@ -463,10 +463,10 @@ zsh_verify() {
     fi
   fi
 
-  if [[ -n "$DOTFILES_COMPANY_DIR_RESOLVED" \
-    && -e "$DOTFILES_COMPANY_DIR_RESOLVED/zsh/company.zsh" ]]; then
-    /bin/zsh -n "$DOTFILES_COMPANY_DIR_RESOLVED/zsh/company.zsh" >/dev/null 2>&1 || {
-      print -u2 -- 'verify: company.zsh 语法错误'
+  if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" \
+    && -e "$DOTFILES_SHARED_DIR_RESOLVED/zsh/shared.zsh" ]]; then
+    /bin/zsh -n "$DOTFILES_SHARED_DIR_RESOLVED/zsh/shared.zsh" >/dev/null 2>&1 || {
+      print -u2 -- 'verify: shared.zsh 语法错误'
       failed=1
     }
   fi

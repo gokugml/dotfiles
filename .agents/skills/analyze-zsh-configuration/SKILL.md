@@ -5,7 +5,7 @@ description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件�
 
 # Zsh 配置分析与修改建议
 
-把用户选定的 Zsh 启动文件的脱敏结构与只读运行时证据转换为可执行、可验证的修改建议。只生成修复计划候选，不修改真实文件，不生成最终 `.zprofile`、`.zshrc` 或 `company.zsh`。
+把用户选定的 Zsh 启动文件的脱敏结构与只读运行时证据转换为可执行、可验证的修改建议。只生成修复计划候选，不修改真实文件，不生成最终 `.zprofile`、`.zshrc` 或 `shared.zsh`。
 
 ## 执行前计划门
 
@@ -31,7 +31,7 @@ description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件�
 - 采集脚本不得启动会加载真实配置的交互/登录 shell，不得执行 `brew doctor`、包清单导出、工具健康检查、网络请求或性能 profiling；未测量的运行时效果必须保留为证据缺口。
 - 不读取 Keychain、shell 历史、完整环境或 `~/.config/dotfiles/local/parameters.zsh` 内容。
 - 不修改真实 Zsh、symlink、软件或服务，不调用 `install.sh`，不安装或退役项目。
-- 不把本机绝对路径、公司信息、账号、远程地址或敏感值写入 public 修复计划。
+- 不把本机绝对路径、shared 仓库专属信息、账号、远程地址或敏感值写入 public 修复计划。
 - 不把推断当作证据。未知 source 表达式、被脱敏路径和无法确认的工具所有权统一标记 `manual`。
 - 不负责审阅 `dump.sh` 导出的 Brewfile、tooling 或 `plugins.toml`；该职责属于 `$review-exported-dotfiles`。
 
@@ -42,8 +42,8 @@ description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件�
 1. 定位当前公开 Git 仓库根目录，确认 `tmp/` 被 Git 忽略且不是 symlink。
 2. 按执行前计划门确定 `source-origin`、来源目录和文件子集。运行与选择完全一致的 `--preflight`；确认 `report-written: no`，并把每个 `input-map` 与用户点名文件逐项对齐。
 3. 检查 `git status --short`，保护用户已有变更；本 Skill 只管理 `tmp/zsh-evidence.md` 和自己生成的 `tmp/**/zsh/zsh-repair-plan.md`。
-4. 将证据来源与输出归属分开确认。`tmp/my_setup/zsh/zsh-repair-plan.md` 只表示 personal 计划归属，不证明证据来自 `my_setup/zsh/`；`tmp/company/...` 同理。
-5. 若 company 修复计划确有必要但 company 归属或目标仓库不明确，把歧义交回 Stage 0 编排 Skill；不要自行猜测。
+4. 将证据来源与输出归属分开确认。`tmp/my_setup/zsh/zsh-repair-plan.md` 只表示 personal 计划归属，不证明证据来自 `my_setup/zsh/`；`tmp/shared/...` 同理。
+5. 若 shared 修复计划确有必要但 shared 归属或目标仓库不明确，把歧义交回 Stage 0 编排 Skill；不要自行猜测。
 6. 如已有同路径候选计划，只覆盖本 Skill 明确生成的文件；不读取或改动其他 `tmp/` 内容。
 
 ### 2. 采集脱敏证据
@@ -94,7 +94,7 @@ description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件�
 
 ```text
 tmp/my_setup/zsh/zsh-repair-plan.md
-tmp/company/zsh/zsh-repair-plan.md   # 仅存在明确公司增量时
+tmp/shared/zsh/zsh-repair-plan.md    # 仅存在明确共享增量时
 ```
 
 计划必须按以下顺序输出；即使详细发现较多，也先让读者在顶部看懂结论：
@@ -109,7 +109,7 @@ tmp/company/zsh/zsh-repair-plan.md   # 仅存在明确公司增量时
 - source-origin: live-home/repository
 - selected-files: 用户选定的逻辑文件子集
 - input-map-check: pass
-- output-ownership: personal/company（与证据来源独立）
+- output-ownership: personal/shared（与证据来源独立）
 
 ## 问题一览
 | 优先级 | 证据等级 | 类别/位置 | 结论与影响 | 归属 | 下一步 |
@@ -142,7 +142,7 @@ tmp/company/zsh/zsh-repair-plan.md   # 仅存在明确公司增量时
 证据：引用证据文件中的字段或计数，不复制敏感内容
 影响：安全、正确性、架构、性能或维护成本
 建议：保留、改写、替代或移除的最小可逆方向
-归属：personal、company、local、retire 或 manual
+归属：personal、shared、local、retire 或 manual
 目标文件：Stage 1 应修改的逻辑位置；用户显式目标优先
 风险：修改可能影响的命令或工作流
 验证：修改后应执行的命令和预期结果
@@ -172,7 +172,7 @@ tmp/company/zsh/zsh-repair-plan.md   # 仅存在明确公司增量时
 - 不把 NVM 与 Bun 并存自动升级为多版本管理器争用；必须确认它们竞争同一命令、版本选择或 PATH 所有权。
 - 对敏感信息只写“疑似敏感变量需要迁移/轮换”，不写值；local 只记录参数类别。
 - 只给修改方向和必要的最小片段，不拼装最终完整 Zsh 文件；最终文件由 `$stage-1-apply-zsh-repair-plan` 根据获准计划生成或更新。
-- 没有实际内容时不创建空 company 计划。
+- 没有实际内容时不创建空 shared 计划。
 
 ### 5. 自检并交接
 
@@ -183,8 +183,8 @@ tmp/company/zsh/zsh-repair-plan.md   # 仅存在明确公司增量时
 - 输出路径只用于表示计划归属，没有被当作证据来源；两者不一致时已在计划中明示。
 - 顶部结论和问题一览表均存在，覆盖全部详细发现，并标注证据等级。
 - 已逐项检查安全、架构、功能、补全、PATH、作用域、工具职责和性能覆盖门；缺失证据已显式列出。
-- public 计划不含公司信息、本机绝对路径、账号、远程地址或敏感值。
-- company/local/retire/manual 未混入 personal 活动配置建议。
+- public 计划不含 shared 仓库专属信息、本机绝对路径、账号、远程地址或敏感值。
+- shared/local/retire/manual 未混入 personal 活动配置建议。
 - 计划没有生成或修改最终 Zsh 文件，没有安装、退役、commit 或 push。
 - 建议包含明确目标、风险和可执行验收，而不是只复述最佳实践；未测量项没有虚构运行时结果。
 - 交接说明准确区分“采集脚本只读扫描了启动文件”和“AI 未直接读取文件内容”；不要笼统声称整个 Skill 未读取源文件。

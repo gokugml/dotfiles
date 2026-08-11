@@ -12,11 +12,11 @@ description: 编排 macOS 目标机器 Stage 2：读取 Stage 1 已确认、使�
   → 脚本内 y/N 确认 → ./install.sh verify
 ```
 
-本阶段不再生成、修复或审查 `zprofile`/`.zprofile`、`zshrc`/`.zshrc`、`company.zsh`。这些职责只属于 `$stage-1-apply-zsh-repair-plan`。
+本阶段不再生成、修复或审查 `zprofile`/`.zprofile`、`zshrc`/`.zshrc`、`shared.zsh`。这些职责只属于 `$stage-1-apply-zsh-repair-plan`。
 
 ## 执行前计划门
 
-先只读检查 public/company 仓库、工作树、Stage 1 交接、仓库版 Zsh、已确认软件/插件配置、当前机器原生硬件架构、进程架构、Homebrew 路径、安装器能力和 local 路径元数据；不要读取 local 内容、生成 Zsh 草稿或运行安装器。
+先只读检查 public/shared 仓库、工作树、Stage 1 交接、仓库版 Zsh、已确认软件/插件配置、当前机器原生硬件架构、进程架构、Homebrew 路径、安装器能力和 local 路径元数据；不要读取 local 内容、生成 Zsh 草稿或运行安装器。
 
 随后展示完整计划：
 
@@ -25,7 +25,7 @@ description: 编排 macOS 目标机器 Stage 2：读取 Stage 1 已确认、使�
 - `install.sh` 可能产生的 Zsh 入口副本、symlink、软件/tooling/plugin、hook、网络和磁盘影响；
 - 服务/数据人工事项、验证、失败停止点，以及不会执行的 Zsh 生成、Stage 3、commit 和 push。
 
-展示后停止并等待用户明确确认，再进入安装工作流。执行前重新检查输入、工作树和架构；范围、软件集合、company 目标、Stage 1 输出或系统状态发生实质变化时，更新计划并再次等待确认。初始确认只授权进入安装器，不替代 `install.sh` 自身默认 `N` 的 `y/N`。
+展示后停止并等待用户明确确认，再进入安装工作流。执行前重新检查输入、工作树和架构；范围、软件集合、shared 目标、Stage 1 输出或系统状态发生实质变化时，更新计划并再次等待确认。初始确认只授权进入安装器，不替代 `install.sh` 自身默认 `N` 的 `y/N`。
 
 ## 读取权威输入
 
@@ -33,7 +33,7 @@ description: 编排 macOS 目标机器 Stage 2：读取 Stage 1 已确认、使�
 
 - [四阶段共用契约](../stage-common-contract.md)和[领域词汇](../../../CONTEXT.md)；
 - [`$stage-1-apply-zsh-repair-plan`](../stage-1-apply-zsh-repair-plan/SKILL.md) 的完成交接；
-- public 仓库 `my_setup/zsh/zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中 Stage 1 已选且唯一完整的一组，以及可选 company `zsh/company.zsh`；
+- public 仓库 `my_setup/zsh/zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中 Stage 1 已选且唯一完整的一组，以及可选 shared `zsh/shared.zsh`；
 - Stage 0 已确认的软件、tooling 和 `plugins.toml` 配置；
 - 已按 [`install-sh-plan.md`](../install-sh-plan.md) 实现并验证的根 `install.sh` 与内部模块；
 - 目标机器的只读架构、路径和 Zsh 入口元数据，但不读取 local 参数内容。
@@ -81,7 +81,7 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 - 不生成、编辑或重写任何仓库版或显式目标 Zsh 文件；发现内容问题时返回 Stage 1。
 - 不直接编辑、替换或重写真实 `~/.zprofile`、`~/.zshrc`；真实入口只允许由获准后的 `install.sh` 管理。
 - 不读取、显示、复制、记录或持久化 `~/.config/dotfiles/local/parameters.zsh` 内容，只检查路径、文件类型、权限和无输出语法结果。
-- 不把公司内容、本机绝对路径、账号或密钥写入 public 仓库。
+- 不把 shared 仓库专属内容、本机绝对路径、账号或密钥写入 public 仓库。
 - 不覆盖与安装范围重叠的用户未确认修改；输入发生变化时重新计划。
 - 不启停服务，不迁移数据库、Homebrew service 或 GUI 应用数据，不清理未知软件、项目 runtime 或另一架构的数据目录。
 - 不调用 `install.sh retire` 或 `install.sh retire --apply`，不自动执行 Stage 3。
@@ -91,10 +91,10 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 
 ### 1. 预检
 
-1. 检查 public 与可选 company 仓库的 `git status --short`，把已有变更视为用户内容。
+1. 检查 public 与可选 shared 仓库的 `git status --short`，把已有变更视为用户内容。
 2. 确认 Stage 1 已完成且最新 Zsh diff 已获用户确认；`my_setup/zsh/` 中恰好存在交接所选的一套完整 Zsh 来源，且没有另一套或混搭残留。
 3. 确认 `install.sh` 能力的测试、pre-commit 和 CI 已完成，根安装器及三个内部模块存在。
-4. 检查所有已确认 personal/company Brewfile、tooling 与插件配置存在且可解析；缺少工具版本、命令来源或目录语义时运行允许的只读查询。
+4. 检查所有已确认 personal/shared Brewfile、tooling 与插件配置存在且可解析；缺少工具版本、命令来源或目录语义时运行允许的只读查询。
 5. 通过只读系统查询判定原生硬件、Rosetta 状态、预期 Homebrew 前缀和安装器兼容性。
 6. 记录 local 文件是否存在及其权限，不读取内容。
 
@@ -110,9 +110,9 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 
 不要添加参数，不要代替用户输入 `y`，不要绕过或预先回答脚本确认。检查脚本在任何写入前即时展示：
 
-- 原生硬件、进程状态、所选 Homebrew 路径和 public/company 来源；
+- 原生硬件、进程状态、所选 Homebrew 路径和 public/shared 来源；
 - 已解析的无前置点或有前置点仓库 Zsh 来源，以及 HOME 入口、现有文件或 symlink 的副本计划；
-- personal/company Brewfile 合并结果；
+- personal/shared Brewfile 合并结果；
 - tooling、mise/uv 和固定 revision 插件变更；
 - public 仓库的 pre-commit hook 配置；
 - local 路径和权限状态，但不显示内容；
@@ -134,7 +134,7 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 
 - 所有启用 Zsh 文件通过 `zsh -n`，login 与 interactive shell 无加载错误；
 - `~/.zprofile` 和 `~/.zshrc` symlink 分别精确指向已选的 public `zprofile`/`zshrc` 或 `.zprofile`/`.zshrc`；
-- company → personal → local 顺序正确，personal 独占 Oh My Zsh/补全初始化；
+- shared → personal → local 顺序正确，personal 独占 Oh My Zsh/补全初始化；
 - local 父目录为 `0700`、文件为 `0600`，未被 Git 跟踪且内容未泄露；
 - Intel Mac 的 Homebrew 和受管命令来自 `/usr/local`，Apple Silicon 来自 `/opt/homebrew`，没有活动的另一架构 Homebrew 前缀；
 - Apple Silicon 的关键二进制为 ARM 或受支持的 Universal；Intel 的关键二进制与 Intel 原生架构匹配；

@@ -44,7 +44,7 @@ fi
 readonly output_root="$repo_root/tmp"
 readonly report="$output_root/dump.md"
 readonly candidate_root="$output_root/my_setup"
-readonly company_candidate_root="$output_root/company"
+readonly shared_candidate_root="$output_root/shared"
 readonly runtime_tmp="$output_root/.runtime"
 readonly uv_cache_dir="$runtime_tmp/uv-cache"
 typeset -i partial=0
@@ -55,7 +55,7 @@ export HOMEBREW_API_AUTO_UPDATE_SECS=31536000
 
 cleanup_managed_output() {
   command rm -f -- "$report"
-  command rm -rf -- "$candidate_root" "$company_candidate_root" "$runtime_tmp"
+  command rm -rf -- "$candidate_root" "$shared_candidate_root" "$runtime_tmp"
 }
 
 cleanup_on_signal() {

@@ -43,11 +43,19 @@ assert_absent() {
 }
 
 quick_checks() {
-  local file output zh_sections en_sections skill_name
+  local file output zh_sections en_sections skill_name legacy_term legacy_zh_term
   local -a repository_files shell_files markdown_files public_files plan_gate_files skill_interface_files
 
   repository_files=("${(@f)$(git -C "$repo_root" ls-files --cached --others --exclude-standard)}")
   (( ${#repository_files} > 0 )) || fail '无法列出仓库文件'
+
+  legacy_term='com''pany'
+  legacy_zh_term=$'\u516c\u53f8'
+  if [[ "${(L)${(j:\n:)repository_files}}" == *"$legacy_term"* ]] \
+    || grep -Eil "$legacy_term|$legacy_zh_term" \
+      "${(@)repository_files/#/$repo_root/}" >/dev/null 2>&1; then
+    fail '仓库仍包含旧共享层术语'
+  fi
 
   for file in "${repository_files[@]}"; do
     case "$file" in
@@ -110,8 +118,8 @@ quick_checks() {
     "${(@)public_files/#/$repo_root/}" >/dev/null 2>&1; then
     fail '公开文件命中密钥模式'
   fi
-  if grep -Eil 'cutto|company[.]internal' "${(@)public_files/#/$repo_root/}" >/dev/null 2>&1; then
-    fail '公开能力文件命中公司标识'
+  if grep -Eil 'cutto|shared[.]internal' "${(@)public_files/#/$repo_root/}" >/dev/null 2>&1; then
+    fail '公开能力文件命中共享标识'
   fi
   for file in "${public_files[@]}"; do
     [[ "$file" == dump.sh ]] && continue
@@ -225,9 +233,9 @@ write_fixture_zsh() {
     print -r -- 'export PATH'
   } > "$fixture_repo/my_setup/zsh/$profile_name"
   {
-    print -r -- '# dotfiles: company'
-    print -r -- 'if [[ -n "${DOTFILES_COMPANY_DIR:-}" && -r "$DOTFILES_COMPANY_DIR/zsh/company.zsh" ]]; then'
-    print -r -- '  source "$DOTFILES_COMPANY_DIR/zsh/company.zsh"'
+    print -r -- '# dotfiles: shared'
+    print -r -- 'if [[ -n "${DOTFILES_SHARED_DIR:-}" && -r "$DOTFILES_SHARED_DIR/zsh/shared.zsh" ]]; then'
+    print -r -- '  source "$DOTFILES_SHARED_DIR/zsh/shared.zsh"'
     print -r -- 'fi'
     print -r -- '# dotfiles: personal'
     print -r -- 'typeset -U path PATH'
@@ -266,46 +274,46 @@ seed_fixture_plugin() {
   git -C "$plugin_dir" rev-parse HEAD
 }
 
-write_company_fixture() {
-  local company_repo="$1"
+write_shared_fixture() {
+  local shared_repo="$1"
 
   command mkdir -p -- \
-    "$company_repo/zsh" \
-    "$company_repo/macos" \
-    "$company_repo/tooling/mise" \
-    "$company_repo/tooling/uv"
+    "$shared_repo/zsh" \
+    "$shared_repo/macos" \
+    "$shared_repo/tooling/mise" \
+    "$shared_repo/tooling/uv"
   {
-    print -r -- '# fixture company file without secrets'
-  } > "$company_repo/zsh/company.zsh"
+    print -r -- '# fixture shared file without secrets'
+  } > "$shared_repo/zsh/shared.zsh"
   {
     print -r -- '[[plugins]]'
     print -r -- 'name = "fixture-plugin"'
-    print -r -- 'source = "https://example.invalid/company.git"'
+    print -r -- 'source = "https://example.invalid/shared.git"'
     print -r -- 'revision = "2222222222222222222222222222222222222222"'
     print -r -- 'enabled = true'
     print -r -- 'load_order = 10'
-  } > "$company_repo/zsh/plugins.toml"
+  } > "$shared_repo/zsh/plugins.toml"
   {
     print -r -- 'brew "ast-grep"'
     print -r -- 'brew "gh"'
-  } > "$company_repo/macos/Brewfile"
+  } > "$shared_repo/macos/Brewfile"
   {
     print -r -- '[tools]'
     print -r -- 'node = "20.0.0"'
-  } > "$company_repo/tooling/mise/10-company.toml"
+  } > "$shared_repo/tooling/mise/10-shared.toml"
   {
     print -r -- '3.14.5'
-  } > "$company_repo/tooling/uv/.python-versions"
+  } > "$shared_repo/tooling/uv/.python-versions"
   {
     print -r -- 'python-preference = "only-managed"'
     print -r -- 'python-downloads = "manual"'
-  } > "$company_repo/tooling/uv/uv.toml"
-  git -C "$company_repo" init -q
-  git -C "$company_repo" add .
+  } > "$shared_repo/tooling/uv/uv.toml"
+  git -C "$shared_repo" init -q
+  git -C "$shared_repo" add .
 }
 
 run_full_checks() {
-  local test_root fixture_repo fixture_home fixture_bin company_repo dump_repo dump_home intel_brew
+  local test_root fixture_repo fixture_home fixture_bin shared_repo dump_repo dump_home intel_brew
   local output default_output apply_output verify_output retire_output retire_apply_output
   local dotted_output ambiguous_output mixed_output profile_link_before rc_link_before
   local before_status after_status profile_backup_count rc_backup_count home_before home_after
@@ -317,9 +325,9 @@ run_full_checks() {
   fixture_repo="$test_root/repo"
   fixture_home="$test_root/home"
   fixture_bin="$test_root/bin"
-  company_repo="$test_root/company"
+  shared_repo="$test_root/shared"
   intel_brew="$test_root/intel-brew"
-  command mkdir -p -- "$fixture_repo" "$fixture_home" "$company_repo"
+  command mkdir -p -- "$fixture_repo" "$fixture_home" "$shared_repo"
 
   command cp -- "$repo_root/install.sh" "$repo_root/dump.sh" "$repo_root/.gitignore" "$fixture_repo/"
   command cp -R -- "$repo_root/my_setup" "$fixture_repo/"
@@ -338,7 +346,7 @@ run_full_checks() {
   git -C "$fixture_repo" init -q
   git -C "$fixture_repo" add .
 
-  write_company_fixture "$company_repo"
+  write_shared_fixture "$shared_repo"
   write_fake_tools "$fixture_bin"
   write_fake_intel_brew "$intel_brew"
 
@@ -362,7 +370,7 @@ run_full_checks() {
     HOME="$fixture_home" \
       PATH="$fixture_bin:/usr/bin:/bin" \
       DOTFILES_INSTALL_TEST_MODE=1 \
-      DOTFILES_COMPANY_DIR="$company_repo" \
+      DOTFILES_SHARED_DIR="$shared_repo" \
       ./install.sh </dev/null > "$default_output" 2>&1
   ) || fail '默认 N 场景执行失败'
   assert_contains "$default_output" '仓库 Zsh 来源：无前置点（zprofile + zshrc）'
@@ -378,7 +386,7 @@ run_full_checks() {
     print -r -- y | HOME="$fixture_home" \
       PATH="$fixture_bin:/usr/bin:/bin" \
       DOTFILES_INSTALL_TEST_MODE=1 \
-      DOTFILES_COMPANY_DIR="$company_repo" \
+      DOTFILES_SHARED_DIR="$shared_repo" \
       ./install.sh > "$apply_output" 2>&1
   ) || {
     sed -n '1,280p' "$apply_output" >&2
@@ -409,7 +417,7 @@ run_full_checks() {
     print -r -- y | HOME="$fixture_home" \
       PATH="$fixture_bin:/usr/bin:/bin" \
       DOTFILES_INSTALL_TEST_MODE=1 \
-      DOTFILES_COMPANY_DIR="$company_repo" \
+      DOTFILES_SHARED_DIR="$shared_repo" \
       ./install.sh >/dev/null 2>&1
   ) || fail '第二次隔离安装失败'
   local -a profile_backups_after rc_backups_after
@@ -424,7 +432,7 @@ run_full_checks() {
     HOME="$fixture_home" \
       PATH="$fixture_bin:/usr/bin:/bin" \
       DOTFILES_INSTALL_TEST_MODE=1 \
-      DOTFILES_COMPANY_DIR="$company_repo" \
+      DOTFILES_SHARED_DIR="$shared_repo" \
       ./install.sh verify > "$verify_output" 2>&1
   ) || {
     sed -n '1,260p' "$verify_output" >&2
@@ -440,7 +448,7 @@ run_full_checks() {
     HOME="$fixture_home" \
       PATH="$fixture_bin:/usr/bin:/bin" \
       DOTFILES_INSTALL_TEST_MODE=1 \
-      DOTFILES_COMPANY_DIR="$company_repo" \
+      DOTFILES_SHARED_DIR="$shared_repo" \
       DOTFILES_TEST_INTEL_BREW="$intel_brew" \
       ./install.sh retire > "$retire_output" 2>&1
   ) || {
@@ -460,7 +468,7 @@ run_full_checks() {
     HOME="$fixture_home" \
       PATH="$fixture_bin:/usr/bin:/bin" \
       DOTFILES_INSTALL_TEST_MODE=1 \
-      DOTFILES_COMPANY_DIR="$company_repo" \
+      DOTFILES_SHARED_DIR="$shared_repo" \
       DOTFILES_TEST_INTEL_BREW="$intel_brew" \
       ./install.sh retire --apply </dev/null > "$retire_apply_output" 2>&1
   ); then
@@ -481,7 +489,7 @@ run_full_checks() {
     print -r -- y | HOME="$fixture_home" \
       PATH="$fixture_bin:/usr/bin:/bin" \
       DOTFILES_INSTALL_TEST_MODE=1 \
-      DOTFILES_COMPANY_DIR="$company_repo" \
+      DOTFILES_SHARED_DIR="$shared_repo" \
       ./install.sh > "$dotted_output" 2>&1
   ) || {
     sed -n '1,280p' "$dotted_output" >&2
@@ -507,7 +515,7 @@ run_full_checks() {
     HOME="$fixture_home" \
       PATH="$fixture_bin:/usr/bin:/bin" \
       DOTFILES_INSTALL_TEST_MODE=1 \
-      DOTFILES_COMPANY_DIR="$company_repo" \
+      DOTFILES_SHARED_DIR="$shared_repo" \
       ./install.sh </dev/null > "$ambiguous_output" 2>&1
   ); then
     fail '两套完整 Zsh 来源同时存在时未阻断'
@@ -527,7 +535,7 @@ run_full_checks() {
     HOME="$fixture_home" \
       PATH="$fixture_bin:/usr/bin:/bin" \
       DOTFILES_INSTALL_TEST_MODE=1 \
-      DOTFILES_COMPANY_DIR="$company_repo" \
+      DOTFILES_SHARED_DIR="$shared_repo" \
       ./install.sh </dev/null > "$mixed_output" 2>&1
   ); then
     fail '混搭 Zsh 来源命名时未阻断'

@@ -43,20 +43,20 @@ if [[ "$test_mode" == 1 ]]; then
   esac
 fi
 
-typeset company_dir=''
-if [[ -n "${DOTFILES_COMPANY_DIR:-}" ]]; then
-  if [[ "${DOTFILES_COMPANY_DIR}" != /* ]]; then
-    print -u2 -- 'install.sh: DOTFILES_COMPANY_DIR 必须是绝对路径'
+typeset shared_dir=''
+if [[ -n "${DOTFILES_SHARED_DIR:-}" ]]; then
+  if [[ "${DOTFILES_SHARED_DIR}" != /* ]]; then
+    print -u2 -- 'install.sh: DOTFILES_SHARED_DIR 必须是绝对路径'
     exit 1
   fi
-  company_dir="${DOTFILES_COMPANY_DIR:A}"
+  shared_dir="${DOTFILES_SHARED_DIR:A}"
 fi
 
 typeset -gr DOTFILES_INSTALLER_ACTIVE=1
 typeset -gr DOTFILES_REPO_ROOT="$repo_root"
 typeset -gr DOTFILES_PERSONAL_DIR="$repo_root/my_setup"
 typeset -gr DOTFILES_TARGET_HOME="$HOME"
-typeset -gr DOTFILES_COMPANY_DIR_RESOLVED="$company_dir"
+typeset -gr DOTFILES_SHARED_DIR_RESOLVED="$shared_dir"
 typeset -gr DOTFILES_LOCAL_DIR="$HOME/.config/dotfiles/local"
 typeset -gr DOTFILES_LOCAL_FILE="$HOME/.config/dotfiles/local/parameters.zsh"
 typeset -gr DOTFILES_PLUGIN_DIR="$HOME/.local/share/dotfiles/plugins"
@@ -129,23 +129,23 @@ check_repositories() {
   fi
   print -- "- personal：$DOTFILES_REPO_ROOT"
 
-  if [[ -n "$DOTFILES_COMPANY_DIR_RESOLVED" ]]; then
-    if [[ ! -d "$DOTFILES_COMPANY_DIR_RESOLVED" ]] \
-      || ! git -C "$DOTFILES_COMPANY_DIR_RESOLVED" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-      print -u2 -- 'install.sh: DOTFILES_COMPANY_DIR 必须指向唯一的现有 Git 工作树'
+  if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" ]]; then
+    if [[ ! -d "$DOTFILES_SHARED_DIR_RESOLVED" ]] \
+      || ! git -C "$DOTFILES_SHARED_DIR_RESOLVED" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      print -u2 -- 'install.sh: DOTFILES_SHARED_DIR 必须指向唯一的现有 Git 工作树'
       return 1
     fi
-    if ! conflicts="$(git -C "$DOTFILES_COMPANY_DIR_RESOLVED" diff --name-only --diff-filter=U 2>/dev/null)"; then
-      print -u2 -- 'install.sh: 无法检查 company 仓库冲突状态'
+    if ! conflicts="$(git -C "$DOTFILES_SHARED_DIR_RESOLVED" diff --name-only --diff-filter=U 2>/dev/null)"; then
+      print -u2 -- 'install.sh: 无法检查 shared 仓库冲突状态'
       return 1
     fi
     if [[ -n "$conflicts" ]]; then
-      print -u2 -- 'install.sh: company 仓库存在未解决冲突，停止安装'
+      print -u2 -- 'install.sh: shared 仓库存在未解决冲突，停止安装'
       return 1
     fi
-    print -- "- company：$DOTFILES_COMPANY_DIR_RESOLVED"
+    print -- "- shared：$DOTFILES_SHARED_DIR_RESOLVED"
   else
-    print -- '- company：未配置（可选）'
+    print -- '- shared：未配置（可选）'
   fi
 }
 
@@ -214,9 +214,9 @@ local_verify() {
     print -u2 -- 'verify: 公开仓库不得跟踪任何 parameters.zsh'
     return 1
   fi
-  if [[ -n "$DOTFILES_COMPANY_DIR_RESOLVED" ]] \
-    && git -C "$DOTFILES_COMPANY_DIR_RESOLVED" ls-files | grep -Eq '(^|/)parameters[.]zsh$'; then
-    print -u2 -- 'verify: company 仓库不得跟踪任何 parameters.zsh'
+  if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" ]] \
+    && git -C "$DOTFILES_SHARED_DIR_RESOLVED" ls-files | grep -Eq '(^|/)parameters[.]zsh$'; then
+    print -u2 -- 'verify: shared 仓库不得跟踪任何 parameters.zsh'
     return 1
   fi
   print -- '✓ local 类型、owner、权限与 Git 边界'

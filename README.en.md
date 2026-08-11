@@ -6,7 +6,7 @@
 
 ## Overview
 
-This public repository stores shareable personal configuration and migration capabilities for moving reviewed Zsh, Homebrew, mise, uv, and Zsh plugins to an Apple Silicon Mac. Company-specific additions belong in an optional private repository, while machine secrets live only in a local file outside every repository.
+This public repository stores shareable personal configuration and migration capabilities for moving reviewed Zsh, Homebrew, mise, uv, and Zsh plugins to an Apple Silicon Mac. Configuration used jointly with other people belongs in an optional separate shared repository, while machine secrets live only in a local file outside every repository.
 
 Stage 1 applies the approved `zsh-repair-plan.md` to reviewed repository-owned Zsh files. It supports either the plain `zprofile` + `zshrc` names or the dotted `.zprofile` + `.zshrc` names. Stage 2 does not generate these files; the installer resolves the one complete pair under `my_setup/zsh/` and then creates the fixed HOME startup entries.
 
@@ -56,10 +56,10 @@ The three nested `install.sh` files are internal modules sourced by the root ins
 
 The parameterless install order is `macos → tooling → zsh → pre-commit hook → verify`. If Apple Silicon Homebrew is missing, the installer stops and asks the user to review and install official Homebrew first; it never runs an opaque `curl | shell` command.
 
-Stage 2 must uniquely authorize the optional company repository and pass its absolute path to the root installer:
+Stage 2 must uniquely authorize the optional shared repository and pass its absolute path to the root installer:
 
 ```zsh
-DOTFILES_COMPANY_DIR=/absolute/path/to/company-dotfiles ./install.sh
+DOTFILES_SHARED_DIR=/absolute/path/to/shared-dotfiles ./install.sh
 ```
 
 <!-- section:configuration -->
@@ -67,16 +67,16 @@ DOTFILES_COMPANY_DIR=/absolute/path/to/company-dotfiles ./install.sh
 ## Configuration contract
 
 - Personal configuration always lives in this public repository under `my_setup/`.
-- Company configuration is an optional, separate Git worktree containing only company additions.
+- Shared configuration is an optional, separate Git worktree containing only settings used jointly with other people.
 - Local configuration is fixed at `~/.config/dotfiles/local/parameters.zsh` and contains only secrets, accounts, and machine paths—not software or plugin choices.
 - Personal Zsh sources must contain exactly one complete pair: `my_setup/zsh/zprofile` + `zshrc`, or `my_setup/zsh/.zprofile` + `.zshrc`. Two complete pairs, mixed names, or an incomplete pair stop before confirmation and writes; the installer never guesses a priority or creates an alias copy.
 - HOME always uses `~/.zprofile` and `~/.zshrc`, symlinked to the resolved repository files from the same pair.
-- `.zshrc` uses the markers `dotfiles: company → dotfiles: personal → dotfiles: local` to preserve load order and the `company < personal < local` override priority.
+- `.zshrc` uses the markers `dotfiles: shared → dotfiles: personal → dotfiles: local` to preserve load order and the `shared < personal < local` override priority.
 - Every enabled plugin has a `dotfiles: plugin <name>` marker in `.zshrc`, ordered by the merged `load_order` value.
-- Personal and company configuration each have at most one `zsh/plugins.toml`. Plugins pin a 40-character commit, and personal wins same-name conflicts.
-- Personal and company configuration declare their own Brewfiles and tooling; personal wins same-name Homebrew conflicts.
+- Personal and shared configuration each have at most one `zsh/plugins.toml`. Plugins pin a 40-character commit, and personal wins same-name conflicts.
+- Personal and shared configuration declare their own Brewfiles and tooling; personal wins same-name Homebrew conflicts.
 
-Managed symlinks expose mise configuration under `~/.config/mise/conf.d/`, with a `10-` prefix for company and `20-` for personal. The personal `uv.toml` becomes the user-level uv configuration through a managed symlink, and the installer explicitly passes approved `.python-versions` entries to `uv python install`.
+Managed symlinks expose mise configuration under `~/.config/mise/conf.d/`, with a `10-` prefix for shared and `20-` for personal. The personal `uv.toml` becomes the user-level uv configuration through a managed symlink, and the installer explicitly passes approved `.python-versions` entries to `uv python install`.
 
 <!-- section:safety -->
 
@@ -85,7 +85,7 @@ Managed symlinks expose mise configuration under `~/.config/mise/conf.d/`, with 
 - Real installation runs only in a native macOS `arm64` session. Test mode accepts only an isolated HOME under `/private/tmp` or `/tmp`.
 - Before replacing an existing `.zprofile` or `.zshrc`, the installer creates a timestamped copy that preserves a file or symlink's type and target.
 - The parent directory of `parameters.zsh` must be mode `0700`, and the file must be mode `0600`. Scripts never display, copy, log, persist, or hash its contents; they only run a silent syntax check and normal shell loading.
-- Public output must not contain company information, secrets, or machine-specific absolute paths.
+- Public output must not contain shared-repository-only information, secrets, or machine-specific absolute paths.
 - Services, databases, Homebrew services, and GUI application data are reported for manual handling and are never automatically started, stopped, migrated, or deleted.
 - Retirement accepts only exact Intel formulae with explicit ARM replacement path and architecture evidence and no service/data record. Unknown items, project dependencies, NVM, Python Frameworks, global runtimes, old plugins, and `/usr/local` as a whole are retained by default.
 
@@ -99,7 +99,7 @@ Managed symlinks expose mise configuration under `~/.config/mise/conf.d/`, with 
 .githooks/pre-commit
 ```
 
-The full smoke test uses a temporary repository and HOME to verify both plain and dotted repository source names, ambiguity/mixed-name blocking, default `N`, backups, symlinks, idempotency, company/personal merging, local-value non-disclosure, read-only retirement, and non-TTY blocking. Quick mode checks syntax, Markdown, section parity between the Chinese and English documentation, safety boundaries, and forbidden Intel runtime paths.
+The full smoke test uses a temporary repository and HOME to verify both plain and dotted repository source names, ambiguity/mixed-name blocking, default `N`, backups, symlinks, idempotency, shared/personal merging, local-value non-disclosure, read-only retirement, and non-TTY blocking. Quick mode checks syntax, Markdown, section parity between the Chinese and English documentation, safety boundaries, and forbidden Intel runtime paths.
 
 The pre-commit hook never installs dependencies. It requires `gitleaks 8.30.0`, installed from the Stage 2 mise declaration, and scans the current public tree. CI uses the same pinned version to scan both the current tree and complete Git history. Release requires quick checks, the complete smoke test, and CI to pass.
 

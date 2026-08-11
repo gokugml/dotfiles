@@ -61,9 +61,9 @@ macos_load_brewfiles() {
   MACOS_BREW_LINE=()
   MACOS_BREW_OWNER=()
 
-  if [[ -n "$DOTFILES_COMPANY_DIR_RESOLVED" \
-    && -e "$DOTFILES_COMPANY_DIR_RESOLVED/macos/Brewfile" ]]; then
-    macos_parse_brewfile "$DOTFILES_COMPANY_DIR_RESOLVED/macos/Brewfile" company || return 1
+  if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" \
+    && -e "$DOTFILES_SHARED_DIR_RESOLVED/macos/Brewfile" ]]; then
+    macos_parse_brewfile "$DOTFILES_SHARED_DIR_RESOLVED/macos/Brewfile" shared || return 1
   fi
   macos_parse_brewfile "$DOTFILES_PERSONAL_DIR/macos/Brewfile" personal || return 1
   if (( ${#MACOS_BREW_LINE} == 0 )); then
@@ -109,20 +109,20 @@ macos_prepare_brew() {
 macos_plan() {
   local key owner
   typeset -i personal_count=0
-  typeset -i company_count=0
+  typeset -i shared_count=0
 
   macos_load_brewfiles || return 1
   macos_prepare_brew || return 1
   for key in ${(k)MACOS_BREW_LINE}; do
     owner="$MACOS_BREW_OWNER[$key]"
-    if [[ "$owner" == company ]]; then
-      (( company_count += 1 ))
+    if [[ "$owner" == shared ]]; then
+      (( shared_count += 1 ))
     else
       (( personal_count += 1 ))
     fi
   done
   print -- "- Homebrew：$MACOS_BREW_COMMAND"
-  print -- "- 合并期望：personal $personal_count 项，company $company_count 项；同名由 personal 决定"
+  print -- "- 合并期望：personal $personal_count 项，shared $shared_count 项；同名由 personal 决定"
   print -- '- 仅安装 Brewfile 声明；不启停 service，不迁移数据库或 GUI 数据'
 }
 

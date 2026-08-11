@@ -31,7 +31,7 @@
 - 为每次配置写入创建唯一 run-id；
 - 在 apply 前保存文件类型、owner、权限、symlink 目标和内容副本；
 - 使用 actions manifest 记录执行顺序、结果和反向动作；
-- 恢复 `~/.zprofile`、`~/.zshrc`、company 链接和来源配置；
+- 恢复 `~/.zprofile`、`~/.zshrc`、shared 链接和来源配置；
 - 恢复可逆 Git 设置，例如 `core.hooksPath`；
 - 验证恢复后的 login/interactive shell；
 - 对重复 rollback 保持幂等；

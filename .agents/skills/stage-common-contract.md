@@ -31,7 +31,7 @@ Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 �
 
 ### 2.1 所有 Skill 的执行前计划门
 
-每个阶段 Skill 和独立子 Skill 被触发后，都必须先进入只读盘点，不得立即生成候选文件、编辑仓库、修改 HOME、安装或删除软件、启停服务、commit 或 push。只读盘点只允许读取本 Skill 边界内的必要文件、`git status`/diff、路径元数据以及明确允许的只读系统事实；不得为了补充计划而越过 local、密钥、公司或真实 Zsh 内容边界。
+每个阶段 Skill 和独立子 Skill 被触发后，都必须先进入只读盘点，不得立即生成候选文件、编辑仓库、修改 HOME、安装或删除软件、启停服务、commit 或 push。只读盘点只允许读取本 Skill 边界内的必要文件、`git status`/diff、路径元数据以及明确允许的只读系统事实；不得为了补充计划而越过 local、密钥、shared 仓库专属信息或真实 Zsh 内容边界。
 
 只读盘点完成后，在首次生成文件或状态变更前，必须向用户展示一份执行计划，至少包含：
 
@@ -47,7 +47,7 @@ Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 �
 
 阶段之间只保留以下边界：
 
-1. Stage 0 的草稿未经用户确认，不写入 personal/company 目标文件。
+1. Stage 0 的草稿未经用户确认，不写入 personal/shared 目标文件。
 2. Stage 1 的最新完整 Zsh diff 未经确认，不写入目标，也不进入 Stage 2。
 3. [`install-sh-plan.md`](./install-sh-plan.md) 定义的脚本、pre-commit 和 CI 能力未实现或未验证，不用于真实机器安装。
 4. Stage 2 安装与验证未完成，不进入 Stage 3。
@@ -57,9 +57,9 @@ Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 �
 
 | 范围 | 保存位置 | 负责 | 不负责 |
 |---|---|---|---|
-| 公开仓库 | 用户当前 Git 仓库 | `dump.sh`、根 `install.sh`、三个内部能力安装模块、Skills、文档、测试、pre-commit、CI 和 `my_setup/` | 公司内容、本机密钥 |
-| personal | 公开仓库固定 `my_setup/` | 可分享的 Zsh、Brewfile、tooling、插件和软件期望状态 | 公司增量、本机密钥 |
-| company | 可选独立私有仓库 | 公司专属 Zsh、Brewfile、tooling 和插件增量 | 通用脚本、个人偏好、本机密钥 |
+| 公开仓库 | 用户当前 Git 仓库 | `dump.sh`、根 `install.sh`、三个内部能力安装模块、Skills、文档、测试、pre-commit、CI 和 `my_setup/` | shared 仓库专属内容、本机密钥 |
+| personal | 公开仓库固定 `my_setup/` | 可分享的 Zsh、Brewfile、tooling、插件和软件期望状态 | shared 增量、本机密钥 |
+| shared | 可选独立共享仓库 | 与他人共用的 Zsh、Brewfile、tooling 和插件增量 | 通用脚本、纯个人偏好、本机密钥 |
 | local | `~/.config/dotfiles/local/parameters.zsh` | 密钥值、账号、机器路径和不可公开参数 | Brewfile、软件清单、插件选择、普通共享配置 |
 
 `personal configuration` 是语义分类；它在磁盘上的固定映射是：
@@ -68,7 +68,7 @@ Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 �
 personal configuration → <public-repository>/my_setup/
 ```
 
-company 缺失时，personal + local 必须能够独立工作。local 文件缺失时，personal 也必须能够独立工作。
+shared 缺失时，personal + local 必须能够独立工作。local 文件缺失时，personal 也必须能够独立工作。
 
 ## 4. 轻量目标结构
 
@@ -99,12 +99,12 @@ dotfiles/
 └── .github/workflows/
 ```
 
-可选 company 仓库：
+可选 shared 仓库：
 
 ```text
-company-dotfiles/
+shared-dotfiles/
 ├── zsh/
-│   ├── company.zsh
+│   ├── shared.zsh
 │   ├── zsh-repair-plan.md
 │   └── plugins.toml
 ├── macos/Brewfile
@@ -119,21 +119,21 @@ company-dotfiles/
     └── parameters.zsh
 ```
 
-不存在实际内容时不创建空 company 文件。详细 tooling 文件由实际工具决定，不为统一目录外观创建空 schema 或占位文件。
+不存在实际内容时不创建空 shared 文件。详细 tooling 文件由实际工具决定，不为统一目录外观创建空 schema 或占位文件。
 
-Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 和可选 `company.zsh`；用户显式提供目标文件时优先更新这些目标，否则先让用户选择默认无前置点或有前置点命名。Stage 2 接受 `my_setup/zsh/` 中恰好一套完整来源：`zprofile` + `zshrc` 或 `.zprofile` + `.zshrc`。两套并存、跨组混搭或文件残缺时根安装器必须在确认和写入前阻断，不猜优先级、不创建另一套副本；显式目标在仓库外时不得擅自复制或覆盖。安装器 smoke test 只能在临时仓库中使用最小 fixture。
+Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 和可选 `shared.zsh`；用户显式提供目标文件时优先更新这些目标，否则先让用户选择默认无前置点或有前置点命名。Stage 2 接受 `my_setup/zsh/` 中恰好一套完整来源：`zprofile` + `zshrc` 或 `.zprofile` + `.zshrc`。两套并存、跨组混搭或文件残缺时根安装器必须在确认和写入前阻断，不猜优先级、不创建另一套副本；显式目标在仓库外时不得擅自复制或覆盖。安装器 smoke test 只能在临时仓库中使用最小 fixture。
 
 ## 5. Zsh 运行时边界
 
 - 不接管 `~/.zshenv`，不设置 `ZDOTDIR`。
 - `~/.zprofile` symlink 到已选的 `my_setup/zsh/zprofile` 或 `my_setup/zsh/.zprofile`。
 - `~/.zshrc` symlink 到与其同组的 `my_setup/zsh/zshrc` 或 `my_setup/zsh/.zshrc`。
-- `.zshrc` 的受管加载顺序固定为 `company → personal → local`。
-- `.zshrc` 使用 `dotfiles: company`、`dotfiles: personal`、`dotfiles: local` 固定标记供安装器验证加载顺序。
+- `.zshrc` 的受管加载顺序固定为 `shared → personal → local`。
+- `.zshrc` 使用 `dotfiles: shared`、`dotfiles: personal`、`dotfiles: local` 固定标记供安装器验证加载顺序。
 - `.zshrc` 为每个启用插件保留 `dotfiles: plugin <name>` 标记，并按合并后的 `load_order` 递增排列。
-- company 只有一个可选 `zsh/company.zsh`，必须能够在 personal 配置之前独立加载。
+- shared 只有一个可选 `zsh/shared.zsh`，必须能够在 personal 配置之前独立加载。
 - local 只有一个可选 `parameters.zsh`，在 personal 配置之后加载。
-- company 或 local 文件缺失时静默跳过；存在但语法错误时 `install.sh verify` 失败。
+- shared 或 local 文件缺失时静默跳过；存在但语法错误时 `install.sh verify` 失败。
 - Stage 1 以目标现有内容为基线做最小修改，尽可能保留修复计划未涉及的 Oh My Zsh 官方模板注释、分区、选项和初始化形态；不得为了模板升级而整文件替换。
 - 日常配置只激活当前机器原生 Homebrew：Intel 使用 `/usr/local`，Apple Silicon 使用 `/opt/homebrew`；不得同时激活另一架构前缀，不得包含 Rosetta fallback 或 ARM→Intel wrapper。
 
@@ -151,8 +151,8 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - uv 管理 Python 版本、环境和 Python tool。
 - `dump.sh` 优先调用各管理器只读、可回放的原生 Dump；没有 Dump 时使用结构化只读输出，由导出配置 Review Skill 转为目标配置。
 - 原生命令如果会维护或写入仓库外状态，Stage 0 必须退化为只读元数据检查。
-- personal 与 company 分别声明自己的 Brewfile 和 tooling；完全相同的项目去重，可覆盖字段按 company → personal 处理，管理器或版本所有权不兼容时停止并报告。
-- personal 与 company 各自最多使用一份 `plugins.toml`，同一条目内记录来源、固定 revision、启用状态和加载顺序。
+- personal 与 shared 分别声明自己的 Brewfile 和 tooling；完全相同的项目去重，可覆盖字段按 shared → personal 处理，管理器或版本所有权不兼容时停止并报告。
+- personal 与 shared 各自最多使用一份 `plugins.toml`，同一条目内记录来源、固定 revision、启用状态和加载顺序。
 - local 不定义软件、版本或插件。
 
 ## 7. 命令契约
@@ -177,8 +177,8 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 
 - 覆盖本地 Zsh 入口前，只为已有 `.zsh` 文件或 symlink 创建保留类型与目标的副本。
 - 安装器不得覆盖 Git 工作树中的未提交冲突。
-- 密钥、公司内容和本机路径不得进入 public 输出。
-- Stage 0 只清理自己生成的 `tmp/zsh-evidence.md`、`tmp/dump.md`、`tmp/my_setup/`、执行期间的 `tmp/.runtime/` 和明确生成的可选 `tmp/company/`，不得清空未知临时内容。
+- 密钥、shared 仓库专属内容和本机路径不得进入 public 输出。
+- Stage 0 只清理自己生成的 `tmp/zsh-evidence.md`、`tmp/dump.md`、`tmp/my_setup/`、执行期间的 `tmp/.runtime/` 和明确生成的可选 `tmp/shared/`，不得清空未知临时内容。
 - `dump.sh` 必须覆盖子进程的临时目录和可重定向缓存位置；只读使用 Homebrew 已有 metadata cache 时必须禁用 refresh、自动更新和 description 查询，使原生工具采集不会写入仓库外目录。
 - 服务、数据库和 GUI 应用数据只检测并报告，不自动迁移。
 - 未处理服务数据、未知 Intel 项、项目级依赖或未验证的原生架构替代不得删除。
@@ -194,7 +194,7 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - 所有启用 Zsh 文件通过 `zsh -n`；
 - login 与 interactive shell 无加载错误；
 - symlink 指向 `my_setup/zsh/`；
-- 加载顺序为 company → personal → local；
+- 加载顺序为 shared → personal → local；
 - local 权限正确且未被 Git 跟踪；
 - Homebrew 与 PATH 符合原生硬件架构：Intel 使用 `/usr/local`，Apple Silicon 使用 `/opt/homebrew`，另一架构前缀不活跃；
 - Apple Silicon 的 Rosetta 会话不会回退使用 Intel Homebrew；

@@ -17,9 +17,9 @@ tooling_trim() {
 tooling_mise_files() {
   local file
 
-  if [[ -n "$DOTFILES_COMPANY_DIR_RESOLVED" && -d "$DOTFILES_COMPANY_DIR_RESOLVED/tooling/mise" ]]; then
-    for file in "$DOTFILES_COMPANY_DIR_RESOLVED"/tooling/mise/*.toml(N); do
-      print -r -- "company|$file"
+  if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" && -d "$DOTFILES_SHARED_DIR_RESOLVED/tooling/mise" ]]; then
+    for file in "$DOTFILES_SHARED_DIR_RESOLVED"/tooling/mise/*.toml(N); do
+      print -r -- "shared|$file"
     done
   fi
   for file in "$DOTFILES_PERSONAL_DIR"/tooling/mise/*.toml(N); do
@@ -120,8 +120,8 @@ tooling_load_mise_tools() {
 
 tooling_uv_config_for() {
   local owner="$1"
-  if [[ "$owner" == company ]]; then
-    print -r -- "$DOTFILES_COMPANY_DIR_RESOLVED/tooling/uv/uv.toml"
+  if [[ "$owner" == shared ]]; then
+    print -r -- "$DOTFILES_SHARED_DIR_RESOLVED/tooling/uv/uv.toml"
   else
     print -r -- "$DOTFILES_PERSONAL_DIR/tooling/uv/uv.toml"
   fi
@@ -129,9 +129,9 @@ tooling_uv_config_for() {
 
 tooling_python_version_files() {
   local file
-  if [[ -n "$DOTFILES_COMPANY_DIR_RESOLVED" ]]; then
-    file="$DOTFILES_COMPANY_DIR_RESOLVED/tooling/uv/.python-versions"
-    [[ -f "$file" && ! -L "$file" ]] && print -r -- "company|$file"
+  if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" ]]; then
+    file="$DOTFILES_SHARED_DIR_RESOLVED/tooling/uv/.python-versions"
+    [[ -f "$file" && ! -L "$file" ]] && print -r -- "shared|$file"
   fi
   file="$DOTFILES_PERSONAL_DIR/tooling/uv/.python-versions"
   [[ -f "$file" && ! -L "$file" ]] && print -r -- "personal|$file"
@@ -212,7 +212,7 @@ tooling_plan() {
       continue
     }
     (( mise_count += 1 ))
-    target="$DOTFILES_TARGET_HOME/.config/mise/conf.d/$([[ "$owner" == company ]] && print 10 || print 20)-dotfiles-${file:t}"
+    target="$DOTFILES_TARGET_HOME/.config/mise/conf.d/$([[ "$owner" == shared ]] && print 10 || print 20)-dotfiles-${file:t}"
     tooling_managed_link_plan "$target" "$file" || blocked=1
   done
   if (( mise_count == 0 )); then
@@ -227,10 +227,10 @@ tooling_plan() {
   uv_config="$DOTFILES_PERSONAL_DIR/tooling/uv/uv.toml"
   tooling_validate_uv_config "$uv_config" || blocked=1
   tooling_managed_link_plan "$DOTFILES_TARGET_HOME/.config/uv/uv.toml" "$uv_config" || blocked=1
-  if [[ -n "$DOTFILES_COMPANY_DIR_RESOLVED" \
-    && -e "$DOTFILES_COMPANY_DIR_RESOLVED/tooling/uv/uv.toml" ]]; then
-    tooling_validate_uv_config "$DOTFILES_COMPANY_DIR_RESOLVED/tooling/uv/uv.toml" || blocked=1
-    print -- '- uv company 配置：仅用于 company 声明安装；personal 用户级配置最终生效'
+  if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" \
+    && -e "$DOTFILES_SHARED_DIR_RESOLVED/tooling/uv/uv.toml" ]]; then
+    tooling_validate_uv_config "$DOTFILES_SHARED_DIR_RESOLVED/tooling/uv/uv.toml" || blocked=1
+    print -- '- uv shared 配置：仅用于 shared 声明安装；personal 用户级配置最终生效'
   fi
   if tooling_load_python_versions; then
     print -- "- uv Python：${(j:, :)${(ok)TOOLING_PYTHON_OWNER}}"
@@ -272,7 +272,7 @@ tooling_apply() {
 
   for record in ${(f)"$(tooling_mise_files)"}; do
     IFS='|' read -r owner file <<< "$record"
-    target="$DOTFILES_TARGET_HOME/.config/mise/conf.d/$([[ "$owner" == company ]] && print 10 || print 20)-dotfiles-${file:t}"
+    target="$DOTFILES_TARGET_HOME/.config/mise/conf.d/$([[ "$owner" == shared ]] && print 10 || print 20)-dotfiles-${file:t}"
     tooling_create_managed_link "$target" "$file" || return 1
   done
   tooling_load_mise_tools || return 1
@@ -321,7 +321,7 @@ tooling_verify() {
       failed=1
       continue
     }
-    target="$DOTFILES_TARGET_HOME/.config/mise/conf.d/$([[ "$owner" == company ]] && print 10 || print 20)-dotfiles-${file:t}"
+    target="$DOTFILES_TARGET_HOME/.config/mise/conf.d/$([[ "$owner" == shared ]] && print 10 || print 20)-dotfiles-${file:t}"
     if [[ ! -L "$target" || "$(readlink "$target" 2>/dev/null)" != "$file" ]]; then
       print -u2 -- "verify: mise 受管 symlink 错误：$target"
       failed=1

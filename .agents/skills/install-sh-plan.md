@@ -2,7 +2,7 @@
 
 > 状态：独立能力需求，不占用 Stage 编号<br>
 > 日期：2026-08-10<br>
-> 执行位置：Stage 0 选定的公开仓库与可选 company 仓库
+> 执行位置：Stage 0 选定的公开仓库与可选 shared 仓库
 
 ## 1. 阶段定位
 
@@ -14,15 +14,15 @@
 
 1. 固化 `dump.sh` 的软件/tooling/plugin 只读导出能力，以及 Zsh Skill 的独立脱敏证据采集能力。
 2. 生成根目录统一 `install.sh`，同时承担 Stage 2 安装和 Stage 3 退役入口；`zsh`、`tooling`、`macos` 各自提供一个只由根安装器编排的内部 `install.sh`。
-3. 建立 `my_setup/`、company 和 local 的轻量契约。
+3. 建立 `my_setup/`、shared 和 local 的轻量契约。
 4. 用最小 smoke test 验证关键路径，不建设额外管理 CLI。
 5. 保留 pre-commit、分离且互链的完整中英文 README 和 CI 发布门禁。
 
 ## 3. 前置条件
 
 - Stage 0 已完成人工确认；
-- 当前 public/company diff 与确认内容一致；
-- public 输出不含公司信息、密钥或本机绝对路径；
+- 当前 public/shared diff 与确认内容一致；
+- public 输出不含 shared 仓库专属信息、密钥或本机绝对路径；
 - 服务和数据迁移事项已标为人工处理；
 - 当前工作树冲突已由用户处理。
 
@@ -30,7 +30,7 @@
 
 ### 3.1 执行前计划门
 
-实现或更新本计划前，先只读检查 Stage 0/1 获准输入、public/company 工作树、现有脚本/配置/测试/文档、Stage 2/3 接口和当前验证状态；不得在盘点阶段编辑文件、运行会写入候选的采集器、安装依赖或修改真实 HOME/软件。随后向用户展示完整计划，至少包含：
+实现或更新本计划前，先只读检查 Stage 0/1 获准输入、public/shared 工作树、现有脚本/配置/测试/文档、Stage 2/3 接口和当前验证状态；不得在盘点阶段编辑文件、运行会写入候选的采集器、安装依赖或修改真实 HOME/软件。随后向用户展示完整计划，至少包含：
 
 - 将新增、修改或删除的精确仓库路径和模块接口；
 - 根 `install.sh` 与三个内部 `install.sh` 的预期行为变化；
@@ -70,12 +70,12 @@ dotfiles/
 └── .github/workflows/verify.yml
 ```
 
-可选 company 仓库：
+可选 shared 仓库：
 
 ```text
-company-dotfiles/
+shared-dotfiles/
 ├── zsh/
-│   ├── company.zsh
+│   ├── shared.zsh
 │   ├── zsh-repair-plan.md
 │   └── plugins.toml
 ├── macos/Brewfile
@@ -84,7 +84,7 @@ company-dotfiles/
 
 三个能力安装模块不是额外的用户命令面：它们被根安装器加载，只暴露带能力前缀的内部 plan/apply/verify 函数，直接执行时必须拒绝并引导用户使用根目录 `install.sh`。目标结构之外不再建设额外管理 CLI、独立 migrate/retire 脚本、通用 schemas 目录、拆散的插件文件、大量场景 fixture 或长期状态目录。
 
-本计划及其安装器不根据修复计划生成最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 或 `company.zsh`；这些文件由 [`$stage-1-apply-zsh-repair-plan`](./stage-1-apply-zsh-repair-plan/SKILL.md) 生成或更新并经用户审查。安装器必须接受 `zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中恰好一套完整来源；两套并存、跨组混搭或文件残缺时，在确认和写入前清楚阻断，不猜优先级，也不创建另一套副本。smoke test 只能在临时仓库中创建最小 Zsh fixture 验证安装能力。
+本计划及其安装器不根据修复计划生成最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 或 `shared.zsh`；这些文件由 [`$stage-1-apply-zsh-repair-plan`](./stage-1-apply-zsh-repair-plan/SKILL.md) 生成或更新并经用户审查。安装器必须接受 `zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中恰好一套完整来源；两套并存、跨组混搭或文件残缺时，在确认和写入前清楚阻断，不猜优先级，也不创建另一套副本。smoke test 只能在临时仓库中创建最小 Zsh fixture 验证安装能力。
 
 ## 5. `dump.sh`
 
@@ -100,7 +100,7 @@ company-dotfiles/
 - 不读取或分析 Zsh 启动文件；Zsh 证据由 `analyze-zsh-configuration` Skill 内部脚本独立采集；
 - 缺少某个工具时记录 `not-installed`，不自动安装；
 - 原生 Dump/List 只写当前仓库被 Git 忽略的 `tmp/` 候选树，不使用仓库外临时目录；
-- 输出目录与 `my_setup/` 和可选 company 目标结构对齐，便于 AI 就地审阅；
+- 输出目录与 `my_setup/` 和可选 shared 目标结构对齐，便于 AI 就地审阅；
 - 有可回放原生 Dump 时优先使用；只有结构化 List/Status 时经脱敏写入 `tmp/dump.md`，由 AI 转成目标配置；
 - 强制把子进程临时文件和可重定向缓存写入执行期间的 `tmp/.runtime/`，结束前清理，不继承仓库外 `TMPDIR`；Homebrew 只读使用已有 metadata cache 时禁用 refresh、自动更新和 description 查询；
 - 导出完成后由 `review-exported-dotfiles` Skill 调整候选条目，并为每个直接期望项目补齐一句话描述、最佳实践、修改级别、建议、归属和验证评论；
@@ -125,7 +125,7 @@ company-dotfiles/
 
 - `my_setup/zsh/install.sh`：Zsh 入口备份和 symlink、插件安装及 Zsh 验证；
 - `my_setup/tooling/install.sh`：mise、uv 等 tooling 安装及版本验证；
-- `my_setup/macos/install.sh`：Homebrew、personal/company Brewfile 安装及来源与架构验证。
+- `my_setup/macos/install.sh`：Homebrew、personal/shared Brewfile 安装及来源与架构验证。
 
 内部模块不得独立提示用户、重复确认、解析根命令面或自动调用其他模块；被直接执行时必须安全失败。普通安装仍只产生一次整体摘要和一次确认。
 
@@ -135,14 +135,14 @@ company-dotfiles/
 
 执行时：
 
-1. 验证当前仓库、`my_setup/` 和可选 company 路径；
+1. 验证当前仓库、`my_setup/` 和可选 shared 路径；
 2. 检查 macOS 原生硬件架构、当前进程是否运行在 Rosetta 下、本地 Zsh 入口和 local 权限；
 3. 计算 Zsh backup/symlink、Brewfile、tooling、插件变更；
 4. 展示简短摘要并以默认 `N` 的 `y/N` 确认；
 5. 为已有本地 `.zsh` 文件或 symlink 创建副本；
 6. 将已选仓库组分别作为来源，建立固定 HOME 入口 `~/.zprofile` 和 `~/.zshrc` symlink；
 7. 为当前公开仓库配置受管的 `core.hooksPath=.githooks`；
-8. Intel Mac 使用 `/usr/local` Homebrew，Apple Silicon 原生会话使用 `/opt/homebrew` Homebrew，安装 personal/company Brewfile、tooling、mise/uv 和固定 revision 插件；
+8. Intel Mac 使用 `/usr/local` Homebrew，Apple Silicon 原生会话使用 `/opt/homebrew` Homebrew，安装 personal/shared Brewfile、tooling、mise/uv 和固定 revision 插件；
 9. 调用同一脚本的验证逻辑。
 
 安装器不得打印、复制或持久化 `parameters.zsh` 内容；只允许检查文件类型、owner、权限和无输出语法。
@@ -153,7 +153,7 @@ company-dotfiles/
 
 - Zsh 语法和两种常见启动场景；
 - symlink 目标；
-- company → personal → local 加载顺序；
+- shared → personal → local 加载顺序；
 - local `0700/0600` 权限及未被 Git 跟踪；
 - Brewfile、tooling 和 `plugins.toml` 语法；
 - 命令实际路径、版本和架构；
@@ -171,17 +171,17 @@ company-dotfiles/
 
 - `my_setup/zsh/zprofile` + `zshrc` 与 `.zprofile` + `.zshrc` 是两种受支持的 personal 仓库命名；必须恰好完整存在一组，且没有另一组残留；
 - HOME 启动入口始终是 `~/.zprofile` 和 `~/.zshrc`，分别指向已解析的仓库来源；
-- company 最多一个 `zsh/company.zsh`；
+- shared 最多一个 `zsh/shared.zsh`；
 - local 最多一个 `parameters.zsh`；
-- `.zshrc` 固定按 company → personal → local 执行；
-- `.zshrc` 使用 `dotfiles: company`、`dotfiles: personal`、`dotfiles: local` 三个固定标记让安装器验证上述顺序；
+- `.zshrc` 固定按 shared → personal → local 执行；
+- `.zshrc` 使用 `dotfiles: shared`、`dotfiles: personal`、`dotfiles: local` 三个固定标记让安装器验证上述顺序；
 - `.zshrc` 为每个启用插件保留 `dotfiles: plugin <name>` 标记，并按合并后的 `load_order` 递增排列；
-- company 不依赖 personal 中后续才定义的 alias/function；
+- shared 不依赖 personal 中后续才定义的 alias/function；
 - local 只保存不可公开参数，不保存软件选择。
 
 ### 7.2 插件
 
-personal/company 各自最多一份 `zsh/plugins.toml`。每个插件条目至少包含：
+personal/shared 各自最多一份 `zsh/plugins.toml`。每个插件条目至少包含：
 
 - 名称；
 - source；
@@ -189,11 +189,11 @@ personal/company 各自最多一份 `zsh/plugins.toml`。每个插件条目至�
 - enabled；
 - 加载顺序。
 
-安装器合并时按 company → personal 处理，同名冲突由 personal 决定，local 不参与。
+安装器合并时按 shared → personal 处理，同名冲突由 personal 决定，local 不参与。
 
 ### 7.3 软件与 tooling
 
-- personal/company 各自使用 Brewfile 表达软件期望；
+- personal/shared 各自使用 Brewfile 表达软件期望；
 - tooling 文件按实际管理器保存，不为统一外观创建额外 schema；
 - 版本必须明确；
 - Homebrew、mise 和 uv 的职责遵循共用契约；
@@ -224,7 +224,7 @@ personal/company 各自最多一份 `zsh/plugins.toml`。每个插件条目至�
 
 - Markdown 和 shell 基础格式；
 - `zsh -n`；
-- public 密钥与公司信息扫描；
+- public 密钥与 shared 仓库专属信息扫描；
 - 与目标机器原生架构不匹配的 Homebrew 运行时路径，以及 Apple Silicon 上的 Rosetta fallback；
 - `README.md` 与 `README.en.md` 的章节结构一致性及靠前互链。
 
@@ -241,10 +241,10 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 - Intel `/usr/local` 与 Apple Silicon `/opt/homebrew` 的路径选择，以及 Apple Silicon Rosetta 会话阻断；
 - 临时 HOME 中的 Zsh 副本和 symlink；
 - 安装幂等与 `verify`；
-- personal/company 插件和软件配置合并；
+- personal/shared 插件和软件配置合并；
 - local 权限及不读取密钥内容；
 - `retire` 只读、非 TTY 阻断和未知数据保护；
-- public 工作树密钥/公司信息扫描；
+- public 工作树密钥/shared 仓库专属信息扫描；
 - 使用固定版本扫描器检查公开仓库当前内容和完整 Git 历史；
 - `README.md` 与 `README.en.md` 的中英文一致性及靠前互链。
 
@@ -256,7 +256,7 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 - [ ] `dump.sh` 只导出软件/tooling/plugin，Zsh 采集与导出 Review 已拆分为独立 Skill；
 - [ ] 根目录 `install.sh` 具备安装、verify 和 retire 命令，三个内部能力安装模块只由根入口编排；
 - [ ] 安装默认展示摘要并使用 `y/N`；
-- [ ] company/personal/local 加载顺序正确；
+- [ ] shared/personal/local 加载顺序正确；
 - [ ] 插件已收敛为单一 `plugins.toml`；
 - [ ] local 密钥不会被脚本、测试或 CI 读取；
 - [ ] smoke test、pre-commit、分离且互链的中英文 README 和 CI 通过；
