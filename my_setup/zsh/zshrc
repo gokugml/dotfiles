@@ -1,3 +1,11 @@
+# dotfiles: local-integrations zshrc-pre
+if [[ -r "$HOME/.config/dotfiles/local/integrations.zsh" ]]; then
+  DOTFILES_INTEGRATIONS_PHASE=zshrc-pre
+  source "$HOME/.config/dotfiles/local/integrations.zsh" ||
+    print -u2 -- "dotfiles: integrations.zsh zshrc-pre 加载失败"
+  unset DOTFILES_INTEGRATIONS_PHASE
+fi
+
 # dotfiles: shared
 if [[ -n "${DOTFILES_SHARED_DIR:-}" && -r "$DOTFILES_SHARED_DIR/zsh/shared.zsh" ]]; then
   source "$DOTFILES_SHARED_DIR/zsh/shared.zsh" ||
@@ -5,6 +13,9 @@ if [[ -n "${DOTFILES_SHARED_DIR:-}" && -r "$DOTFILES_SHARED_DIR/zsh/shared.zsh" 
 fi
 
 # dotfiles: personal
+
+# If you come from bash you might have to change your $PATH.
+# export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
 
 # Path to your Oh My Zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
@@ -29,7 +40,7 @@ ZSH_THEME="robbyrussell"
 # HYPHEN_INSENSITIVE="true"
 
 # Uncomment one of the following lines to change the auto-update behavior
-zstyle ':omz:update' mode disabled  # disable automatic updates
+# zstyle ':omz:update' mode disabled  # disable automatic updates
 # zstyle ':omz:update' mode auto      # update automatically without asking
 zstyle ':omz:update' mode reminder  # just remind me to update when it's time
 
@@ -83,6 +94,8 @@ typeset -U fpath FPATH
 source $ZSH/oh-my-zsh.sh
 
 # User configuration
+
+# export MANPATH="/usr/local/man:$MANPATH"
 
 # You may need to manually set your language environment
 # export LANG=en_US.UTF-8
@@ -155,4 +168,12 @@ fi
 if [[ -r "$HOME/.config/dotfiles/local/parameters.zsh" ]]; then
   source "$HOME/.config/dotfiles/local/parameters.zsh" ||
     print -u2 -- "dotfiles: parameters.zsh 加载失败"
+fi
+
+# dotfiles: local-integrations zshrc-post
+if [[ -r "$HOME/.config/dotfiles/local/integrations.zsh" ]]; then
+  DOTFILES_INTEGRATIONS_PHASE=zshrc-post
+  source "$HOME/.config/dotfiles/local/integrations.zsh" ||
+    print -u2 -- "dotfiles: integrations.zsh zshrc-post 加载失败"
+  unset DOTFILES_INTEGRATIONS_PHASE
 fi

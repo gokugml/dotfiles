@@ -1,3 +1,11 @@
+# dotfiles: local-integrations zprofile-pre
+if [[ -r "$HOME/.config/dotfiles/local/integrations.zsh" ]]; then
+  DOTFILES_INTEGRATIONS_PHASE=zprofile-pre
+  source "$HOME/.config/dotfiles/local/integrations.zsh" ||
+    print -u2 -- "dotfiles: integrations.zsh zprofile-pre 加载失败"
+  unset DOTFILES_INTEGRATIONS_PHASE
+fi
+
 # Apple Silicon login environment.
 typeset -U path PATH
 
@@ -14,3 +22,11 @@ path=(
   "${path[@]}"
 )
 export PATH
+
+# dotfiles: local-integrations zprofile-post
+if [[ -r "$HOME/.config/dotfiles/local/integrations.zsh" ]]; then
+  DOTFILES_INTEGRATIONS_PHASE=zprofile-post
+  source "$HOME/.config/dotfiles/local/integrations.zsh" ||
+    print -u2 -- "dotfiles: integrations.zsh zprofile-post 加载失败"
+  unset DOTFILES_INTEGRATIONS_PHASE
+fi
