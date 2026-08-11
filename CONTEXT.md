@@ -37,7 +37,7 @@ _避免使用_：public-company-local 三层栈
 通过独立 Zsh Skill 的确定性脚本提取启动文件的脱敏结构证据，再由 AI 按 Skill 内置手册生成 `zsh-repair-plan.md` 修改建议。它不生成或修改最终 Zsh 文件。
 
 **Zsh 修复应用（Zsh Repair Application）**：
-Stage 1 通过独立 Skill 把已确认的 `zsh-repair-plan.md` 应用到用户显式提供的 `.zshrc`、`.zprofile` 目标；没有显式目标时更新公开仓库的默认 Zsh 文件和可选 company 增量。它尽可能保留现有 Oh My Zsh 模板配置，不建立 symlink 或安装软件。
+Stage 1 通过独立 Skill 把已确认的 `zsh-repair-plan.md` 应用到用户显式提供的 `zshrc`/`.zshrc`、`zprofile`/`.zprofile` 目标；没有显式目标时先让用户选择无前置点或有前置点仓库命名，再更新对应文件和可选 company 增量。它尽可能保留现有 Oh My Zsh 模板配置，不建立 symlink 或安装软件。
 
 **install.sh 能力计划（Install Capability Plan）**：
 独立于 Stage 编号的仓库能力建设需求，定义根 `install.sh`、内部安装模块、`dump.sh`、测试、文档和 CI。它不生成最终 Zsh 文件，也不代表 `./install.sh plan` 子命令。
@@ -46,7 +46,7 @@ Stage 1 通过独立 Skill 把已确认的 `zsh-repair-plan.md` 应用到用户�
 通过独立 Review Skill 审阅当前仓库 `tmp/` 中由 `dump.sh` 已导出的 Brewfile、tooling 和插件候选，补充结构化 AI 评论。它不运行采集、不分析 Zsh 文件、不执行正式写入。
 
 **安装（Install）**：
-Stage 2 通过无参数 `install.sh` 备份本地 Zsh 入口、建立 symlink，并按当前机器原生硬件架构安装 personal/company 声明的配置与软件。Apple Silicon 的 Rosetta 会话不得回退使用 Intel Homebrew。
+Stage 2 通过无参数 `install.sh` 从 `my_setup/zsh/` 中唯一完整的无前置点或有前置点来源组备份并建立固定的 HOME Zsh 入口 symlink，再按当前机器原生硬件架构安装 personal/company 声明的配置与软件。Apple Silicon 的 Rosetta 会话不得回退使用 Intel Homebrew。
 
 **退役（Retire）**：
 Stage 3 只在 Apple Silicon 上通过 `install.sh retire` 预览，并通过 `install.sh retire --apply` 删除已有 ARM 替代或已明确淘汰的旧 Intel 软件；Intel Mac 不进入 Stage 3。

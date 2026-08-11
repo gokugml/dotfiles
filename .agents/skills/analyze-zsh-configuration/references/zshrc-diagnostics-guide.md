@@ -354,7 +354,7 @@ touch "$HOME/.config/dotfiles/local/parameters.zsh"
 chmod 600 "$HOME/.config/dotfiles/local/parameters.zsh"
 ```
 
-`my_setup/zsh/.zshrc` 在 personal 主配置完成后条件加载：
+Stage 1 已选的 `my_setup/zsh/zshrc` 或 `my_setup/zsh/.zshrc` 在 personal 主配置完成后条件加载：
 
 ```zsh
 local_parameters="$HOME/.config/dotfiles/local/parameters.zsh"

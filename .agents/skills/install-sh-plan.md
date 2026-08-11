@@ -55,8 +55,8 @@ dotfiles/
 ├── my_setup/
 │   ├── zsh/
 │   │   ├── install.sh
-│   │   ├── .zprofile          # Stage 1 根据已确认修复计划生成
-│   │   ├── .zshrc             # Stage 1 根据已确认修复计划生成
+│   │   ├── zprofile 或 .zprofile  # Stage 1 选择并生成其中一个
+│   │   ├── zshrc 或 .zshrc        # 与 zprofile 使用同一命名方案
 │   │   ├── zsh-repair-plan.md
 │   │   └── plugins.toml
 │   ├── macos/
@@ -84,7 +84,7 @@ company-dotfiles/
 
 三个能力安装模块不是额外的用户命令面：它们被根安装器加载，只暴露带能力前缀的内部 plan/apply/verify 函数，直接执行时必须拒绝并引导用户使用根目录 `install.sh`。目标结构之外不再建设额外管理 CLI、独立 migrate/retire 脚本、通用 schemas 目录、拆散的插件文件、大量场景 fixture 或长期状态目录。
 
-本计划及其安装器不根据修复计划生成最终 `.zprofile`、`.zshrc` 或 `company.zsh`；这些文件由 [`$stage-1-apply-zsh-repair-plan`](./stage-1-apply-zsh-repair-plan/SKILL.md) 生成或更新并经用户审查。安装器在必要文件缺失时必须以清楚的阻断信息停止，smoke test 只能在临时仓库中创建最小 Zsh fixture 验证安装能力。
+本计划及其安装器不根据修复计划生成最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 或 `company.zsh`；这些文件由 [`$stage-1-apply-zsh-repair-plan`](./stage-1-apply-zsh-repair-plan/SKILL.md) 生成或更新并经用户审查。安装器必须接受 `zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中恰好一套完整来源；两套并存、跨组混搭或文件残缺时，在确认和写入前清楚阻断，不猜优先级，也不创建另一套副本。smoke test 只能在临时仓库中创建最小 Zsh fixture 验证安装能力。
 
 ## 5. `dump.sh`
 
@@ -140,7 +140,7 @@ company-dotfiles/
 3. 计算 Zsh backup/symlink、Brewfile、tooling、插件变更；
 4. 展示简短摘要并以默认 `N` 的 `y/N` 确认；
 5. 为已有本地 `.zsh` 文件或 symlink 创建副本；
-6. 建立指向 `my_setup/zsh/` 的 `~/.zprofile` 和 `~/.zshrc` symlink；
+6. 将已选仓库组分别作为来源，建立固定 HOME 入口 `~/.zprofile` 和 `~/.zshrc` symlink；
 7. 为当前公开仓库配置受管的 `core.hooksPath=.githooks`；
 8. Intel Mac 使用 `/usr/local` Homebrew，Apple Silicon 原生会话使用 `/opt/homebrew` Homebrew，安装 personal/company Brewfile、tooling、mise/uv 和固定 revision 插件；
 9. 调用同一脚本的验证逻辑。
@@ -169,7 +169,8 @@ company-dotfiles/
 
 ### 7.1 Zsh
 
-- `my_setup/zsh/.zprofile` 和 `.zshrc` 是唯一真实 personal 入口；
+- `my_setup/zsh/zprofile` + `zshrc` 与 `.zprofile` + `.zshrc` 是两种受支持的 personal 仓库命名；必须恰好完整存在一组，且没有另一组残留；
+- HOME 启动入口始终是 `~/.zprofile` 和 `~/.zshrc`，分别指向已解析的仓库来源；
 - company 最多一个 `zsh/company.zsh`；
 - local 最多一个 `parameters.zsh`；
 - `.zshrc` 固定按 company → personal → local 执行；

@@ -43,7 +43,7 @@ assert_absent() {
 }
 
 quick_checks() {
-  local file output zh_sections en_sections
+  local file output zh_sections en_sections skill_name
   local -a repository_files shell_files markdown_files public_files plan_gate_files skill_interface_files
 
   repository_files=("${(@f)$(git -C "$repo_root" ls-files --cached --others --exclude-standard)}")
@@ -87,7 +87,7 @@ quick_checks() {
 
   (( ${#plan_gate_files} > 0 )) || fail '仓库中未发现 Skill'
   plan_gate_files+=(
-    '.agents/skills/stage-1-portable-dotfiles-capability-build.md'
+    '.agents/skills/install-sh-plan.md'
     '.agents/skills/stage-common-contract.md'
   )
   for file in "${plan_gate_files[@]}"; do
@@ -99,10 +99,11 @@ quick_checks() {
 
   (( ${#skill_interface_files} > 0 )) || fail '仓库中未发现 Skill UI 元数据'
   for file in "${skill_interface_files[@]}"; do
-    grep -Fq '先只读盘点' "$repo_root/$file" \
-      || fail "Skill 默认提示未要求先只读盘点：$file"
-    grep -Fq '等待我确认' "$repo_root/$file" \
-      || fail "Skill 默认提示未要求计划确认：$file"
+    skill_name="${file:h:h:t}"
+    grep -Fq 'default_prompt:' "$repo_root/$file" \
+      || fail "Skill UI 元数据缺少 default_prompt：$file"
+    grep -Fq "\$$skill_name" "$repo_root/$file" \
+      || fail "Skill 默认提示未引用自身 Skill：$file"
   done
 
   if grep -En 'AKIA[[:alnum:]]{16}|sk-[[:alnum:]_-]{20,}|BEGIN (RSA |OPENSSH )?PRIVATE KEY' \
@@ -118,7 +119,11 @@ quick_checks() {
       fail "公开能力文件包含本机绝对 HOME 路径：$file"
     fi
   done
-  for file in "$repo_root/my_setup/zsh/.zprofile" "$repo_root/my_setup/zsh/.zshrc"; do
+  for file in \
+    "$repo_root/my_setup/zsh/zprofile" \
+    "$repo_root/my_setup/zsh/zshrc" \
+    "$repo_root/my_setup/zsh/.zprofile" \
+    "$repo_root/my_setup/zsh/.zshrc"; do
     [[ -e "$file" ]] || continue
     if grep -En '/usr/local|arch[[:space:]]+-x86_64|Rosetta|ZDOTDIR' "$file" >/dev/null 2>&1; then
       fail "最终 Zsh 文件含禁止的 Intel/Rosetta/ZDOTDIR 标记：${file#$repo_root/}"
@@ -126,8 +131,8 @@ quick_checks() {
   done
 
   grep -Fq 'tmp/' "$repo_root/.gitignore" || fail 'tmp/ 未被 Git ignore'
-  grep -Fq '不读取或分析 Zsh 启动文件' "$repo_root/.agents/skills/stage-1-portable-dotfiles-capability-build.md" \
-    || fail 'Stage 1 未保留 dump/Zsh 分离边界'
+  grep -Fq '不读取或分析 Zsh 启动文件' "$repo_root/.agents/skills/install-sh-plan.md" \
+    || fail 'install.sh plan 未保留 dump/Zsh 分离边界'
 
   for file in \
     "$repo_root/my_setup/zsh/install.sh" \
@@ -198,12 +203,27 @@ write_fake_intel_brew() {
 write_fixture_zsh() {
   local fixture_repo="$1"
   local plugin_revision="$2"
+  local naming="${3:-plain}"
+  local profile_name='zprofile'
+  local rc_name='zshrc'
+
+  if [[ "$naming" == dotted ]]; then
+    profile_name='.zprofile'
+    rc_name='.zshrc'
+  elif [[ "$naming" != plain ]]; then
+    fail "未知 Zsh fixture 命名：$naming"
+  fi
+  command rm -f -- \
+    "$fixture_repo/my_setup/zsh/zprofile" \
+    "$fixture_repo/my_setup/zsh/zshrc" \
+    "$fixture_repo/my_setup/zsh/.zprofile" \
+    "$fixture_repo/my_setup/zsh/.zshrc"
   {
     print -r -- '# Apple Silicon login environment.'
     print -r -- 'typeset -U path PATH'
     print -r -- 'path=(/usr/bin /bin /usr/sbin /sbin)'
     print -r -- 'export PATH'
-  } > "$fixture_repo/my_setup/zsh/.zprofile"
+  } > "$fixture_repo/my_setup/zsh/$profile_name"
   {
     print -r -- '# dotfiles: company'
     print -r -- 'if [[ -n "${DOTFILES_COMPANY_DIR:-}" && -r "$DOTFILES_COMPANY_DIR/zsh/company.zsh" ]]; then'
@@ -217,7 +237,7 @@ write_fixture_zsh() {
     print -r -- 'if [[ -r "$HOME/.config/dotfiles/local/parameters.zsh" ]]; then'
     print -r -- '  source "$HOME/.config/dotfiles/local/parameters.zsh"'
     print -r -- 'fi'
-  } > "$fixture_repo/my_setup/zsh/.zshrc"
+  } > "$fixture_repo/my_setup/zsh/$rc_name"
   {
     print -r -- '[[plugins]]'
     print -r -- 'name = "fixture-plugin"'
@@ -287,6 +307,7 @@ write_company_fixture() {
 run_full_checks() {
   local test_root fixture_repo fixture_home fixture_bin company_repo dump_repo dump_home intel_brew
   local output default_output apply_output verify_output retire_output retire_apply_output
+  local dotted_output ambiguous_output mixed_output profile_link_before rc_link_before
   local before_status after_status profile_backup_count rc_backup_count home_before home_after
   local plugin_revision
 
@@ -310,7 +331,7 @@ run_full_checks() {
     "$fixture_repo/my_setup/macos/install.sh" \
     "$fixture_repo/.githooks/pre-commit"
   plugin_revision="$(seed_fixture_plugin "$fixture_home")" || fail '无法创建固定 revision 插件 fixture'
-  write_fixture_zsh "$fixture_repo" "$plugin_revision"
+  write_fixture_zsh "$fixture_repo" "$plugin_revision" plain
   {
     print -r -- 'brew "ast-grep"'
   } > "$fixture_repo/my_setup/macos/Brewfile"
@@ -344,6 +365,7 @@ run_full_checks() {
       DOTFILES_COMPANY_DIR="$company_repo" \
       ./install.sh </dev/null > "$default_output" 2>&1
   ) || fail '默认 N 场景执行失败'
+  assert_contains "$default_output" '仓库 Zsh 来源：无前置点（zprofile + zshrc）'
   assert_contains "$default_output" '已取消，未执行任何安装'
   assert_absent "$default_output" 'fixture-secret-value'
   [[ "$(readlink "$fixture_home/.zprofile")" == "$fixture_home/original-profile" ]] \
@@ -363,9 +385,9 @@ run_full_checks() {
     fail '隔离安装失败'
   }
   assert_absent "$apply_output" 'fixture-secret-value'
-  [[ "$(readlink "$fixture_home/.zprofile")" == "$fixture_repo/my_setup/zsh/.zprofile" ]] \
+  [[ "$(readlink "$fixture_home/.zprofile")" == "$fixture_repo/my_setup/zsh/zprofile" ]] \
     || fail '.zprofile symlink 错误'
-  [[ "$(readlink "$fixture_home/.zshrc")" == "$fixture_repo/my_setup/zsh/.zshrc" ]] \
+  [[ "$(readlink "$fixture_home/.zshrc")" == "$fixture_repo/my_setup/zsh/zshrc" ]] \
     || fail '.zshrc symlink 错误'
   profile_backup_count=("$fixture_home"/.zprofile.dotfiles-backup.*(N))
   rc_backup_count=("$fixture_home"/.zshrc.dotfiles-backup.*(N))
@@ -446,6 +468,75 @@ run_full_checks() {
   fi
   assert_contains "$retire_apply_output" '必须在 stdin/stdout 均为真实 TTY'
   [[ ! -e "$fixture_home/uninstall.log" ]] || fail '非 TTY retire --apply 执行了卸载'
+
+  command mv -- \
+    "$fixture_repo/my_setup/zsh/zprofile" \
+    "$fixture_repo/my_setup/zsh/.zprofile"
+  command mv -- \
+    "$fixture_repo/my_setup/zsh/zshrc" \
+    "$fixture_repo/my_setup/zsh/.zshrc"
+  dotted_output="$test_root/dotted.out"
+  (
+    cd "$fixture_repo" || exit 1
+    print -r -- y | HOME="$fixture_home" \
+      PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 \
+      DOTFILES_COMPANY_DIR="$company_repo" \
+      ./install.sh > "$dotted_output" 2>&1
+  ) || {
+    sed -n '1,280p' "$dotted_output" >&2
+    fail '有前置点 Zsh 来源安装失败'
+  }
+  assert_contains "$dotted_output" '仓库 Zsh 来源：有前置点（.zprofile + .zshrc）'
+  [[ "$(readlink "$fixture_home/.zprofile")" == "$fixture_repo/my_setup/zsh/.zprofile" ]] \
+    || fail '有前置点 .zprofile symlink 错误'
+  [[ "$(readlink "$fixture_home/.zshrc")" == "$fixture_repo/my_setup/zsh/.zshrc" ]] \
+    || fail '有前置点 .zshrc symlink 错误'
+
+  command cp -p -- \
+    "$fixture_repo/my_setup/zsh/.zprofile" \
+    "$fixture_repo/my_setup/zsh/zprofile"
+  command cp -p -- \
+    "$fixture_repo/my_setup/zsh/.zshrc" \
+    "$fixture_repo/my_setup/zsh/zshrc"
+  profile_link_before="$(readlink "$fixture_home/.zprofile")"
+  rc_link_before="$(readlink "$fixture_home/.zshrc")"
+  ambiguous_output="$test_root/ambiguous.out"
+  if (
+    cd "$fixture_repo" || exit 1
+    HOME="$fixture_home" \
+      PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 \
+      DOTFILES_COMPANY_DIR="$company_repo" \
+      ./install.sh </dev/null > "$ambiguous_output" 2>&1
+  ); then
+    fail '两套完整 Zsh 来源同时存在时未阻断'
+  fi
+  assert_contains "$ambiguous_output" '同时存在两套完整 Zsh 来源'
+  assert_contains "$ambiguous_output" '摘要包含阻断项，未请求确认，也未执行写入'
+  [[ "$(readlink "$fixture_home/.zprofile")" == "$profile_link_before" \
+    && "$(readlink "$fixture_home/.zshrc")" == "$rc_link_before" ]] \
+    || fail '来源歧义场景改动了 HOME Zsh 入口'
+
+  command rm -f -- \
+    "$fixture_repo/my_setup/zsh/zprofile" \
+    "$fixture_repo/my_setup/zsh/.zshrc"
+  mixed_output="$test_root/mixed.out"
+  if (
+    cd "$fixture_repo" || exit 1
+    HOME="$fixture_home" \
+      PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 \
+      DOTFILES_COMPANY_DIR="$company_repo" \
+      ./install.sh </dev/null > "$mixed_output" 2>&1
+  ); then
+    fail '混搭 Zsh 来源命名时未阻断'
+  fi
+  assert_contains "$mixed_output" 'Zsh 来源命名混搭或文件残缺'
+  assert_contains "$mixed_output" '摘要包含阻断项，未请求确认，也未执行写入'
+  [[ "$(readlink "$fixture_home/.zprofile")" == "$profile_link_before" \
+    && "$(readlink "$fixture_home/.zshrc")" == "$rc_link_before" ]] \
+    || fail '混搭来源场景改动了 HOME Zsh 入口'
 
   dump_repo="$test_root/dump-repo"
   dump_home="$test_root/dump-home"

@@ -8,15 +8,15 @@
 
 这个公开仓库保存可分享的个人配置和迁移能力，用于把经过确认的 Zsh、Homebrew、mise、uv 与 Zsh 插件迁移到 Apple Silicon Mac。公司增量放在可选的独立私有仓库，本机密钥只放在仓库外的 local 文件。
 
-仓库当前处于 Stage 1 能力建设阶段。Stage 1 只构建和测试脚本，不会安装到开发者的真实 HOME。最终 `my_setup/zsh/.zprofile` 与 `.zshrc` 由 Stage 2 根据已确认的 `zsh-repair-plan.md` 生成并经用户审查。
+Stage 1 根据已确认的 `zsh-repair-plan.md` 应用并审查仓库版 Zsh，可使用无前置点的 `zprofile` + `zshrc`，也可使用有前置点的 `.zprofile` + `.zshrc`。Stage 2 不生成这些文件；安装器从 `my_setup/zsh/` 中解析唯一完整的一组来源，再建立固定的 HOME 启动入口。
 
 <!-- section:stages -->
 
 ## 四阶段流程
 
 1. **Stage 0：分析与导出。** `./dump.sh` 只读导出软件、tooling 和插件候选；独立 Zsh Skill 采集不含值的结构证据并生成修复计划；导出 Review Skill 审阅候选配置。用户确认后才写入正式草稿。
-2. **Stage 1：能力建设。** 建设导出器、安装器、内部能力模块、测试、pre-commit、中英文文档和 CI 门禁，不修改真实 HOME 或软件。
-3. **Stage 2：配置与安装。** 根据修复计划生成仓库版 Zsh，先审查 public/company diff，再运行无参数 `./install.sh`。脚本展示整体摘要并使用默认 `N` 的一次 `y/N` 确认，完成后运行 `./install.sh verify`。
+2. **Stage 1：应用 Zsh 修复计划。** 优先更新用户显式提供的目标；否则先确认使用 `zprofile`/`zshrc` 还是 `.zprofile`/`.zshrc`，再以现有内容为基线应用计划并审查完整 diff，不修改真实 HOME 或安装软件。
+3. **Stage 2：配置与安装。** 确认 `my_setup/zsh/` 中恰好存在 Stage 1 选择的一套完整 Zsh 来源，再运行无参数 `./install.sh`。脚本展示所选来源和整体摘要，使用默认 `N` 的一次 `y/N` 确认，完成后运行 `./install.sh verify`。
 4. **Stage 3：Intel 退役。** 先用 `./install.sh retire` 只读预览；只有再次审查并在真实 TTY 中确认后，才运行 `./install.sh retire --apply`。普通安装和 `verify` 永远不会触发退役。
 
 <!-- section:layout -->
@@ -31,6 +31,8 @@ dotfiles/
 ├── install.sh                    # 唯一公开安装入口
 ├── my_setup/
 │   ├── zsh/install.sh            # 内部 Zsh/symlink/plugin 模块
+│   ├── zsh/{zprofile,zshrc}       # Stage 1 默认无前置点来源
+│   │   或 zsh/{.zprofile,.zshrc}  # 用户选择的有前置点来源
 │   ├── tooling/install.sh        # 内部 mise/uv 模块
 │   └── macos/install.sh          # 内部 Homebrew 模块
 ├── tests/smoke.zsh
@@ -67,6 +69,8 @@ DOTFILES_COMPANY_DIR=/absolute/path/to/company-dotfiles ./install.sh
 - personal 固定保存在公开仓库的 `my_setup/`。
 - company 是可选的独立 Git 工作树，只保存公司增量。
 - local 固定为 `~/.config/dotfiles/local/parameters.zsh`，只保存密钥值、账号和单机路径，不保存软件或插件选择。
+- personal Zsh 仓库来源必须恰好完整存在一组：`my_setup/zsh/zprofile` + `zshrc`，或 `my_setup/zsh/.zprofile` + `.zshrc`。两套并存、跨组混搭或文件残缺都会在安装确认和写入前阻断；安装器不会猜优先级或创建另一套副本。
+- HOME 端始终使用 `~/.zprofile` 和 `~/.zshrc`，分别 symlink 到已解析的同组仓库来源。
 - `.zshrc` 使用 `dotfiles: company → dotfiles: personal → dotfiles: local` 三个标记维持加载顺序和 `company < personal < local` 覆盖优先级。
 - 每个启用插件在 `.zshrc` 中使用 `dotfiles: plugin <name>` 标记，并按合并后的 `load_order` 递增排列。
 - personal/company 各自最多一份 `zsh/plugins.toml`；插件固定 40 位 commit，相同名称由 personal 决定。
@@ -95,7 +99,7 @@ mise 配置通过受管 symlink 进入 `~/.config/mise/conf.d/`，company 文件
 .githooks/pre-commit
 ```
 
-完整 smoke 使用临时仓库和临时 HOME 验证默认 `N`、副本、symlink、幂等、company/personal 合并、local 不泄露、retire 只读以及非 TTY 阻断。快速模式执行语法、Markdown、中英文文档章节结构、安全边界和 Intel 路径扫描。
+完整 smoke 使用临时仓库和临时 HOME 验证无前置点与有前置点两种仓库来源、歧义/混搭阻断、默认 `N`、副本、symlink、幂等、company/personal 合并、local 不泄露、retire 只读以及非 TTY 阻断。快速模式执行语法、Markdown、中英文文档章节结构、安全边界和 Intel 路径扫描。
 
 pre-commit 不安装依赖。它要求 `gitleaks 8.30.0` 已由 Stage 2 的 mise 配置安装，并扫描当前公开工作树；CI 还会使用同一固定版本扫描当前内容和完整 Git 历史。只有快速检查、完整 smoke 和 CI 全部通过后才能发布。
 

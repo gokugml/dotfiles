@@ -85,8 +85,8 @@ dotfiles/
 ├── my_setup/
 │   ├── zsh/
 │   │   ├── install.sh
-│   │   ├── .zprofile          # Stage 1 生成或更新
-│   │   ├── .zshrc             # Stage 1 生成或更新
+│   │   ├── zprofile 或 .zprofile  # Stage 1 选择并生成其中一个
+│   │   ├── zshrc 或 .zshrc        # 与 zprofile 使用同一命名方案
 │   │   ├── zsh-repair-plan.md
 │   │   └── plugins.toml
 │   ├── macos/
@@ -121,13 +121,13 @@ company-dotfiles/
 
 不存在实际内容时不创建空 company 文件。详细 tooling 文件由实际工具决定，不为统一目录外观创建空 schema 或占位文件。
 
-Stage 1 根据已确认修复计划生成或更新最终 `.zprofile`、`.zshrc` 和可选 `company.zsh`；用户显式提供目标文件时优先更新这些目标，否则使用上述默认仓库位置。Stage 2 只接受与安装器固定来源一致的仓库版 Zsh；显式目标在仓库外时不得擅自复制或覆盖。必要仓库文件缺失时根安装器必须阻断真实安装，安装器 smoke test 只能在临时仓库中使用最小 fixture。
+Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 和可选 `company.zsh`；用户显式提供目标文件时优先更新这些目标，否则先让用户选择默认无前置点或有前置点命名。Stage 2 接受 `my_setup/zsh/` 中恰好一套完整来源：`zprofile` + `zshrc` 或 `.zprofile` + `.zshrc`。两套并存、跨组混搭或文件残缺时根安装器必须在确认和写入前阻断，不猜优先级、不创建另一套副本；显式目标在仓库外时不得擅自复制或覆盖。安装器 smoke test 只能在临时仓库中使用最小 fixture。
 
 ## 5. Zsh 运行时边界
 
 - 不接管 `~/.zshenv`，不设置 `ZDOTDIR`。
-- `~/.zprofile` symlink 到 `my_setup/zsh/.zprofile`。
-- `~/.zshrc` symlink 到 `my_setup/zsh/.zshrc`。
+- `~/.zprofile` symlink 到已选的 `my_setup/zsh/zprofile` 或 `my_setup/zsh/.zprofile`。
+- `~/.zshrc` symlink 到与其同组的 `my_setup/zsh/zshrc` 或 `my_setup/zsh/.zshrc`。
 - `.zshrc` 的受管加载顺序固定为 `company → personal → local`。
 - `.zshrc` 使用 `dotfiles: company`、`dotfiles: personal`、`dotfiles: local` 固定标记供安装器验证加载顺序。
 - `.zshrc` 为每个启用插件保留 `dotfiles: plugin <name>` 标记，并按合并后的 `load_order` 递增排列。

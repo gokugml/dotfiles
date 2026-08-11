@@ -1,4 +1,4 @@
 interface:
   display_name: "Stage 2：目标机配置与软件安装"
-  short_description: "按 Intel 或 Apple Silicon 原生路径安装并验证配置"
-  default_prompt: "使用 $stage-2-target-machine-configuration-and-software-migration 按当前 Mac 的原生硬件架构运行安装器并验证已确认配置。"
+  short_description: "兼容两种 Zsh 命名并按 Mac 原生架构安装验证"
+  default_prompt: "使用 $stage-2-target-machine-configuration-and-software-migration，先确认仓库中唯一完整的 Zsh 命名组，再按当前 Mac 的原生硬件架构运行安装器并验证已确认配置。"

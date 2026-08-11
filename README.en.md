@@ -8,15 +8,15 @@
 
 This public repository stores shareable personal configuration and migration capabilities for moving reviewed Zsh, Homebrew, mise, uv, and Zsh plugins to an Apple Silicon Mac. Company-specific additions belong in an optional private repository, while machine secrets live only in a local file outside every repository.
 
-The repository is currently building its Stage 1 capabilities. Stage 1 builds and tests scripts without installing anything into the developer's real HOME. Stage 2 will generate the final `my_setup/zsh/.zprofile` and `.zshrc` from the approved `zsh-repair-plan.md` and show the changes for review.
+Stage 1 applies the approved `zsh-repair-plan.md` to reviewed repository-owned Zsh files. It supports either the plain `zprofile` + `zshrc` names or the dotted `.zprofile` + `.zshrc` names. Stage 2 does not generate these files; the installer resolves the one complete pair under `my_setup/zsh/` and then creates the fixed HOME startup entries.
 
 <!-- section:stages -->
 
 ## Four-stage workflow
 
 1. **Stage 0 — analyze and export.** `./dump.sh` exports software, tooling, and plugin candidates read-only. A separate Zsh Skill collects value-free structural evidence and writes a repair plan. The Export Review Skill reviews candidate configuration. Formal drafts are written only after user confirmation.
-2. **Stage 1 — build capabilities.** Build the collector, installer, internal capability modules, tests, pre-commit hook, Chinese and English documentation, and CI gates without changing the real HOME or installed software.
-3. **Stage 2 — configure and install.** Generate repository-owned Zsh files from the repair plan, review the public/company diff, then run parameterless `./install.sh`. The script shows one combined summary and asks once with a default-`N` `y/N` prompt, followed by `./install.sh verify`.
+2. **Stage 1 — apply the Zsh repair plan.** Update explicit user-provided targets when present. Otherwise, first confirm `zprofile`/`zshrc` or `.zprofile`/`.zshrc`, then apply the plan against the existing files and review the complete diff without changing the real HOME or installing software.
+3. **Stage 2 — configure and install.** Confirm that `my_setup/zsh/` contains exactly the complete pair selected in Stage 1, then run parameterless `./install.sh`. The script shows the selected sources and one combined summary, asks once with a default-`N` `y/N` prompt, and finishes with `./install.sh verify`.
 4. **Stage 3 — retire Intel software.** Start with the read-only `./install.sh retire` preview. Run `./install.sh retire --apply` only after another review and an explicit confirmation in a real TTY. Normal installation and `verify` never trigger retirement.
 
 <!-- section:layout -->
@@ -31,6 +31,8 @@ dotfiles/
 ├── install.sh                    # only public installation entry point
 ├── my_setup/
 │   ├── zsh/install.sh            # internal Zsh/symlink/plugin module
+│   ├── zsh/{zprofile,zshrc}       # default plain Stage 1 sources
+│   │   or zsh/{.zprofile,.zshrc}  # dotted sources when selected
 │   ├── tooling/install.sh        # internal mise/uv module
 │   └── macos/install.sh          # internal Homebrew module
 ├── tests/smoke.zsh
@@ -67,6 +69,8 @@ DOTFILES_COMPANY_DIR=/absolute/path/to/company-dotfiles ./install.sh
 - Personal configuration always lives in this public repository under `my_setup/`.
 - Company configuration is an optional, separate Git worktree containing only company additions.
 - Local configuration is fixed at `~/.config/dotfiles/local/parameters.zsh` and contains only secrets, accounts, and machine paths—not software or plugin choices.
+- Personal Zsh sources must contain exactly one complete pair: `my_setup/zsh/zprofile` + `zshrc`, or `my_setup/zsh/.zprofile` + `.zshrc`. Two complete pairs, mixed names, or an incomplete pair stop before confirmation and writes; the installer never guesses a priority or creates an alias copy.
+- HOME always uses `~/.zprofile` and `~/.zshrc`, symlinked to the resolved repository files from the same pair.
 - `.zshrc` uses the markers `dotfiles: company → dotfiles: personal → dotfiles: local` to preserve load order and the `company < personal < local` override priority.
 - Every enabled plugin has a `dotfiles: plugin <name>` marker in `.zshrc`, ordered by the merged `load_order` value.
 - Personal and company configuration each have at most one `zsh/plugins.toml`. Plugins pin a 40-character commit, and personal wins same-name conflicts.
@@ -95,7 +99,7 @@ Managed symlinks expose mise configuration under `~/.config/mise/conf.d/`, with 
 .githooks/pre-commit
 ```
 
-The full smoke test uses a temporary repository and HOME to verify default `N`, backups, symlinks, idempotency, company/personal merging, local-value non-disclosure, read-only retirement, and non-TTY blocking. Quick mode checks syntax, Markdown, section parity between the Chinese and English documentation, safety boundaries, and forbidden Intel runtime paths.
+The full smoke test uses a temporary repository and HOME to verify both plain and dotted repository source names, ambiguity/mixed-name blocking, default `N`, backups, symlinks, idempotency, company/personal merging, local-value non-disclosure, read-only retirement, and non-TTY blocking. Quick mode checks syntax, Markdown, section parity between the Chinese and English documentation, safety boundaries, and forbidden Intel runtime paths.
 
 The pre-commit hook never installs dependencies. It requires `gitleaks 8.30.0`, installed from the Stage 2 mise declaration, and scans the current public tree. CI uses the same pinned version to scan both the current tree and complete Git history. Release requires quick checks, the complete smoke test, and CI to pass.
 

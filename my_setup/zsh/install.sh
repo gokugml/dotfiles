@@ -14,6 +14,9 @@ typeset -gA ZSH_PLUGIN_ENABLED
 typeset -gA ZSH_PLUGIN_ORDER
 typeset -gA ZSH_PLUGIN_OWNER
 typeset -gA ZSH_PLUGIN_SEEN
+typeset -g ZSH_PERSONAL_PROFILE=''
+typeset -g ZSH_PERSONAL_RC=''
+typeset -g ZSH_PERSONAL_NAMING=''
 
 zsh_trim() {
   local value="$1"
@@ -159,6 +162,47 @@ zsh_plugin_records() {
   done | LC_ALL=C sort
 }
 
+zsh_resolve_personal_entries() {
+  local zsh_dir="$DOTFILES_PERSONAL_DIR/zsh"
+  local plain_profile="$zsh_dir/zprofile"
+  local plain_rc="$zsh_dir/zshrc"
+  local dotted_profile="$zsh_dir/.zprofile"
+  local dotted_rc="$zsh_dir/.zshrc"
+  local resolved_profile='' resolved_rc='' resolved_naming=''
+  typeset -i plain_count=0 dotted_count=0
+
+  [[ -e "$plain_profile" || -L "$plain_profile" ]] && (( plain_count += 1 ))
+  [[ -e "$plain_rc" || -L "$plain_rc" ]] && (( plain_count += 1 ))
+  [[ -e "$dotted_profile" || -L "$dotted_profile" ]] && (( dotted_count += 1 ))
+  [[ -e "$dotted_rc" || -L "$dotted_rc" ]] && (( dotted_count += 1 ))
+
+  if (( plain_count == 2 && dotted_count == 0 )); then
+    resolved_profile="$plain_profile"
+    resolved_rc="$plain_rc"
+    resolved_naming='无前置点（zprofile + zshrc）'
+  elif (( dotted_count == 2 && plain_count == 0 )); then
+    resolved_profile="$dotted_profile"
+    resolved_rc="$dotted_rc"
+    resolved_naming='有前置点（.zprofile + .zshrc）'
+  elif (( plain_count == 2 && dotted_count == 2 )); then
+    print -u2 -- 'zsh: my_setup/zsh/ 同时存在两套完整 Zsh 来源；请只保留 zprofile + zshrc 或 .zprofile + .zshrc 中的一套'
+    return 1
+  else
+    print -u2 -- 'zsh: my_setup/zsh/ 的 Zsh 来源命名混搭或文件残缺；必须完整提供 zprofile + zshrc 或 .zprofile + .zshrc 中的一套'
+    return 1
+  fi
+
+  if [[ -n "$ZSH_PERSONAL_PROFILE" \
+    && ( "$ZSH_PERSONAL_PROFILE" != "$resolved_profile" || "$ZSH_PERSONAL_RC" != "$resolved_rc" ) ]]; then
+    print -u2 -- 'zsh: 仓库 Zsh 来源在安装摘要后发生变化；停止写入，请重新运行安装器'
+    return 1
+  fi
+
+  ZSH_PERSONAL_PROFILE="$resolved_profile"
+  ZSH_PERSONAL_RC="$resolved_rc"
+  ZSH_PERSONAL_NAMING="$resolved_naming"
+}
+
 zsh_entry_plan() {
   local target="$1"
   local source="$2"
@@ -177,21 +221,27 @@ zsh_entry_plan() {
 }
 
 zsh_plan() {
-  local profile="$DOTFILES_PERSONAL_DIR/zsh/.zprofile"
-  local rc="$DOTFILES_PERSONAL_DIR/zsh/.zshrc"
+  local profile='' rc=''
   local record name source revision enabled owner target
   typeset -i enabled_count=0
   typeset -i blocked=0
 
-  for target in "$profile" "$rc"; do
-    if [[ ! -f "$target" || -L "$target" ]]; then
-      print -u2 -- "zsh: 缺少 Stage 2 生成的 ${target#$DOTFILES_REPO_ROOT/}"
-      blocked=1
-    elif ! /bin/zsh -n "$target" >/dev/null 2>&1; then
-      print -u2 -- "zsh: ${target#$DOTFILES_REPO_ROOT/} 语法错误"
-      blocked=1
-    fi
-  done
+  if zsh_resolve_personal_entries; then
+    profile="$ZSH_PERSONAL_PROFILE"
+    rc="$ZSH_PERSONAL_RC"
+    print -- "- 仓库 Zsh 来源：$ZSH_PERSONAL_NAMING"
+    for target in "$profile" "$rc"; do
+      if [[ ! -f "$target" || -L "$target" ]]; then
+        print -u2 -- "zsh: ${target#$DOTFILES_REPO_ROOT/} 必须是普通文件且不得是 symlink"
+        blocked=1
+      elif ! /bin/zsh -n "$target" >/dev/null 2>&1; then
+        print -u2 -- "zsh: ${target#$DOTFILES_REPO_ROOT/} 语法错误"
+        blocked=1
+      fi
+    done
+  else
+    blocked=1
+  fi
 
   if (( blocked == 0 )); then
     zsh_entry_plan "$DOTFILES_TARGET_HOME/.zprofile" "$profile" || blocked=1
@@ -295,6 +345,7 @@ zsh_install_git_plugin() {
 zsh_apply() {
   local record name source revision enabled owner
 
+  zsh_resolve_personal_entries || return 1
   zsh_load_plugins || return 1
   for record in ${(f)"$(zsh_plugin_records)"}; do
     IFS='|' read -r _ name source revision enabled owner <<< "$record"
@@ -309,12 +360,12 @@ zsh_apply() {
     fi
   done
 
-  zsh_backup_and_link "$DOTFILES_TARGET_HOME/.zprofile" "$DOTFILES_PERSONAL_DIR/zsh/.zprofile" || return 1
-  zsh_backup_and_link "$DOTFILES_TARGET_HOME/.zshrc" "$DOTFILES_PERSONAL_DIR/zsh/.zshrc"
+  zsh_backup_and_link "$DOTFILES_TARGET_HOME/.zprofile" "$ZSH_PERSONAL_PROFILE" || return 1
+  zsh_backup_and_link "$DOTFILES_TARGET_HOME/.zshrc" "$ZSH_PERSONAL_RC"
 }
 
 zsh_verify_load_order() {
-  local rc="$DOTFILES_PERSONAL_DIR/zsh/.zshrc"
+  local rc="$1"
   local company_line personal_line local_line
 
   company_line="$(grep -n -m1 'dotfiles: company' "$rc" 2>/dev/null | cut -d: -f1)"
@@ -328,7 +379,7 @@ zsh_verify_load_order() {
 }
 
 zsh_verify_plugin_load_order() {
-  local rc="$DOTFILES_PERSONAL_DIR/zsh/.zshrc"
+  local rc="$1"
   local record name source revision enabled owner marker_line
   typeset -i previous_line=0
 
@@ -375,33 +426,41 @@ zsh_verify_plugin() {
 }
 
 zsh_verify() {
-  local profile="$DOTFILES_PERSONAL_DIR/zsh/.zprofile"
-  local rc="$DOTFILES_PERSONAL_DIR/zsh/.zshrc"
+  local profile='' rc=''
   local record name source revision enabled owner target
   typeset -i failed=0
 
-  for target in "$profile" "$rc"; do
-    if [[ ! -f "$target" || -L "$target" ]] || ! /bin/zsh -n "$target" >/dev/null 2>&1; then
-      print -u2 -- "verify: ${target#$DOTFILES_REPO_ROOT/} 缺失、类型错误或语法错误"
+  if zsh_resolve_personal_entries; then
+    profile="$ZSH_PERSONAL_PROFILE"
+    rc="$ZSH_PERSONAL_RC"
+    for target in "$profile" "$rc"; do
+      if [[ ! -f "$target" || -L "$target" ]] || ! /bin/zsh -n "$target" >/dev/null 2>&1; then
+        print -u2 -- "verify: ${target#$DOTFILES_REPO_ROOT/} 缺失、类型错误或语法错误"
+        failed=1
+      fi
+    done
+  else
+    failed=1
+  fi
+
+  if [[ -n "$profile" && -n "$rc" ]]; then
+    if grep -En '/usr/local|arch[[:space:]]+-x86_64|Rosetta|ZDOTDIR' "$profile" "$rc" >/dev/null 2>&1; then
+      print -u2 -- 'verify: personal Zsh 含禁止的 Intel/Rosetta/ZDOTDIR 标记'
       failed=1
     fi
-  done
-  if grep -En '/usr/local|arch[[:space:]]+-x86_64|Rosetta|ZDOTDIR' "$profile" "$rc" >/dev/null 2>&1; then
-    print -u2 -- 'verify: personal Zsh 含禁止的 Intel/Rosetta/ZDOTDIR 标记'
-    failed=1
-  fi
-  zsh_verify_load_order || failed=1
-  zsh_verify_plugin_load_order || failed=1
+    zsh_verify_load_order "$rc" || failed=1
+    zsh_verify_plugin_load_order "$rc" || failed=1
 
-  if [[ ! -L "$DOTFILES_TARGET_HOME/.zprofile" \
-    || "$(readlink "$DOTFILES_TARGET_HOME/.zprofile" 2>/dev/null)" != "$profile" ]]; then
-    print -u2 -- 'verify: ~/.zprofile 未指向 personal .zprofile'
-    failed=1
-  fi
-  if [[ ! -L "$DOTFILES_TARGET_HOME/.zshrc" \
-    || "$(readlink "$DOTFILES_TARGET_HOME/.zshrc" 2>/dev/null)" != "$rc" ]]; then
-    print -u2 -- 'verify: ~/.zshrc 未指向 personal .zshrc'
-    failed=1
+    if [[ ! -L "$DOTFILES_TARGET_HOME/.zprofile" \
+      || "$(readlink "$DOTFILES_TARGET_HOME/.zprofile" 2>/dev/null)" != "$profile" ]]; then
+      print -u2 -- "verify: ~/.zprofile 未指向已选 personal ${profile:t}"
+      failed=1
+    fi
+    if [[ ! -L "$DOTFILES_TARGET_HOME/.zshrc" \
+      || "$(readlink "$DOTFILES_TARGET_HOME/.zshrc" 2>/dev/null)" != "$rc" ]]; then
+      print -u2 -- "verify: ~/.zshrc 未指向已选 personal ${rc:t}"
+      failed=1
+    fi
   fi
 
   if [[ -n "$DOTFILES_COMPANY_DIR_RESOLVED" \
