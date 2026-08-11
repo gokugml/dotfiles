@@ -68,6 +68,9 @@ chmod 700 "$fixture_home/bin/pnpm"
 } > "$fixture_home/.zprofile"
 
 {
+  print -r -- '# Kiro CLI pre block. Keep at the top of this file.'
+  print -r -- '[[ -r "$HOME/.kiro/shell/zshrc.pre.zsh" ]] && source "$HOME/.kiro/shell/zshrc.pre.zsh"'
+  print
   print -r -- 'export PATH="/usr/local/bin:$PATH"'
   print -r -- 'export PNPM_HOME="$HOME/bin/pnpm"'
   print -r -- 'export NVM_DIR="$HOME/.nvm"'
@@ -82,6 +85,21 @@ chmod 700 "$fixture_home/bin/pnpm"
   print -r -- 'compinit'
   print -r -- 'export PROJECT_DIR="/Users/example/private"'
   print -r -- '# export ARCHFLAGS="-arch x86_64"'
+  print
+  print -r -- '# The following lines have been added by Docker Desktop to enable Docker CLI completions.'
+  print -r -- 'fpath=("$HOME/.docker/completions" "${fpath[@]}")'
+  print
+  print -r -- '# The next line updates PATH for the Google Cloud SDK.'
+  print -r -- '[[ -r "$HOME/google-cloud-sdk/path.zsh.inc" ]] && source "$HOME/google-cloud-sdk/path.zsh.inc"'
+  print -r -- '# The next line enables shell command completion for gcloud.'
+  print -r -- '[[ -r "$HOME/google-cloud-sdk/completion.zsh.inc" ]] && source "$HOME/google-cloud-sdk/completion.zsh.inc"'
+  print
+  print -r -- '# kimi-code'
+  print -r -- 'export KIMI_LOCAL_TOKEN="fixture-functional-secret"'
+  print -r -- '[[ -r "$HOME/.kimi/kimi.zsh" ]] && source "$HOME/.kimi/kimi.zsh"'
+  print
+  print -r -- '# Kiro CLI post block. Keep at the bottom of this file.'
+  print -r -- '[[ -r "$HOME/.kiro/shell/zshrc.post.zsh" ]] && source "$HOME/.kiro/shell/zshrc.post.zsh"'
 } > "$fixture_home/.zshrc"
 
 {
@@ -138,15 +156,23 @@ assert_contains '- compinit-calls-active: 1'
 assert_contains 'name=ACTIVE_API_KEY scope=exported secret-like=yes'
 assert_contains 'name=OLD_ACCESS_TOKEN scope=exported secret-like=yes'
 assert_contains 'name=PNPM_HOME path-category=$HOME/<redacted> target-kind=file'
-assert_count 1 'source-category: line 4 nvm-runtime'
+assert_count 1 'source-category: line 7 nvm-runtime'
 assert_count 2 'nvm-completion'
-assert_contains '- hardcoded-home: line 13 active=yes'
+assert_contains '- hardcoded-home: line 16 active=yes'
 assert_contains '- duplicate-excess: 1'
+assert_contains '- functional-block-count: 6'
+assert_contains 'id=kiro-cli-pre occurrence=1 order=1 phase=zshrc-pre relocation=local-integrations'
+assert_contains 'id=docker-desktop-completion occurrence=1 order=2 phase=zshrc-post relocation=local-integrations'
+assert_contains 'id=google-cloud-sdk-path occurrence=1 order=3 phase=zshrc-post relocation=local-integrations'
+assert_contains 'id=google-cloud-sdk-completion occurrence=1 order=4 phase=zshrc-post relocation=local-integrations'
+assert_contains 'id=kimi-code occurrence=1 order=5 phase=zshrc-post relocation=local-integrations'
+assert_contains 'id=kiro-cli-post occurrence=1 order=6 phase=zshrc-post relocation=local-integrations'
 
 assert_absent 'fixture-active-secret'
 assert_absent 'fixture-commented-secret'
 assert_absent '/Users/example/private'
 assert_absent "$fixture_home"
+assert_absent 'fixture-functional-secret'
 
 preflight_output="$({
   cd "$fixture_repo" || exit 1

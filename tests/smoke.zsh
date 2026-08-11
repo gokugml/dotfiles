@@ -354,8 +354,15 @@ run_full_checks() {
   {
     print -r -- 'export FIXTURE_API_TOKEN="fixture-secret-value"' # gitleaks:allow
   } > "$fixture_home/.config/dotfiles/local/parameters.zsh"
+  {
+    print -r -- '# dotfiles: generated local integrations v1'
+    print -r -- 'case "${DOTFILES_INTEGRATIONS_PHASE:-}" in'
+    print -r -- '  zshrc-post) return 0 ;;'
+    print -r -- 'esac'
+  } > "$fixture_home/.config/dotfiles/local/integrations.zsh"
   chmod 755 "$fixture_home/.config/dotfiles/local"
   chmod 644 "$fixture_home/.config/dotfiles/local/parameters.zsh"
+  chmod 644 "$fixture_home/.config/dotfiles/local/integrations.zsh"
   {
     print -r -- '# old rc'
   } > "$fixture_home/.zshrc"
@@ -407,6 +414,8 @@ run_full_checks() {
     || fail 'local 目录权限不是 0700'
   [[ "$(stat -f '%Lp' "$fixture_home/.config/dotfiles/local/parameters.zsh")" == 600 ]] \
     || fail 'parameters.zsh 权限不是 0600'
+  [[ "$(stat -f '%Lp' "$fixture_home/.config/dotfiles/local/integrations.zsh")" == 600 ]] \
+    || fail 'integrations.zsh 权限不是 0600'
   [[ "$(git -C "$fixture_repo" config --local --get core.hooksPath)" == .githooks ]] \
     || fail '未配置受管 hooksPath'
 
@@ -575,6 +584,8 @@ run_full_checks() {
 
   "$repo_root/.agents/skills/analyze-zsh-configuration/scripts/test-collect-zsh-evidence.zsh" \
     >/dev/null || fail 'Zsh 脱敏证据采集测试失败'
+  /bin/zsh "$repo_root/.agents/skills/analyze-zsh-configuration/scripts/test-zsh-functional-blocks.zsh" \
+    >/dev/null || fail 'Zsh 功能块覆盖比较测试失败'
 
   print -- 'smoke.zsh: 通过'
 }

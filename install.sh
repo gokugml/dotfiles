@@ -59,6 +59,7 @@ typeset -gr DOTFILES_TARGET_HOME="$HOME"
 typeset -gr DOTFILES_SHARED_DIR_RESOLVED="$shared_dir"
 typeset -gr DOTFILES_LOCAL_DIR="$HOME/.config/dotfiles/local"
 typeset -gr DOTFILES_LOCAL_FILE="$HOME/.config/dotfiles/local/parameters.zsh"
+typeset -gr DOTFILES_LOCAL_INTEGRATIONS_FILE="$HOME/.config/dotfiles/local/integrations.zsh"
 typeset -gr DOTFILES_PLUGIN_DIR="$HOME/.local/share/dotfiles/plugins"
 typeset -gr DOTFILES_TEST_MODE="$test_mode"
 
@@ -151,6 +152,8 @@ check_repositories() {
 
 local_plan() {
   local mode='missing'
+  local local_file local_name
+  local -a present
 
   if [[ -L "$DOTFILES_LOCAL_DIR" ]]; then
     print -u2 -- 'install.sh: local 目录不得是 symlink'
@@ -164,26 +167,36 @@ local_plan() {
     mode="$(stat -f '%Lp' "$DOTFILES_LOCAL_DIR" 2>/dev/null)"
   fi
 
-  if [[ -e "$DOTFILES_LOCAL_FILE" || -L "$DOTFILES_LOCAL_FILE" ]]; then
-    if [[ -L "$DOTFILES_LOCAL_FILE" || ! -f "$DOTFILES_LOCAL_FILE" || ! -O "$DOTFILES_LOCAL_FILE" ]]; then
-      print -u2 -- 'install.sh: parameters.zsh 必须是当前用户拥有的普通文件，且不得是 symlink'
-      return 1
+  for local_file in "$DOTFILES_LOCAL_FILE" "$DOTFILES_LOCAL_INTEGRATIONS_FILE"; do
+    local_name="${local_file:t}"
+    if [[ -e "$local_file" || -L "$local_file" ]]; then
+      if [[ -L "$local_file" || ! -f "$local_file" || ! -O "$local_file" ]]; then
+        print -u2 -- "install.sh: $local_name 必须是当前用户拥有的普通文件，且不得是 symlink"
+        return 1
+      fi
+      present+=("$local_name")
     fi
-    print -- "- local：存在；目录权限 ${mode}，安装时收敛为 0700/0600（不读取内容）"
+  done
+  if (( ${#present[@]} > 0 )); then
+    print -- "- local：${(j:、:)present} 存在；目录权限 ${mode}，安装时收敛为 0700/0600（不读取内容）"
   else
-    print -- '- local：parameters.zsh 不存在；仅创建权限为 0700 的 local 目录'
+    print -- '- local：parameters.zsh 与 integrations.zsh 均不存在；仅创建权限为 0700 的 local 目录'
   fi
 }
 
 local_apply() {
   command mkdir -p -- "$DOTFILES_LOCAL_DIR" || return 1
   chmod 700 "$DOTFILES_LOCAL_DIR" || return 1
-  if [[ -f "$DOTFILES_LOCAL_FILE" && ! -L "$DOTFILES_LOCAL_FILE" ]]; then
-    chmod 600 "$DOTFILES_LOCAL_FILE" || return 1
-  fi
+  local local_file
+  for local_file in "$DOTFILES_LOCAL_FILE" "$DOTFILES_LOCAL_INTEGRATIONS_FILE"; do
+    if [[ -f "$local_file" && ! -L "$local_file" ]]; then
+      chmod 600 "$local_file" || return 1
+    fi
+  done
 }
 
 local_verify() {
+  local local_file local_name
   if [[ ! -d "$DOTFILES_LOCAL_DIR" || -L "$DOTFILES_LOCAL_DIR" || ! -O "$DOTFILES_LOCAL_DIR" ]]; then
     print -u2 -- 'verify: local 目录缺失、类型错误或 owner 错误'
     return 1
@@ -192,31 +205,34 @@ local_verify() {
     print -u2 -- 'verify: local 目录权限必须是 0700'
     return 1
   fi
-  if [[ -e "$DOTFILES_LOCAL_FILE" || -L "$DOTFILES_LOCAL_FILE" ]]; then
-    if [[ -L "$DOTFILES_LOCAL_FILE" || ! -f "$DOTFILES_LOCAL_FILE" || ! -O "$DOTFILES_LOCAL_FILE" ]]; then
-      print -u2 -- 'verify: parameters.zsh 类型或 owner 错误'
+  for local_file in "$DOTFILES_LOCAL_FILE" "$DOTFILES_LOCAL_INTEGRATIONS_FILE"; do
+    local_name="${local_file:t}"
+    if [[ -e "$local_file" || -L "$local_file" ]]; then
+      if [[ -L "$local_file" || ! -f "$local_file" || ! -O "$local_file" ]]; then
+        print -u2 -- "verify: $local_name 类型或 owner 错误"
+        return 1
+      fi
+      if [[ "$(stat -f '%Lp' "$local_file" 2>/dev/null)" != 600 ]]; then
+        print -u2 -- "verify: $local_name 权限必须是 0600"
+        return 1
+      fi
+      /bin/zsh -n "$local_file" >/dev/null 2>&1 || {
+        print -u2 -- "verify: $local_name 语法错误（内容未输出）"
+        return 1
+      }
+    fi
+    if git -C "$DOTFILES_REPO_ROOT" ls-files --error-unmatch "$local_file" >/dev/null 2>&1; then
+      print -u2 -- "verify: $local_name 不得被公开仓库跟踪"
       return 1
     fi
-    if [[ "$(stat -f '%Lp' "$DOTFILES_LOCAL_FILE" 2>/dev/null)" != 600 ]]; then
-      print -u2 -- 'verify: parameters.zsh 权限必须是 0600'
-      return 1
-    fi
-    /bin/zsh -n "$DOTFILES_LOCAL_FILE" >/dev/null 2>&1 || {
-      print -u2 -- 'verify: parameters.zsh 语法错误（内容未输出）'
-      return 1
-    }
-  fi
-  if git -C "$DOTFILES_REPO_ROOT" ls-files --error-unmatch "$DOTFILES_LOCAL_FILE" >/dev/null 2>&1; then
-    print -u2 -- 'verify: parameters.zsh 不得被公开仓库跟踪'
-    return 1
-  fi
-  if git -C "$DOTFILES_REPO_ROOT" ls-files | grep -Eq '(^|/)parameters[.]zsh$'; then
-    print -u2 -- 'verify: 公开仓库不得跟踪任何 parameters.zsh'
+  done
+  if git -C "$DOTFILES_REPO_ROOT" ls-files | grep -Eq '(^|/)(parameters|integrations)[.]zsh$'; then
+    print -u2 -- 'verify: 公开仓库不得跟踪 local parameters.zsh 或 integrations.zsh'
     return 1
   fi
   if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" ]] \
-    && git -C "$DOTFILES_SHARED_DIR_RESOLVED" ls-files | grep -Eq '(^|/)parameters[.]zsh$'; then
-    print -u2 -- 'verify: shared 仓库不得跟踪任何 parameters.zsh'
+    && git -C "$DOTFILES_SHARED_DIR_RESOLVED" ls-files | grep -Eq '(^|/)(parameters|integrations)[.]zsh$'; then
+    print -u2 -- 'verify: shared 仓库不得跟踪 local parameters.zsh 或 integrations.zsh'
     return 1
   fi
   print -- '✓ local 类型、owner、权限与 Git 边界'

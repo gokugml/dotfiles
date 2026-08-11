@@ -1,6 +1,6 @@
 ---
 name: analyze-zsh-configuration
-description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件来源（当前 live HOME 或当前仓库目录及文件子集）的脱敏结构与运行时事实，依据 Skill 内置的 Zsh 最佳实践手册生成含证据来源、顶部结论、一览表和逐项建议的 zsh-repair-plan.md 候选。用于用户要求诊断或优化 .zshenv、.zprofile、.zshrc、.zlogin，排查 Intel/ARM 与 Homebrew 前缀、重复 compinit/source、PATH/fpath、*_HOME 功能错误、初始化顺序、变量作用域、疑似敏感项或启动性能时；不用于导出软件配置、审阅 Brewfile/tooling、生成最终 Zsh 文件或修改真实 HOME。
+description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件来源（当前 live HOME 或当前仓库目录及文件子集）的脱敏结构、第三方安装器功能块清单与运行时事实，依据 Skill 内置手册生成含证据来源、顶部结论、一览表、功能块保全清单和逐项建议的 zsh-repair-plan.md 候选。用于用户要求诊断或优化 .zshenv、.zprofile、.zshrc、.zlogin，保全 Kiro/Docker/gcloud/kimi 等软件追加块，或排查架构、PATH、补全、source、变量、敏感项和启动性能时；不用于导出软件配置、审阅 Brewfile/tooling、生成最终 Zsh 文件或修改真实 HOME。
 ---
 
 # Zsh 配置分析与修改建议
@@ -22,14 +22,15 @@ description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件�
 ## 使用内置资源
 
 - 使用 [`scripts/collect-zsh-evidence.zsh`](scripts/collect-zsh-evidence.zsh) 采集证据。始终从当前公开 Git 仓库根目录执行，必须显式传入 `--source live-home|repository`；`repository` 还必须传入 `--source-dir`，用 `--files` 限定文件子集。`--preflight` 只验证映射且不生成报告。不要用 `dump.sh` 采集 Zsh。脚本可以执行内置白名单中的只读事实检查，但不得 source 启动文件。
-- 修改采集器后运行 [`scripts/test-collect-zsh-evidence.zsh`](scripts/test-collect-zsh-evidence.zsh)；测试必须使用 `/private/tmp/` fixture，验证信号覆盖和敏感值不进入报告。
+- 使用 [`scripts/zsh-functional-blocks.zsh`](scripts/zsh-functional-blocks.zsh) 生成安全清单、构造私有 integrations 候选并执行源/目标覆盖比较。Stage 0 只调用 `inventory`；不得让 AI 读取其内部正文或把内容摘要写入报告。
+- 修改采集器或功能块工具后运行 [`scripts/test-collect-zsh-evidence.zsh`](scripts/test-collect-zsh-evidence.zsh) 和 [`scripts/test-zsh-functional-blocks.zsh`](scripts/test-zsh-functional-blocks.zsh)；测试必须使用 `/private/tmp/` fixture，验证信号覆盖、缺块失败和敏感值不进入输出。
 - 使用 [`references/zshrc-diagnostics-guide.md`](references/zshrc-diagnostics-guide.md) 作为修改建议的权威手册。先查看目录，再只读取与当前证据相关的章节；涉及多个类别时可读取多个章节。
 
 ## 遵守边界
 
 - AI 分析层不直接读取、输出或 source 用户选定的 Zsh 文件；只有内置确定性脚本可以扫描结构，并采集架构、Rosetta、Homebrew 前缀、命令来源类别和二进制架构等只读事实。AI 只读取脚本生成的 `tmp/zsh-evidence.md`。
 - 采集脚本不得启动会加载真实配置的交互/登录 shell，不得执行 `brew doctor`、包清单导出、工具健康检查、网络请求或性能 profiling；未测量的运行时效果必须保留为证据缺口。
-- 不读取 Keychain、shell 历史、完整环境或 `~/.config/dotfiles/local/parameters.zsh` 内容。
+- 不读取 Keychain、shell 历史、完整环境或 `~/.config/dotfiles/local/parameters.zsh`、`integrations.zsh` 内容。
 - 不修改真实 Zsh、symlink、软件或服务，不调用 `install.sh`，不安装或退役项目。
 - 不把本机绝对路径、shared 仓库专属信息、账号、远程地址或敏感值写入 public 修复计划。
 - 不把推断当作证据。未知 source 表达式、被脱敏路径和无法确认的工具所有权统一标记 `manual`。
@@ -66,8 +67,8 @@ description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件�
 - 采集失败时停止，不绕过脚本安全检查，不回读真实 Zsh 文件补证据。
 - 确认唯一证据文件为 `tmp/zsh-evidence.md`，且 Git 未跟踪它。
 - 确认报告顶部的 `source-origin`、`source-root-category`、`selected-files` 与预检及用户选择一致，且每个启动文件章节的 `source-input-name` 与 `input-map` 一致。不一致时删除本次证据并停止，不生成修复计划。
-- 确认报告只包含以下白名单证据：文件类型/权限/symlink 类别、语法结果、活动与注释标记计数、变量名与导出作用域、source 类别、`*_HOME` 目标类别与文件类型、脱敏 PATH/fpath 及其精确重复计数、硬件 ARM 能力、采集进程架构、Rosetta、Homebrew 前缀、白名单命令的来源类别与二进制架构。
-- 确认报告不包含变量值、alias/function body、原始 source 路径、完整命令输出、账号或本机绝对路径。活动行只表示“非注释结构信号”，不自动证明该分支在启动时执行。
+- 确认报告只包含以下白名单证据：文件类型/权限/symlink 类别、语法结果、活动与注释标记计数、变量名与导出作用域、source 类别、`*_HOME` 目标类别与文件类型、脱敏 PATH/fpath 及其精确重复计数、第三方功能块的稳定分类 ID/出现序号/相对顺序/行范围/加载阶段/迁移资格、硬件 ARM 能力、采集进程架构、Rosetta、Homebrew 前缀、白名单命令的来源类别与二进制架构。
+- 确认报告不包含变量值、alias/function body、功能块正文或内容摘要、原始 source 路径、完整命令输出、账号或本机绝对路径。活动行只表示“非注释结构信号”，不自动证明该分支在启动时执行。
 - 继承 PATH/fpath 和命令来源只代表采集进程环境，不代表新登录 shell 的完整启动结果；不得把它们自动归因于 `.zshrc`。
 
 ### 3. 选择手册章节
@@ -111,6 +112,11 @@ tmp/shared/zsh/zsh-repair-plan.md    # 仅存在明确共享增量时
 - input-map-check: pass
 - output-ownership: personal/shared（与证据来源独立）
 
+## 功能块保全清单
+| 源逻辑文件 | 块 ID/出现序号 | 源顺序 | 加载阶段 | Stage 1 处置 |
+|---|---|---:|---|---|
+| .zprofile/.zshrc | 安全分类 ID，不复制原注释或正文 | 1..N | zprofile-pre/post 或 zshrc-pre/post | preserve-target/migrate-local-integrations/manual/retire |
+
 ## 问题一览
 | 优先级 | 证据等级 | 类别/位置 | 结论与影响 | 归属 | 下一步 |
 |---|---|---|---|---|---|
@@ -131,6 +137,7 @@ tmp/shared/zsh/zsh-repair-plan.md    # 仅存在明确共享增量时
 - `保留` 只用于语法通过、缺失文件无须创建、注释配置不生效等非行动项；可出现在一览表，但不伪装成 P3 问题。
 - 合并同一根因的信号，通常保持 5–8 个详细发现；不要为每个变量各写一条，也不要用“可能冲突”凑数。
 - 结论、一览表和详细发现必须一致；顶部不得出现详细部分无法追溯的新结论。
+- 功能块保全清单必须逐项覆盖证据中的每个 `functional-block`，并保持源文件、出现序号和相对顺序。已识别且 `relocation=local-integrations` 的块默认建议迁移到单一 `~/.config/dotfiles/local/integrations.zsh`；未分类块只能 `preserve-target` 或 `manual`。只有用户明确要求退役某块时才允许标为 `retire`，不得静默删除。
 
 为每个可行动发现写明：
 
@@ -155,6 +162,7 @@ tmp/shared/zsh/zsh-repair-plan.md    # 仅存在明确共享增量时
 | 安全 | 活动和注释的疑似凭证标记、文件权限；不读取值，不把“疑似”写成“真实凭证” |
 | 架构 | 硬件 ARM 能力、采集进程架构、Rosetta、Homebrew 前缀、关键命令架构；不得把采集进程说成用户终端，只有组合证据完整时才确认架构混用 |
 | 功能 | `*_HOME` 的 target-kind；指向文件可列功能错误，动态或缺失保持 manual 并要求官方语义核验 |
+| 第三方块 | 每个功能块的 ID、出现序号、顺序、加载阶段和迁移资格；没有正文证据时只给保全处置，不猜实现 |
 | 补全 | 活动/注释的 `compinit` 引用与调用、fpath 与框架顺序、重复 source 类别；`autoload` 引用不是调用，结构重复不等于已测量执行次数 |
 | PATH | 多点赋值、硬编码 HOME、继承 PATH/fpath 精确重复数；脱敏标签相同不等于真实路径相同，继承重复也不能自动归因于启动文件 |
 | 作用域 | `scope=exported/shell` 与配置归属；只根据标识符不能判断子进程需求 |
@@ -168,6 +176,7 @@ tmp/shared/zsh/zsh-repair-plan.md    # 仅存在明确共享增量时
 - 分开报告活动和注释的 `compinit` 引用与调用；不要把 `autoload -Uz compinit` 计作调用。存在显式调用且框架也负责补全时，指出双所有者的结构候选，并结合 fpath 顺序给最小建议。没有 profiling 时不得声称实际执行次数或毫秒收益。
 - `*_HOME target-kind=file` 必须进入一览表的功能正确性项；对具体工具先依据内置手册或官方文档核验语义，不根据变量名猜值。
 - source 类别重复时指出重复初始化候选；只有脚本提供内容指纹或运行证据时，才能声称两个文件内容相同或运行了两次。
+- 把第三方安装器块视为功能资产而不是模板噪声。即使其实现需要另行整改，也必须先在保全清单中建立 `source block → target/local/retire` 映射；未建立映射不得建议整段替换目标文件。
 - PATH/fpath 只有精确重复计数才能写“已确认重复”；多次赋值、相同脱敏标签或硬编码信号只能支持结构性整改建议。
 - 不把 NVM 与 Bun 并存自动升级为多版本管理器争用；必须确认它们竞争同一命令、版本选择或 PATH 所有权。
 - 对敏感信息只写“疑似敏感变量需要迁移/轮换”，不写值；local 只记录参数类别。
@@ -182,6 +191,7 @@ tmp/shared/zsh/zsh-repair-plan.md    # 仅存在明确共享增量时
 - 证据报告的 `source-origin`、`selected-files`、`source-input-name` 与预检映射、用户选择及修复计划的“证据来源”完全一致。
 - 输出路径只用于表示计划归属，没有被当作证据来源；两者不一致时已在计划中明示。
 - 顶部结论和问题一览表均存在，覆盖全部详细发现，并标注证据等级。
+- 功能块保全清单逐项覆盖证据中的全部块，顺序与加载阶段一致，没有隐式丢弃；`retire` 均有用户明确决定。
 - 已逐项检查安全、架构、功能、补全、PATH、作用域、工具职责和性能覆盖门；缺失证据已显式列出。
 - public 计划不含 shared 仓库专属信息、本机绝对路径、账号、远程地址或敏感值。
 - shared/local/retire/manual 未混入 personal 活动配置建议。

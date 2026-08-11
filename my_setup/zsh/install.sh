@@ -378,6 +378,37 @@ zsh_verify_load_order() {
   fi
 }
 
+zsh_verify_integration_loader() {
+  local file="$1"
+  local phase="$2"
+  local marker_line first_nonblank last_nonblank
+
+  marker_line="$(grep -n -F -m1 -- "# dotfiles: local-integrations $phase" "$file" 2>/dev/null | cut -d: -f1)"
+  [[ -n "$marker_line" ]] || return 0
+  grep -Fq -- "DOTFILES_INTEGRATIONS_PHASE=$phase" "$file" \
+    && grep -Fq -- 'source "$HOME/.config/dotfiles/local/integrations.zsh"' "$file" || {
+      print -u2 -- "verify: ${file:t} 的 integrations $phase loader 不完整"
+      return 1
+    }
+
+  case "$phase" in
+    *-pre)
+      first_nonblank="$(/usr/bin/awk 'NF { print NR; exit }' "$file")"
+      [[ "$marker_line" == "$first_nonblank" ]] || {
+        print -u2 -- "verify: ${file:t} 的 integrations $phase 必须是第一个非空块"
+        return 1
+      }
+      ;;
+    *-post)
+      last_nonblank="$(/usr/bin/awk 'NF { line=NR } END { print line }' "$file")"
+      (( last_nonblank - marker_line <= 6 )) || {
+        print -u2 -- "verify: ${file:t} 的 integrations $phase 必须是最后一个非空块"
+        return 1
+      }
+      ;;
+  esac
+}
+
 zsh_verify_plugin_load_order() {
   local rc="$1"
   local record name source revision enabled owner marker_line
@@ -449,6 +480,10 @@ zsh_verify() {
       failed=1
     fi
     zsh_verify_load_order "$rc" || failed=1
+    zsh_verify_integration_loader "$profile" zprofile-pre || failed=1
+    zsh_verify_integration_loader "$profile" zprofile-post || failed=1
+    zsh_verify_integration_loader "$rc" zshrc-pre || failed=1
+    zsh_verify_integration_loader "$rc" zshrc-post || failed=1
     zsh_verify_plugin_load_order "$rc" || failed=1
 
     if [[ ! -L "$DOTFILES_TARGET_HOME/.zprofile" \

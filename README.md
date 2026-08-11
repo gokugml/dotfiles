@@ -8,14 +8,14 @@
 
 这个公开仓库保存可分享的个人配置和迁移能力，用于把经过确认的 Zsh、Homebrew、mise、uv 与 Zsh 插件迁移到 Apple Silicon Mac。与他人共用的配置增量放在可选的独立 shared 仓库，本机密钥只放在仓库外的 local 文件。
 
-Stage 1 根据已确认的 `zsh-repair-plan.md` 应用并审查仓库版 Zsh，可使用无前置点的 `zprofile` + `zshrc`，也可使用有前置点的 `.zprofile` + `.zshrc`。Stage 2 不生成这些文件；安装器从 `my_setup/zsh/` 中解析唯一完整的一组来源，再建立固定的 HOME 启动入口。
+Stage 1 根据已确认的 `zsh-repair-plan.md` 应用并审查仓库版 Zsh，可使用无前置点的 `zprofile` + `zshrc`，也可使用有前置点的 `.zprofile` + `.zshrc`。它在写入前后逐块比较源 Zsh 与目标加本机 integrations，缺块即失败。Stage 2 不生成这些文件；安装器从 `my_setup/zsh/` 中解析唯一完整的一组来源，再建立固定的 HOME 启动入口。
 
 <!-- section:stages -->
 
 ## 四阶段流程
 
-1. **Stage 0：分析与导出。** `./dump.sh` 只读导出软件、tooling 和插件候选；独立 Zsh Skill 采集不含值的结构证据并生成修复计划；导出 Review Skill 审阅候选配置。用户确认后才写入正式草稿。
-2. **Stage 1：应用 Zsh 修复计划。** 优先更新用户显式提供的目标；否则先确认使用 `zprofile`/`zshrc` 还是 `.zprofile`/`.zshrc`，再以现有内容为基线应用计划并审查完整 diff，不修改真实 HOME 或安装软件。
+1. **Stage 0：分析与导出。** `./dump.sh` 只读导出软件、tooling 和插件候选；独立 Zsh Skill 采集不含值的结构证据与第三方功能块保全清单并生成修复计划；导出 Review Skill 审阅候选配置。用户确认后才写入正式草稿。
+2. **Stage 1：应用 Zsh 修复计划。** 优先更新用户显式提供的目标；否则先确认使用 `zprofile`/`zshrc` 还是 `.zprofile`/`.zshrc`，再用官方安装工具在隔离 HOME 拉取最新版 Oh My Zsh 模板、应用计划、逐块比较源与目标并审查完整 diff。它不修改真实 Zsh 入口，只能在单独确认后备份并更新固定的 local parameters/integrations 文件，也不安装软件。
 3. **Stage 2：配置与安装。** 确认 `my_setup/zsh/` 中恰好存在 Stage 1 选择的一套完整 Zsh 来源，再运行无参数 `./install.sh`。脚本展示所选来源和整体摘要，使用默认 `N` 的一次 `y/N` 确认，完成后运行 `./install.sh verify`。
 4. **Stage 3：Intel 退役。** 先用 `./install.sh retire` 只读预览；只有再次审查并在真实 TTY 中确认后，才运行 `./install.sh retire --apply`。普通安装和 `verify` 永远不会触发退役。
 
@@ -68,10 +68,10 @@ DOTFILES_SHARED_DIR=/absolute/path/to/shared-dotfiles ./install.sh
 
 - personal 固定保存在公开仓库的 `my_setup/`。
 - shared 是可选的独立 Git 工作树，只保存与他人共用的配置增量。
-- local 固定为 `~/.config/dotfiles/local/parameters.zsh`，只保存密钥值、账号和单机路径，不保存软件或插件选择。
+- local 固定在 `~/.config/dotfiles/local/`：`parameters.zsh` 保存密钥值、账号和单机路径；可选 `integrations.zsh` 保存第三方安装器追加的 Zsh 功能块。二者都不保存软件或插件期望状态。
 - personal Zsh 仓库来源必须恰好完整存在一组：`my_setup/zsh/zprofile` + `zshrc`，或 `my_setup/zsh/.zprofile` + `.zshrc`。两套并存、跨组混搭或文件残缺都会在安装确认和写入前阻断；安装器不会猜优先级或创建另一套副本。
 - HOME 端始终使用 `~/.zprofile` 和 `~/.zshrc`，分别 symlink 到已解析的同组仓库来源。
-- `.zshrc` 使用 `dotfiles: shared → dotfiles: personal → dotfiles: local` 三个标记维持加载顺序和 `shared < personal < local` 覆盖优先级。
+- `.zshrc` 使用 `dotfiles: shared → dotfiles: personal → dotfiles: local` 维持声明式覆盖顺序；`integrations.zsh` 通过 `dotfiles: local-integrations <phase>` 在 zprofile/zshrc 的 pre/post 阶段加载。
 - 每个启用插件在 `.zshrc` 中使用 `dotfiles: plugin <name>` 标记，并按合并后的 `load_order` 递增排列。
 - personal/shared 各自最多一份 `zsh/plugins.toml`；插件固定 40 位 commit，相同名称由 personal 决定。
 - personal/shared 分别声明 Brewfile 和 tooling；相同 Homebrew 项目由 personal 决定。
@@ -84,7 +84,7 @@ mise 配置通过受管 symlink 进入 `~/.config/mise/conf.d/`，shared 文件�
 
 - 安装器只在原生 macOS `arm64` 会话执行真实安装；测试模式只允许 `/private/tmp` 或 `/tmp` 下的隔离 HOME。
 - 替换现有 `.zprofile` 或 `.zshrc` 前，会创建保留文件类型或 symlink 目标的带时间戳副本。
-- `parameters.zsh` 的父目录权限必须为 `0700`，文件权限必须为 `0600`。脚本不会显示、复制、记录、持久化或哈希其内容，只执行无输出语法检查和正常 shell 加载。
+- local 父目录权限必须为 `0700`，存在的 `parameters.zsh` 和 `integrations.zsh` 权限必须为 `0600`。脚本不会显示、复制、记录、持久化或哈希其内容，只执行无输出语法检查和正常 shell 加载。
 - public 输出不得包含 shared 仓库专属信息、密钥或本机绝对路径。
 - 服务、数据库、Homebrew service 和 GUI 应用数据只报告、人工处理，不自动启停、迁移或删除。
 - retire 只处理同时具备明确 ARM 替代路径、版本/架构证据且没有 service/data 记录的精确 Intel formula；未知项目、项目依赖、NVM、Python Framework、全局 runtime、旧插件和整个 `/usr/local` 默认保留。

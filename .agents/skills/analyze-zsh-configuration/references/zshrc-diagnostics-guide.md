@@ -235,6 +235,8 @@ unset private_config
 
 无条件 `source` 一个被 Git 忽略或由安装器生成的文件，会让全新环境在启动时直接报错。
 
+第三方安装器可能同时要求“文件最前”和“文件最后”加载。需要把这类块迁出公开配置时，使用单一私有 `integrations.zsh` 的 `zprofile-pre`、`zprofile-post`、`zshrc-pre`、`zshrc-post` 分支，并在对应启动文件的首尾条件加载；不要把所有块合并成一次末尾 source。迁移前后用确定性工具逐块核对正文、阶段和同阶段顺序，不能只依赖 `zsh -n`。
+
 ### 6.3 始终正确引用路径
 
 变量可能包含空格或通配符。引用文件和目录时应使用双引号：
@@ -433,6 +435,7 @@ Keychain 是可选增强，不是当前 `install.sh` 的前置条件。
 公开仓库 my_setup/：personal 配置
 独立 shared 仓库：可选共享增量
 ~/.config/dotfiles/local/parameters.zsh：本机密钥和私有参数
+~/.config/dotfiles/local/integrations.zsh：可选第三方安装器功能块
 ```
 
 `my_setup/` 可以包含：
@@ -450,7 +453,7 @@ Keychain 是可选增强，不是当前 `install.sh` 的前置条件。
 - 某台机器独有的应用数据目录；
 - 未脱敏的诊断输出、shell 历史或完整环境变量。
 
-`.zshrc` 的加载顺序是 shared → personal → local。shared 和 local 缺失时，personal 仍应正常启动。
+声明式配置的加载顺序是 shared → personal → parameters；integrations 的 pre/post 分支包围对应启动文件，不构成新的覆盖层。shared 和 local 缺失时，personal 仍应正常启动。
 
 ## 13. 安装脚本与本地副本
 
@@ -591,6 +594,7 @@ file "$(command -v example-cli)"
 - [ ] 仓库当前内容、Git 历史和诊断输出不含敏感信息；
 - [ ] 文档示例只使用 `$HOME`、`example.*` 和虚构变量名；
 - [ ] 安装步骤具备 Zsh 本地副本、验证和破坏性操作确认；
+- [ ] 源 `.zprofile` 与 `.zshrc` 中每个第三方功能块都在目标文件或正确阶段加载的私有 integrations 中逐字节覆盖，未批准的缺块、变化和错序为零；
 - [ ] 性能优化前后有可重复的测量结果。
 
 ## 17. 参考资料

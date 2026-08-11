@@ -60,7 +60,7 @@ Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 �
 | 公开仓库 | 用户当前 Git 仓库 | `dump.sh`、根 `install.sh`、三个内部能力安装模块、Skills、文档、测试、pre-commit、CI 和 `my_setup/` | shared 仓库专属内容、本机密钥 |
 | personal | 公开仓库固定 `my_setup/` | 可分享的 Zsh、Brewfile、tooling、插件和软件期望状态 | shared 增量、本机密钥 |
 | shared | 可选独立共享仓库 | 与他人共用的 Zsh、Brewfile、tooling 和插件增量 | 通用脚本、纯个人偏好、本机密钥 |
-| local | `~/.config/dotfiles/local/parameters.zsh` | 密钥值、账号、机器路径和不可公开参数 | Brewfile、软件清单、插件选择、普通共享配置 |
+| local | `~/.config/dotfiles/local/parameters.zsh` 与 `integrations.zsh` | 前者保存密钥值、账号和机器参数；后者保存源机器上由第三方安装器追加且不能公开的功能块 | Brewfile、软件清单、插件选择、普通共享配置 |
 
 `personal configuration` 是语义分类；它在磁盘上的固定映射是：
 
@@ -116,7 +116,8 @@ shared-dotfiles/
 ```text
 ~/.config/dotfiles/
 └── local/
-    └── parameters.zsh
+    ├── parameters.zsh
+    └── integrations.zsh   # 可选；单一四阶段第三方功能块文件
 ```
 
 不存在实际内容时不创建空 shared 文件。详细 tooling 文件由实际工具决定，不为统一目录外观创建空 schema 或占位文件。
@@ -128,13 +129,16 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - 不接管 `~/.zshenv`，不设置 `ZDOTDIR`。
 - `~/.zprofile` symlink 到已选的 `my_setup/zsh/zprofile` 或 `my_setup/zsh/.zprofile`。
 - `~/.zshrc` symlink 到与其同组的 `my_setup/zsh/zshrc` 或 `my_setup/zsh/.zshrc`。
-- `.zshrc` 的受管加载顺序固定为 `shared → personal → local`。
+- 声明式配置的受管覆盖顺序固定为 `shared → personal → parameters`。`integrations.zsh` 是阶段钩子，不是第四个覆盖层。
+- 单一可选 `integrations.zsh` 通过 `zprofile-pre`、`zprofile-post`、`zshrc-pre`、`zshrc-post` 四个分支加载：pre 是对应启动文件第一个非空块，post 是最后一个非空块。
+- 对应目标文件使用 `dotfiles: local-integrations <phase>` 固定标记；缺少本阶段功能块时不添加空分支或空 loader。
 - `.zshrc` 使用 `dotfiles: shared`、`dotfiles: personal`、`dotfiles: local` 固定标记供安装器验证加载顺序。
 - `.zshrc` 为每个启用插件保留 `dotfiles: plugin <name>` 标记，并按合并后的 `load_order` 递增排列。
 - shared 只有一个可选 `zsh/shared.zsh`，必须能够在 personal 配置之前独立加载。
-- local 只有一个可选 `parameters.zsh`，在 personal 配置之后加载。
-- shared 或 local 文件缺失时静默跳过；存在但语法错误时 `install.sh verify` 失败。
+- local 参数只有一个可选 `parameters.zsh`，在 personal 配置之后加载；可执行第三方块不得混入该文件。
+- shared、parameters 或 integrations 文件缺失时静默跳过；存在但语法错误时 `install.sh verify` 失败。
 - Stage 1 以目标现有内容为基线做最小修改，尽可能保留修复计划未涉及的 Oh My Zsh 官方模板注释、分区、选项和初始化形态；不得为了模板升级而整文件替换。
+- Stage 0 必须为源 `.zprofile`/`.zshrc` 中识别到的第三方功能块生成脱敏保全清单；Stage 1 写入前后都必须用同一确定性工具比较源文件与目标文件加 `integrations.zsh`，缺块、正文变化、阶段错误或同阶段错序时失败。
 - 日常配置只激活当前机器原生 Homebrew：Intel 使用 `/usr/local`，Apple Silicon 使用 `/opt/homebrew`；不得同时激活另一架构前缀，不得包含 Rosetta fallback 或 ARM→Intel wrapper。
 
 `parameters.zsh` 可以直接保存密钥值和其他不可公开参数。默认安全要求：
@@ -143,6 +147,8 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - 不进入 Git、云同步、普通备份、日志、报告、测试 fixture 或哈希输入；
 - Zsh Skill 的采集脚本只提取脱敏结构信号，`dump.sh` 不读取 Zsh 文件；两者都不采集 `parameters.zsh` 内容。`install.sh` 不打印、复制或持久化内容，只允许无输出的语法检查和正常 shell 加载；
 - Keychain 是可选增强，不是安装前置条件。
+
+`integrations.zsh` 只保存由确定性工具从已确认源文件逐字节迁移的第三方功能块，权限同样为 `0600`，不得进入 Git、报告或内容摘要输入。已有 `parameters.zsh` 或 `integrations.zsh` 在 Stage 1 获准修改前必须先创建同目录 `0600` 时间戳副本；无法证明安全合并时保留源块在目标文件并标为 `manual`，不得覆盖本机文件。
 
 ## 6. 软件与插件边界
 
@@ -153,7 +159,7 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - 原生命令如果会维护或写入仓库外状态，Stage 0 必须退化为只读元数据检查。
 - personal 与 shared 分别声明自己的 Brewfile 和 tooling；完全相同的项目去重，可覆盖字段按 shared → personal 处理，管理器或版本所有权不兼容时停止并报告。
 - personal 与 shared 各自最多使用一份 `plugins.toml`，同一条目内记录来源、固定 revision、启用状态和加载顺序。
-- local 不定义软件、版本或插件。
+- local 不定义软件、版本或插件期望状态；`integrations.zsh` 只保留安装器已经追加的机器级加载块。
 
 ## 7. 命令契约
 
@@ -194,7 +200,8 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - 所有启用 Zsh 文件通过 `zsh -n`；
 - login 与 interactive shell 无加载错误；
 - symlink 指向 `my_setup/zsh/`；
-- 加载顺序为 shared → personal → local；
+- 声明式加载顺序为 shared → personal → parameters，integrations 的 pre/post 阶段和固定标记位置正确；
+- Stage 1 的源 `.zprofile` + `.zshrc` 功能块清单全部由目标 Zsh 或 `integrations.zsh` 精确覆盖，除非用户逐项批准 retire；
 - local 权限正确且未被 Git 跟踪；
 - Homebrew 与 PATH 符合原生硬件架构：Intel 使用 `/usr/local`，Apple Silicon 使用 `/opt/homebrew`，另一架构前缀不活跃；
 - Apple Silicon 的 Rosetta 会话不会回退使用 Intel Homebrew；

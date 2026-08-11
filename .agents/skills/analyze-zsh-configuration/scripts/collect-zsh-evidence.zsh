@@ -9,6 +9,7 @@ umask 077
 
 readonly repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
 readonly current_dir="${PWD:A}"
+readonly functional_blocks="${0:A:h}/zsh-functional-blocks.zsh"
 
 if [[ -z "$repo_root" || "$repo_root" != "$current_dir" ]]; then
   print -u2 -- 'collect-zsh-evidence.zsh: 必须从当前公开 Git 仓库根目录运行'
@@ -621,6 +622,7 @@ zsh_file_summary() {
   print -r -- "- plugin-markers-active: $active_plugin_hits" >> "$report"
   if [[ -f "$file" ]]; then
     zsh_file_signals "$file" >> "$report"
+    /bin/zsh "$functional_blocks" inventory --file "$file" --logical-file "$label" >> "$report"
   fi
   print >> "$report"
 }

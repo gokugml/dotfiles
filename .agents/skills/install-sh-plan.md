@@ -145,7 +145,7 @@ shared-dotfiles/
 8. Intel Mac 使用 `/usr/local` Homebrew，Apple Silicon 原生会话使用 `/opt/homebrew` Homebrew，安装 personal/shared Brewfile、tooling、mise/uv 和固定 revision 插件；
 9. 调用同一脚本的验证逻辑。
 
-安装器不得打印、复制或持久化 `parameters.zsh` 内容；只允许检查文件类型、owner、权限和无输出语法。
+安装器不得打印、复制或持久化 `parameters.zsh`、`integrations.zsh` 内容；只允许检查文件类型、owner、权限和无输出语法。
 
 ### 6.2 验证
 
@@ -153,7 +153,7 @@ shared-dotfiles/
 
 - Zsh 语法和两种常见启动场景；
 - symlink 目标；
-- shared → personal → local 加载顺序；
+- integrations pre → shared → personal → parameters → integrations post 阶段；
 - local `0700/0600` 权限及未被 Git 跟踪；
 - Brewfile、tooling 和 `plugins.toml` 语法；
 - 命令实际路径、版本和架构；
@@ -172,12 +172,13 @@ shared-dotfiles/
 - `my_setup/zsh/zprofile` + `zshrc` 与 `.zprofile` + `.zshrc` 是两种受支持的 personal 仓库命名；必须恰好完整存在一组，且没有另一组残留；
 - HOME 启动入口始终是 `~/.zprofile` 和 `~/.zshrc`，分别指向已解析的仓库来源；
 - shared 最多一个 `zsh/shared.zsh`；
-- local 最多一个 `parameters.zsh`；
-- `.zshrc` 固定按 shared → personal → local 执行；
+- local 最多各一个 `parameters.zsh` 与 `integrations.zsh`；
+- `.zshrc` 的声明式配置固定按 shared → personal → parameters 执行，单一 integrations 通过 zprofile/zshrc 的 pre/post 阶段包围；
 - `.zshrc` 使用 `dotfiles: shared`、`dotfiles: personal`、`dotfiles: local` 三个固定标记让安装器验证上述顺序；
+- 使用 `dotfiles: local-integrations <phase>` 标记让安装器验证存在的 pre/post loader 位置；
 - `.zshrc` 为每个启用插件保留 `dotfiles: plugin <name>` 标记，并按合并后的 `load_order` 递增排列；
 - shared 不依赖 personal 中后续才定义的 alias/function；
-- local 只保存不可公开参数，不保存软件选择。
+- `parameters.zsh` 只保存不可公开参数；`integrations.zsh` 只保存第三方安装器功能块；local 不保存软件期望状态。
 
 ### 7.2 插件
 
@@ -214,7 +215,7 @@ personal/shared 各自最多一份 `zsh/plugins.toml`。每个插件条目至少
 2. Stage 0 分别使用 Zsh 分析 Skill、`dump.sh` 和导出配置 Review Skill，并先为每个工具给出一句话描述；
 3. Stage 1 应用 Zsh 修复计划并优先更新用户显式目标；
 4. Stage 2 按原生硬件架构选择 Intel `/usr/local` 或 Apple Silicon `/opt/homebrew`，无参数 `install.sh` 会在确认后安装；
-5. local 可以保存密钥值但永不进入 Git；
+5. local parameters 可以保存密钥值，local integrations 可以保存第三方功能块，二者都永不进入 Git；
 6. Stage 3 只适用于 Apple Silicon，且 `retire` 不会被普通安装触发；
 7. 服务和数据需要人工处理。
 
@@ -242,7 +243,8 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 - 临时 HOME 中的 Zsh 副本和 symlink；
 - 安装幂等与 `verify`；
 - personal/shared 插件和软件配置合并；
-- local 权限及不读取密钥内容；
+- local 两个可选文件的权限、语法及不读取正文；
+- 源/目标 Zsh 功能块清单和缺块失败回归测试；
 - `retire` 只读、非 TTY 阻断和未知数据保护；
 - public 工作树密钥/shared 仓库专属信息扫描；
 - 使用固定版本扫描器检查公开仓库当前内容和完整 Git 历史；

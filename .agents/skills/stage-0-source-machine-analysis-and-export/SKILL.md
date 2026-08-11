@@ -1,6 +1,6 @@
 ---
 name: stage-0-source-machine-analysis-and-export
-description: 编排源机器 Stage 0：运行 dump.sh 导出软件/tooling/plugin 候选，调用独立 Zsh 分析 Skill 生成文件修改建议，再调用独立导出 Review Skill 为每个工具先给出一句话描述并完成 AI 审阅、自检和一次用户确认，最后只写入获准草稿。用于用户要求“分析当前 Zsh 并 dump 本地配置”、盘点源 Mac 或为 macOS dotfiles 迁移准备候选配置时；不直接承担 Zsh 诊断或导出文件逐项 Review，也不安装、退役、commit 或 push。
+description: 编排源机器 Stage 0：运行 dump.sh 导出软件/tooling/plugin 候选，调用独立 Zsh 分析 Skill 生成含第三方功能块保全清单的修改建议，再调用独立导出 Review Skill 为每个工具先给出一句话描述并完成 AI 审阅、自检和一次用户确认，最后只写入获准草稿。用于用户要求分析当前 Zsh、保全软件安装器追加块、dump 本地配置、盘点源 Mac 或为 macOS dotfiles 迁移准备候选配置时；不直接承担 Zsh 诊断或导出文件逐项 Review，也不安装、退役、commit 或 push。
 ---
 
 # Stage 0：源机器分析与配置导出编排
@@ -29,8 +29,8 @@ dump.sh → Zsh 分析 Skill → 导出配置 Review Skill
 
 ## 遵守硬边界
 
-- 不直接读取、输出或 source 真实 Zsh 文件；Zsh 内容只由子 Skill 的脱敏采集脚本处理。
-- 不读取 Keychain、shell 历史、完整环境或 `~/.config/dotfiles/local/parameters.zsh` 内容。
+- 不直接读取、输出或 source 真实 Zsh 文件；Zsh 内容只由子 Skill 的脱敏采集脚本处理。第三方功能块只交接安全 ID、出现序号、顺序、行范围、阶段和处置，不交接正文或内容摘要。
+- 不读取 Keychain、shell 历史、完整环境或 `~/.config/dotfiles/local/parameters.zsh`、`integrations.zsh` 内容。
 - 不修改真实 Zsh、symlink、软件、服务或应用数据，不调用 `install.sh`。
 - 不在 Stage 0 生成最终 `.zprofile`、`.zshrc` 或 `shared.zsh`。
 - 不创建远程仓库，不改变可见性，不 commit 或 push。
@@ -88,7 +88,7 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 
 - `tmp/zsh-evidence.md`；
 - personal 和可选 shared 的 `zsh-repair-plan.md` 候选；
-- Zsh 发现摘要、证据缺口和自检结果。
+- Zsh 发现摘要、逐块保全清单、证据缺口和自检结果。
 
 必须在 `dump.sh` 完成后运行，避免导出脚本的候选清理删除 Zsh 修复计划。子 Skill 失败时停止并精确清理本次受管输出；不要改由本 Skill 直接读取真实 Zsh。
 
@@ -106,6 +106,7 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 - personal/shared 无重复或所有权冲突，shared 内容未进入 public。
 - public 输出不含本机绝对路径、邮箱、账号、敏感值或私有/内部/带凭证的远程地址；允许配置所需且已审阅的公开插件 source。
 - Zsh Skill 只生成修复计划，Review Skill 只修改导出候选，均未越权。
+- Zsh 证据中的每个功能块在修复计划中恰有一个处置；源文件、出现序号、相对顺序和加载阶段一致，`retire` 均能追溯到用户明确决定。
 - tooling 版本、插件 revision 和每个直接期望项目的六字段 `AI-REVIEW` 完整，首字段是一句话工具描述。
 - 未经审阅的机器快照没有直接成为正式配置；未知项均标记 `manual`。
 - 正式目录、真实 HOME、软件、服务和 Git 历史尚未被本次流程修改。
@@ -116,7 +117,7 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 
 展示：
 
-1. Zsh 修改建议摘要和证据缺口；
+1. Zsh 修改建议摘要、功能块保全清单和证据缺口；
 2. 导出配置的逐项调整摘要和 manual 项；每个工具先显示一句话描述，再显示修改级别和建议；
 3. public/shared 正式目标；
 4. 正式目录到候选目录的全部新增、修改和删除 diff；

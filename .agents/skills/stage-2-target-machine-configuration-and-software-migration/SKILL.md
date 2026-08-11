@@ -36,7 +36,7 @@ description: 编排 macOS 目标机器 Stage 2：读取 Stage 1 已确认、使�
 - public 仓库 `my_setup/zsh/zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中 Stage 1 已选且唯一完整的一组，以及可选 shared `zsh/shared.zsh`；
 - Stage 0 已确认的软件、tooling 和 `plugins.toml` 配置；
 - 已按 [`install-sh-plan.md`](../install-sh-plan.md) 实现并验证的根 `install.sh` 与内部模块；
-- 目标机器的只读架构、路径和 Zsh 入口元数据，但不读取 local 参数内容。
+- 目标机器的只读架构、路径和 Zsh 入口元数据，但不读取 local parameters 或 integrations 正文。
 
 Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 安装器只管理 `my_setup/zsh/` 中恰好一套完整来源。无前置点组和有前置点组都受支持，不设置隐式优先级：两套同时存在、跨组混搭或任一组残缺时，在安装确认和任何写入前停止。Stage 1 只更新了仓库外显式目标时，报告映射缺口并停止；不要复制、改名或生成另一套文件来迁就安装器。
 
@@ -80,7 +80,7 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 
 - 不生成、编辑或重写任何仓库版或显式目标 Zsh 文件；发现内容问题时返回 Stage 1。
 - 不直接编辑、替换或重写真实 `~/.zprofile`、`~/.zshrc`；真实入口只允许由获准后的 `install.sh` 管理。
-- 不读取、显示、复制、记录或持久化 `~/.config/dotfiles/local/parameters.zsh` 内容，只检查路径、文件类型、权限和无输出语法结果。
+- 不读取、显示、复制、记录或持久化 `~/.config/dotfiles/local/parameters.zsh`、`integrations.zsh` 内容，只检查路径、文件类型、权限和无输出语法结果。
 - 不把 shared 仓库专属内容、本机绝对路径、账号或密钥写入 public 仓库。
 - 不覆盖与安装范围重叠的用户未确认修改；输入发生变化时重新计划。
 - 不启停服务，不迁移数据库、Homebrew service 或 GUI 应用数据，不清理未知软件、项目 runtime 或另一架构的数据目录。
@@ -96,7 +96,7 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 3. 确认 `install.sh` 能力的测试、pre-commit 和 CI 已完成，根安装器及三个内部模块存在。
 4. 检查所有已确认 personal/shared Brewfile、tooling 与插件配置存在且可解析；缺少工具版本、命令来源或目录语义时运行允许的只读查询。
 5. 通过只读系统查询判定原生硬件、Rosetta 状态、预期 Homebrew 前缀和安装器兼容性。
-6. 记录 local 文件是否存在及其权限，不读取内容。
+6. 记录 local `parameters.zsh`、`integrations.zsh` 是否存在及其权限，不读取内容。
 
 只有经过允许的只读查询后，仍会影响精确写入目标、安装安全、架构选择、敏感边界或来源唯一性的缺口，才阻止对应安装动作。单个工具的版本或目录证据缺口不阻止无关预检，也不能在查询前阻止 `install.sh` 计划阶段。不要在 Stage 2 生成文件来绕过真实安全缺口。
 
@@ -134,8 +134,8 @@ Stage 1 可以独立更新用户显式提供的任意 Zsh 目标，但 Stage 2 �
 
 - 所有启用 Zsh 文件通过 `zsh -n`，login 与 interactive shell 无加载错误；
 - `~/.zprofile` 和 `~/.zshrc` symlink 分别精确指向已选的 public `zprofile`/`zshrc` 或 `.zprofile`/`.zshrc`；
-- shared → personal → local 顺序正确，personal 独占 Oh My Zsh/补全初始化；
-- local 父目录为 `0700`、文件为 `0600`，未被 Git 跟踪且内容未泄露；
+- integrations pre → shared → personal → parameters → integrations post 阶段正确，personal 独占 Oh My Zsh/补全初始化；
+- local 父目录为 `0700`，存在的 `parameters.zsh`、`integrations.zsh` 为 `0600`，未被 Git 跟踪且内容未泄露；
 - Intel Mac 的 Homebrew 和受管命令来自 `/usr/local`，Apple Silicon 来自 `/opt/homebrew`，没有活动的另一架构 Homebrew 前缀；
 - Apple Silicon 的关键二进制为 ARM 或受支持的 Universal；Intel 的关键二进制与 Intel 原生架构匹配；
 - mise、uv、插件和其他命令来自预期路径与版本；
