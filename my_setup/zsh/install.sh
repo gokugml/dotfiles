@@ -230,6 +230,10 @@ zsh_plan() {
     profile="$ZSH_PERSONAL_PROFILE"
     rc="$ZSH_PERSONAL_RC"
     print -- "- 仓库 Zsh 来源：$ZSH_PERSONAL_NAMING"
+    print -- "- symlink source：$profile"
+    print -- "  target：$DOTFILES_TARGET_HOME/.zprofile；action：备份冲突入口后建立 symlink"
+    print -- "- symlink source：$rc"
+    print -- "  target：$DOTFILES_TARGET_HOME/.zshrc；action：备份冲突入口后建立 symlink"
     for target in "$profile" "$rc"; do
       if [[ ! -f "$target" || -L "$target" ]]; then
         print -u2 -- "zsh: ${target#$DOTFILES_REPO_ROOT/} 必须是普通文件且不得是 symlink"
@@ -259,9 +263,11 @@ zsh_plan() {
         target="$DOTFILES_PLUGIN_DIR/$name"
       fi
       if [[ -e "$target" ]]; then
-        print -- "- plugin $name：校验/固定 $revision（$owner）"
+        print -- "- plugin source：$source@$revision（$owner）"
+        print -- "  target：$target；action：校验 origin、工作树并固定 revision"
       else
-        print -- "- plugin $name：安装固定 revision $revision（$owner）"
+        print -- "- plugin source：$source@$revision（$owner）"
+        print -- "  target：$target；action：clone 并固定 revision"
       fi
     done
     print -- "- 启用插件：$enabled_count 个；同名冲突由 personal 决定"
@@ -475,8 +481,8 @@ zsh_verify() {
   fi
 
   if [[ -n "$profile" && -n "$rc" ]]; then
-    if grep -En '/usr/local|arch[[:space:]]+-x86_64|Rosetta|ZDOTDIR' "$profile" "$rc" >/dev/null 2>&1; then
-      print -u2 -- 'verify: personal Zsh 含禁止的 Intel/Rosetta/ZDOTDIR 标记'
+    if grep -En 'arch[[:space:]]+-x86_64|Rosetta fallback|ZDOTDIR' "$profile" "$rc" >/dev/null 2>&1; then
+      print -u2 -- 'verify: personal Zsh 含禁止的 Rosetta fallback 或 ZDOTDIR 标记'
       failed=1
     fi
     zsh_verify_load_order "$rc" || failed=1

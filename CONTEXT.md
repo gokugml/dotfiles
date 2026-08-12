@@ -54,7 +54,7 @@ Stage 1 通过独立 Skill 把已确认的 `zsh-repair-plan.md` 应用到用户�
 通过独立 Review Skill 审阅当前仓库 `tmp/` 中由 `dump.sh` 已导出的 Brewfile、tooling 和插件候选，补充结构化 AI 评论。它不运行采集、不分析 Zsh 文件、不执行正式写入。
 
 **安装（Install）**：
-Stage 2 通过无参数 `install.sh` 从 `my_setup/zsh/` 中唯一完整的无前置点或有前置点来源组备份并建立固定的 HOME Zsh 入口 symlink，再按当前机器原生硬件架构把 personal/shared 声明的全部配置、软件、runtime 和插件安装到精确目标。Apple Silicon 的 Rosetta 会话不得回退使用 Intel Homebrew；旧 Intel 项可以保留，但须进入 Intel 退役交接清单且不得成为受管目标。
+Stage 2 在每台目标机只读取当前 checkout 的根安装器、必需 `my_setup/macos/`、`my_setup/tooling/` 和可选 `my_setup/zsh/`，按原生硬件架构把声明的配置、软件、runtime 和插件安装到精确目标。它不读取 Stage 0/1 或 `zsh-repair-plan.md`；启用 Zsh 时才从唯一完整命名组备份并建立 HOME symlink。Apple Silicon 的 Rosetta 会话不得回退使用 Intel Homebrew；旧 Intel 项可以保留，但须进入 Intel 退役交接清单且不得成为受管目标。
 
 **退役（Retire）**：
 Stage 3 只在 Apple Silicon 上读取 Intel 退役交接清单作为线索，通过 `install.sh retire` 实时重新盘点和预览，并通过 `install.sh retire --apply` 删除已有 ARM 替代或已明确淘汰的旧 Intel 软件；Intel Mac 不进入 Stage 3。

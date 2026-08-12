@@ -8,7 +8,7 @@
 
 这个公开仓库保存可分享的个人配置和迁移能力，用于把经过确认的 Zsh、Homebrew、mise、uv 与 Zsh 插件迁移到 Apple Silicon Mac。与他人共用的配置增量放在可选的独立 shared 仓库，本机密钥只放在仓库外的 local 文件。
 
-Stage 1 根据已确认的 `zsh-repair-plan.md` 应用并审查仓库版 Zsh，可使用无前置点的 `zprofile` + `zshrc`，也可使用有前置点的 `.zprofile` + `.zshrc`。它在写入前后逐块比较源 Zsh 与目标加本机 integrations，缺块即失败；全部验证通过后把实际采用计划的状态更新为 `Stage 1 已应用`。Stage 2 不生成这些文件；安装器从 `my_setup/zsh/` 中解析唯一完整的一组来源，再建立固定的 HOME 启动入口。
+Stage 1 根据已确认的 `zsh-repair-plan.md` 独立生产并审查仓库版 Zsh。Stage 2 不读取该计划或 Stage 1 状态；它在每台目标机只使用当前 checkout 的 macOS/tooling 声明和可选 Zsh 模块。启用 Zsh 时，安装器从 `my_setup/zsh/` 中解析唯一完整的一组来源并建立固定 HOME 启动入口。
 
 <!-- section:stages -->
 
@@ -16,7 +16,7 @@ Stage 1 根据已确认的 `zsh-repair-plan.md` 应用并审查仓库版 Zsh，�
 
 1. **Stage 0：分析与导出。** `./dump.sh` 只读导出软件、tooling 和插件候选；独立 Zsh Skill 采集不含值的结构证据与第三方功能块保全清单并生成修复计划；导出 Review Skill 审阅候选配置。用户确认后才写入正式草稿。
 2. **Stage 1：应用 Zsh 修复计划。** 优先更新用户显式提供的目标；否则先确认使用 `zprofile`/`zshrc` 还是 `.zprofile`/`.zshrc`，再用官方安装工具在隔离 HOME 拉取最新版 Oh My Zsh 模板、应用计划、逐块比较源与目标并审查完整 diff。全部目标验证通过后，实际采用的计划更新为 `> 状态：Stage 1 已应用`。它不修改真实 Zsh 入口，只能在单独确认后备份并更新固定的 local parameters/integrations 文件，也不安装软件。
-3. **Stage 2：配置与安装。** 确认 `my_setup/zsh/` 中恰好存在 Stage 1 选择的一套完整 Zsh 来源，再运行无参数 `./install.sh`。脚本展示所有精确目标和整体摘要，使用默认 `N` 的一次 `y/N` 确认，并用 `./install.sh verify` 检查全部 symlink、软件、runtime 和插件是否安装到原生目标。Apple Silicon 上的 Intel 残留写入本机 `intel_to_be_retired.tsv`，不因残留本身判定安装失败。
+3. **Stage 2：配置与安装。** 在目标机 checkout 根 `install.sh`、`my_setup/macos/`、`my_setup/tooling/` 和可选 `my_setup/zsh/`，再运行无参数 `./install.sh`；不需要 Stage 0/1 交接。脚本展示所有精确目标和整体摘要，使用默认 `N` 的一次 `y/N` 确认，并用 `./install.sh verify` 检查全部启用声明是否安装到原生目标。Apple Silicon 上的 Intel 残留写入本机 `intel_to_be_retired.tsv`，不因残留本身判定安装失败。
 4. **Stage 3：Intel 退役。** 读取 `intel_to_be_retired.tsv` 作为线索，再用 `./install.sh retire` 实时重新盘点和只读预览；只有再次审查并在真实 TTY 中确认后，才运行 `./install.sh retire --apply`。普通安装和 `verify` 永远不会触发退役。
 
 <!-- section:layout -->
@@ -31,7 +31,7 @@ dotfiles/
 ├── install.sh                    # 唯一公开安装入口
 ├── my_setup/
 │   ├── zsh/install.sh            # 内部 Zsh/symlink/plugin 模块
-│   ├── zsh/{zprofile,zshrc}       # Stage 1 默认无前置点来源
+│   ├── zsh/{zprofile,zshrc}       # Stage 2 可选 Zsh 模块
 │   │   或 zsh/{.zprofile,.zshrc}  # 用户选择的有前置点来源
 │   ├── tooling/install.sh        # 内部 mise/uv 模块
 │   └── macos/install.sh          # 内部 Homebrew 模块

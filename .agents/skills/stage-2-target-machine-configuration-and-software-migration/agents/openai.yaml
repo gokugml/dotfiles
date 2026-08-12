@@ -1,4 +1,4 @@
 interface:
-  display_name: "Stage 2：目标机完整安装与验证"
-  short_description: "将全部配置和软件安装到原生目标，并生成 Intel 退役交接清单"
-  default_prompt: "使用 $stage-2-target-machine-configuration-and-software-migration，将全部 symlink、软件、runtime 和插件安装到当前系统原生目标，并生成可选 Intel 退役交接清单。"
+  display_name: "Stage 2：从仓库部署目标机"
+  short_description: "独立部署 checkout 中的 macOS、tooling 与可选 Zsh 配置"
+  default_prompt: "使用 $stage-2-target-machine-configuration-and-software-migration，从当前 checkout 独立配置这台 macOS 并验证所有原生安装目标。"

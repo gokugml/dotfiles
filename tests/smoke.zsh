@@ -133,10 +133,19 @@ quick_checks() {
     "$repo_root/my_setup/zsh/.zprofile" \
     "$repo_root/my_setup/zsh/.zshrc"; do
     [[ -e "$file" ]] || continue
-    if grep -En '/usr/local|arch[[:space:]]+-x86_64|Rosetta|ZDOTDIR' "$file" >/dev/null 2>&1; then
-      fail "最终 Zsh 文件含禁止的 Intel/Rosetta/ZDOTDIR 标记：${file#$repo_root/}"
+    if grep -En 'arch[[:space:]]+-x86_64|Rosetta fallback|ZDOTDIR' "$file" >/dev/null 2>&1; then
+      fail "最终 Zsh 文件含禁止的 Rosetta fallback/ZDOTDIR 标记：${file#$repo_root/}"
     fi
   done
+  grep -Fq 'hw.optional.arm64' "$repo_root/my_setup/zsh/zprofile" \
+    || fail '可移植 zprofile 未按原生硬件选择 Homebrew'
+  grep -Fq '/opt/homebrew' "$repo_root/my_setup/zsh/zprofile" \
+    || fail '可移植 zprofile 缺少 Apple Silicon 原生前缀'
+  grep -Fq '/usr/local' "$repo_root/my_setup/zsh/zprofile" \
+    || fail '可移植 zprofile 缺少 Intel 原生前缀'
+  grep -Fq '不依赖 Stage 0、Stage 1、`zsh-repair-plan.md`' \
+    "$repo_root/.agents/skills/stage-2-target-machine-configuration-and-software-migration/SKILL.md" \
+    || fail 'Stage 2 Skill 仍未声明独立 checkout 输入'
 
   grep -Fq 'tmp/' "$repo_root/.gitignore" || fail 'tmp/ 未被 Git ignore'
   grep -Fq '不读取或分析 Zsh 启动文件' "$repo_root/.agents/skills/install-sh-plan.md" \
@@ -154,12 +163,13 @@ quick_checks() {
 
 write_fake_tools() {
   local bin_dir="$1"
+  local brew_prefix="${2:-/opt/homebrew}"
 
   command mkdir -p -- "$bin_dir"
   {
     print -r -- '#!/bin/zsh'
     print -r -- 'if [[ "$1" == --version ]]; then print -- "Homebrew 9.9.9-test"; exit 0; fi'
-    print -r -- 'if [[ "$1" == --prefix ]]; then print -- /opt/homebrew; exit 0; fi'
+    print -r -- "if [[ \"\$1\" == --prefix ]]; then print -- $brew_prefix; exit 0; fi"
     print -r -- 'if [[ "$1" == bundle ]]; then'
     print -r -- '  for arg in "$@"; do'
     print -r -- '    if [[ "$arg" == --file=* && "$*" == *" dump "* ]]; then'
@@ -199,8 +209,12 @@ write_fake_intel_brew() {
     print -r -- '#!/bin/zsh'
     print -r -- 'case "$*" in'
     print -r -- '  "--prefix") print -- /usr/local ;;'
+    print -r -- '  "--prefix ast-grep") print -- /usr/local/opt/ast-grep ;;'
+    print -r -- '  "--prefix unknown-intel") print -- /usr/local/opt/unknown-intel ;;'
     print -r -- '  "list --formula -1") print -- ast-grep; print -- unknown-intel ;;'
+    print -r -- '  "list --versions --formula") print -- "ast-grep 1.0.0"; print -- "unknown-intel 2.0.0" ;;'
     print -r -- '  "list --cask -1") print -- unknown-gui ;;'
+    print -r -- '  "list --versions --cask") print -- "unknown-gui 3.0.0" ;;'
     print -r -- '  "services list") print -- "Name Status User File" ;;'
     print -r -- '  uninstall*) print -r -- "$*" >> "$HOME/uninstall.log" ;;'
     print -r -- 'esac'
@@ -314,10 +328,13 @@ write_shared_fixture() {
 
 run_full_checks() {
   local test_root fixture_repo fixture_home fixture_bin shared_repo dump_repo dump_home intel_brew
-  local output default_output apply_output verify_output retire_output retire_apply_output
+  local output default_output apply_output verify_output handoff_output retire_output retire_apply_output
   local dotted_output ambiguous_output mixed_output profile_link_before rc_link_before
   local before_status after_status profile_backup_count rc_backup_count home_before home_after
-  local plugin_revision
+  local plugin_revision handoff_file handoff_before handoff_after handoff_backup foreign_output cleanup_output
+  local repo_state_output symlink_state_output external_state_dir
+  local minimal_repo minimal_home minimal_bin minimal_output intel_home intel_bin intel_output
+  local rosetta_home rosetta_output
 
   test_root="$(mktemp -d /private/tmp/dotfiles-smoke.XXXXXX)" || fail '无法创建隔离测试目录'
   SMOKE_TEST_ROOT="$test_root"
@@ -379,7 +396,10 @@ run_full_checks() {
       DOTFILES_INSTALL_TEST_MODE=1 \
       DOTFILES_SHARED_DIR="$shared_repo" \
       ./install.sh </dev/null > "$default_output" 2>&1
-  ) || fail '默认 N 场景执行失败'
+  ) || {
+    sed -n '1,280p' "$default_output" >&2
+    fail '默认 N 场景执行失败'
+  }
   assert_contains "$default_output" '仓库 Zsh 来源：无前置点（zprofile + zshrc）'
   assert_contains "$default_output" '已取消，未执行任何安装'
   assert_absent "$default_output" 'fixture-secret-value'
@@ -449,6 +469,108 @@ run_full_checks() {
   }
   assert_contains "$verify_output" 'install.sh verify: 通过'
   assert_absent "$verify_output" 'fixture-secret-value'
+
+  handoff_file="$fixture_home/.local/state/dotfiles/intel_to_be_retired.tsv"
+  handoff_output="$test_root/handoff.out"
+  (
+    cd "$fixture_repo" || exit 1
+    HOME="$fixture_home" \
+      PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 \
+      DOTFILES_SHARED_DIR="$shared_repo" \
+      DOTFILES_TEST_INTEL_BREW="$intel_brew" \
+      ./install.sh verify > "$handoff_output" 2>&1
+  ) || {
+    sed -n '1,300p' "$handoff_output" >&2
+    fail 'Intel 退役交接 verify 失败'
+  }
+  assert_contains "$handoff_output" 'A. 安装完整性：通过'
+  assert_contains "$handoff_output" 'B. Intel 退役交接：通过'
+  [[ -f "$handoff_file" && ! -L "$handoff_file" ]] || fail '未生成受管 Intel 退役交接文件'
+  [[ "$(stat -f '%Lp' "${handoff_file:h}")" == 700 ]] || fail 'Intel 交接父目录权限不是 0700'
+  [[ "$(stat -f '%Lp' "$handoff_file")" == 600 ]] || fail 'Intel 交接文件权限不是 0600'
+  [[ "$(sed -n '1p' "$handoff_file")" == '# dotfiles-intel-retirement-handoff-v1' ]] \
+    || fail 'Intel 交接文件缺少固定标记'
+  [[ "$(sed -n '2p' "$handoff_file")" == $'kind\tmanager\tname\tversion\tpath\tarchitecture\treason' ]] \
+    || fail 'Intel 交接 TSV schema 错误'
+  grep -Fq $'formula\thomebrew\tast-grep\t1.0.0\t/usr/local/opt/ast-grep' "$handoff_file" \
+    || {
+      sed -n '1,80p' "$handoff_file" >&2
+      fail 'Intel 交接缺少精确 formula 项'
+    }
+  grep -Fq $'cask\thomebrew\tunknown-gui\t3.0.0\t/usr/local/Caskroom/unknown-gui' "$handoff_file" \
+    || fail 'Intel 交接缺少保留 cask 项'
+  assert_absent "$handoff_file" 'fixture-secret-value'
+  handoff_before="$(cksum "$handoff_file")"
+  (
+    cd "$fixture_repo" || exit 1
+    HOME="$fixture_home" PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_SHARED_DIR="$shared_repo" \
+      DOTFILES_TEST_INTEL_BREW="$intel_brew" ./install.sh verify >/dev/null 2>&1
+  ) || fail 'Intel 交接第二次 verify 失败'
+  handoff_after="$(cksum "$handoff_file")"
+  [[ "$handoff_before" == "$handoff_after" ]] || fail 'Intel 交接文件不是确定性稳定输出'
+
+  repo_state_output="$test_root/repo-state.out"
+  if (
+    cd "$fixture_repo" || exit 1
+    HOME="$fixture_home" PATH="$fixture_bin:/usr/bin:/bin" \
+      XDG_STATE_HOME="$fixture_repo/.forbidden-state" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_SHARED_DIR="$shared_repo" \
+      DOTFILES_TEST_INTEL_BREW="$intel_brew" ./install.sh verify > "$repo_state_output" 2>&1
+  ); then
+    fail '安装器允许把 Intel 交接状态写入 public checkout'
+  fi
+  assert_contains "$repo_state_output" '状态目录不得位于 public checkout 内'
+  [[ ! -e "$fixture_repo/.forbidden-state/dotfiles/intel_to_be_retired.tsv" ]] \
+    || fail '阻断后仍在 public checkout 写入了 Intel 交接文件'
+
+  handoff_backup="$test_root/known-handoff.tsv"
+  command cp -p -- "$handoff_file" "$handoff_backup"
+  print -r -- 'foreign-state-must-not-be-overwritten' > "$handoff_file"
+  foreign_output="$test_root/foreign-handoff.out"
+  if (
+    cd "$fixture_repo" || exit 1
+    HOME="$fixture_home" PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_SHARED_DIR="$shared_repo" \
+      DOTFILES_TEST_INTEL_BREW="$intel_brew" ./install.sh verify > "$foreign_output" 2>&1
+  ); then
+    fail '安装器覆盖了未知同名 Intel 交接文件'
+  fi
+  assert_contains "$foreign_output" '同名状态文件不属于安装器'
+  command mv -f -- "$handoff_backup" "$handoff_file"
+
+  cleanup_output="$test_root/handoff-cleanup.out"
+  (
+    cd "$fixture_repo" || exit 1
+    HOME="$fixture_home" PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_SHARED_DIR="$shared_repo" \
+      ./install.sh verify > "$cleanup_output" 2>&1
+  ) || fail '无 Intel 残留清理 verify 失败'
+  [[ ! -e "$handoff_file" ]] || fail '无 Intel 残留时保留了旧交接文件'
+
+  external_state_dir="$test_root/external-state"
+  command mkdir -p -- "$external_state_dir"
+  {
+    print -r -- '# dotfiles-intel-retirement-handoff-v1'
+    print -r -- $'kind\tmanager\tname\tversion\tpath\tarchitecture\treason'
+  } > "$external_state_dir/intel_to_be_retired.tsv"
+  command rmdir -- "${handoff_file:h}"
+  command ln -s -- "$external_state_dir" "${handoff_file:h}"
+  symlink_state_output="$test_root/symlink-state.out"
+  if (
+    cd "$fixture_repo" || exit 1
+    HOME="$fixture_home" PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_SHARED_DIR="$shared_repo" \
+      ./install.sh verify > "$symlink_state_output" 2>&1
+  ); then
+    fail '安装器允许通过 symlink 状态目录清理 Intel 交接文件'
+  fi
+  assert_contains "$symlink_state_output" '状态目录不得是 symlink'
+  [[ -f "$external_state_dir/intel_to_be_retired.tsv" ]] \
+    || fail '安装器通过 symlink 状态目录删除了外部文件'
+  command rm -f -- "${handoff_file:h}"
+  command mkdir -p -- "${handoff_file:h}"
 
   before_status="$(git -C "$fixture_repo" status --short)"
   retire_output="$test_root/retire.out"
@@ -554,6 +676,87 @@ run_full_checks() {
   [[ "$(readlink "$fixture_home/.zprofile")" == "$profile_link_before" \
     && "$(readlink "$fixture_home/.zshrc")" == "$rc_link_before" ]] \
     || fail '混搭来源场景改动了 HOME Zsh 入口'
+
+  minimal_repo="$test_root/minimal-repo"
+  minimal_home="$test_root/minimal-home"
+  minimal_bin="$test_root/minimal-bin"
+  command mkdir -p -- "$minimal_repo/my_setup" "$minimal_home"
+  command cp -- "$repo_root/install.sh" "$minimal_repo/"
+  command cp -R -- "$repo_root/my_setup/macos" "$repo_root/my_setup/tooling" "$minimal_repo/my_setup/"
+  chmod 700 "$minimal_repo/install.sh" \
+    "$minimal_repo/my_setup/macos/install.sh" "$minimal_repo/my_setup/tooling/install.sh"
+  {
+    print -r -- 'brew "ast-grep"'
+    print -r -- 'brew "mise"'
+    print -r -- 'brew "uv"'
+  } > "$minimal_repo/my_setup/macos/Brewfile"
+  git -C "$minimal_repo" init -q
+  git -C "$minimal_repo" add .
+  write_fake_tools "$minimal_bin" /opt/homebrew
+
+  minimal_output="$test_root/minimal-install.out"
+  (
+    cd "$minimal_repo" || exit 1
+    print -r -- y | HOME="$minimal_home" PATH="$minimal_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_TEST_NATIVE_ARCH=arm64 \
+      DOTFILES_TEST_PROCESS_ARCH=arm64 ./install.sh > "$minimal_output" 2>&1
+  ) || {
+    sed -n '1,320p' "$minimal_output" >&2
+    fail 'macOS+tooling 最小 checkout 安装失败'
+  }
+  assert_contains "$minimal_output" '模块：macOS=启用，tooling=启用，Zsh=未checkout'
+  assert_contains "$minimal_output" '未 checkout，跳过 Zsh、plugin 与 HOME Zsh 入口'
+  assert_contains "$minimal_output" 'A. 安装完整性：通过'
+  assert_contains "$minimal_output" 'B. Intel 退役交接：通过'
+  [[ -L "$minimal_home/.config/mise/conf.d/20-dotfiles-10-public.toml" ]] \
+    || fail '最小 checkout 未建立 mise 配置 symlink'
+  [[ -L "$minimal_home/.config/uv/uv.toml" ]] \
+    || fail '最小 checkout 未建立 uv 配置 symlink'
+  [[ ! -e "$minimal_home/.zprofile" && ! -e "$minimal_home/.zshrc" ]] \
+    || fail '最小 checkout 意外创建 Zsh 入口'
+  [[ ! -e "$minimal_home/.config/dotfiles/local" ]] \
+    || fail '最小 checkout 意外创建 local Zsh 目录'
+  [[ -z "$(git -C "$minimal_repo" config --local --get core.hooksPath 2>/dev/null)" ]] \
+    || fail '未 checkout hook 时仍修改了 hooksPath'
+  [[ ! -e "$minimal_home/.local/state/dotfiles/intel_to_be_retired.tsv" ]] \
+    || fail '无 Intel 残留的最小 checkout 生成了交接文件'
+
+  intel_home="$test_root/intel-home"
+  intel_bin="$test_root/intel-bin"
+  command mkdir -p -- "$intel_home"
+  write_fake_tools "$intel_bin" /usr/local
+  intel_output="$test_root/intel-install.out"
+  (
+    cd "$minimal_repo" || exit 1
+    print -r -- y | HOME="$intel_home" PATH="$intel_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_TEST_NATIVE_ARCH=x86_64 \
+      DOTFILES_TEST_PROCESS_ARCH=x86_64 ./install.sh > "$intel_output" 2>&1
+  ) || {
+    sed -n '1,320p' "$intel_output" >&2
+    fail 'Intel 原生目标隔离安装失败'
+  }
+  assert_contains "$intel_output" '/usr/local/bin/brew（prefix /usr/local）'
+  assert_contains "$intel_output" 'target：/usr/local/Cellar/ast-grep'
+  assert_contains "$intel_output" 'Intel Mac：不生成 Intel 退役交接，Stage 3 不适用'
+  assert_contains "$intel_output" 'install.sh verify: 通过'
+  [[ ! -e "$intel_home/.local/state/dotfiles/intel_to_be_retired.tsv" ]] \
+    || fail 'Intel Mac 生成了 Intel 退役交接文件'
+
+  rosetta_home="$test_root/rosetta-home"
+  command mkdir -p -- "$rosetta_home"
+  rosetta_output="$test_root/rosetta.out"
+  if (
+    cd "$minimal_repo" || exit 1
+    HOME="$rosetta_home" PATH="$minimal_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_TEST_NATIVE_ARCH=arm64 \
+      DOTFILES_TEST_PROCESS_ARCH=x86_64 DOTFILES_TEST_TRANSLATED=1 \
+      ./install.sh </dev/null > "$rosetta_output" 2>&1
+  ); then
+    fail 'Apple Silicon Rosetta 会话未在写入前阻断'
+  fi
+  assert_contains "$rosetta_output" '必须从原生 arm64 会话运行'
+  assert_contains "$rosetta_output" '摘要包含阻断项，未请求确认，也未执行写入'
+  [[ ! -e "$rosetta_home/.config/mise" ]] || fail 'Rosetta 阻断后仍写入 tooling'
 
   dump_repo="$test_root/dump-repo"
   dump_home="$test_root/dump-home"

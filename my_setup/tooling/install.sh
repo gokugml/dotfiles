@@ -191,17 +191,35 @@ tooling_managed_link_plan() {
   local target="$1"
   local source="$2"
   if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
-    print -- "- ${target#$DOTFILES_TARGET_HOME/}：symlink 已正确"
+    print -- "- symlink source：$source"
+    print -- "  target：$target；action：保持正确 symlink"
   elif [[ -e "$target" || -L "$target" ]]; then
     print -u2 -- "tooling: 受管路径已存在且不是期望 symlink，拒绝覆盖：$target"
     return 1
   else
-    print -- "- ${target#$DOTFILES_TARGET_HOME/}：建立受管 symlink"
+    print -- "- symlink source：$source"
+    print -- "  target：$target；action：建立受管 symlink"
+  fi
+}
+
+tooling_mise_command() {
+  if [[ "$DOTFILES_TEST_MODE" == 1 ]]; then
+    print -r -- "${commands[mise]:-}"
+  else
+    print -r -- "$DOTFILES_HOMEBREW_PREFIX/bin/mise"
+  fi
+}
+
+tooling_uv_command() {
+  if [[ "$DOTFILES_TEST_MODE" == 1 ]]; then
+    print -r -- "${commands[uv]:-}"
+  else
+    print -r -- "$DOTFILES_HOMEBREW_PREFIX/bin/uv"
   fi
 }
 
 tooling_plan() {
-  local record owner file target uv_config
+  local record owner file target uv_config tool version
   typeset -i mise_count=0
   typeset -i blocked=0
 
@@ -220,6 +238,11 @@ tooling_plan() {
     blocked=1
   elif tooling_load_mise_tools; then
     print -- "- mise：$mise_count 个配置文件，合并为 ${#TOOLING_MISE_VERSION} 个固定工具；同名由 personal 决定"
+    for tool in ${(ok)TOOLING_MISE_VERSION}; do
+      version="$TOOLING_MISE_VERSION[$tool]"
+      print -- "- runtime source：mise $tool@$version（$TOOLING_MISE_OWNER[$tool]）"
+      print -- "  target：${MISE_DATA_DIR:-$DOTFILES_TARGET_HOME/.local/share/mise}/installs（由 mise where $tool@$version 精确验证）"
+    done
   else
     blocked=1
   fi
@@ -234,6 +257,10 @@ tooling_plan() {
   fi
   if tooling_load_python_versions; then
     print -- "- uv Python：${(j:, :)${(ok)TOOLING_PYTHON_OWNER}}"
+    for version in ${(ok)TOOLING_PYTHON_OWNER}; do
+      print -- "- runtime source：uv Python $version（$TOOLING_PYTHON_OWNER[$version]）"
+      print -- "  target：${UV_PYTHON_INSTALL_DIR:-$DOTFILES_TARGET_HOME/.local/share/uv/python}（uv managed）"
+    done
   else
     blocked=1
   fi
@@ -258,14 +285,16 @@ tooling_create_managed_link() {
 }
 
 tooling_apply() {
-  local record owner file target uv_config version tool
+  local record owner file target uv_config version tool mise_command uv_command
   local -a versions mise_specs
 
-  (( $+commands[mise] )) || {
+  mise_command="$(tooling_mise_command)"
+  uv_command="$(tooling_uv_command)"
+  [[ -n "$mise_command" && -x "$mise_command" ]] || {
     print -u2 -- 'tooling: mise 未安装；macos 模块应先完成 Brewfile'
     return 1
   }
-  (( $+commands[uv] )) || {
+  [[ -n "$uv_command" && -x "$uv_command" ]] || {
     print -u2 -- 'tooling: uv 未安装；macos 模块应先完成 Brewfile'
     return 1
   }
@@ -279,41 +308,44 @@ tooling_apply() {
   for tool in ${(ok)TOOLING_MISE_VERSION}; do
     mise_specs+=("${tool}@${TOOLING_MISE_VERSION[$tool]}")
   done
-  mise --no-hooks -y install "${mise_specs[@]}" || return 1
+  "$mise_command" --no-hooks -y install "${mise_specs[@]}" || return 1
 
   uv_config="$DOTFILES_PERSONAL_DIR/tooling/uv/uv.toml"
   tooling_create_managed_link "$DOTFILES_TARGET_HOME/.config/uv/uv.toml" "$uv_config" || return 1
   tooling_load_python_versions || return 1
   versions=(${(ok)TOOLING_PYTHON_OWNER})
-  uv --config-file "$uv_config" --no-progress python install "${versions[@]}"
+  "$uv_command" --config-file "$uv_config" --no-progress python install "${versions[@]}"
 }
 
 tooling_verify_binary_arch() {
-  local name="$1"
-  local path="${commands[$name]:-}"
-  [[ -n "$path" ]] || {
-    print -u2 -- "verify: $name 不在 PATH"
+  local name="$1" path="$2" expected_arch
+  [[ -n "$path" && -x "$path" ]] || {
+    print -u2 -- "verify: $name 不在原生目标路径"
     return 1
   }
   if [[ "$DOTFILES_TEST_MODE" != 1 ]]; then
-    if [[ "$path" != /opt/homebrew/* ]]; then
-      print -u2 -- "verify: $name 必须来自 /opt/homebrew"
+    if [[ "$path" != "$DOTFILES_HOMEBREW_PREFIX"/* ]]; then
+      print -u2 -- "verify: $name 必须来自 $DOTFILES_HOMEBREW_PREFIX"
       return 1
     fi
-    if ! file -L "$path" | grep -Eq 'arm64|universal binary'; then
-      print -u2 -- "verify: $name 不是 ARM 或 Universal 二进制"
+    expected_arch='x86_64|universal binary'
+    [[ "$DOTFILES_NATIVE_ARCH" == arm64 ]] && expected_arch='arm64|universal binary'
+    if ! file -L "$path" | grep -Eq "$expected_arch"; then
+      print -u2 -- "verify: $name 架构不符合 $DOTFILES_NATIVE_ARCH"
       return 1
     fi
   fi
 }
 
 tooling_verify() {
-  local record owner file target uv_config version output tool
+  local record owner file target uv_config version output tool mise_command uv_command location
   local -a mise_specs
   typeset -i failed=0
 
-  tooling_verify_binary_arch mise || failed=1
-  tooling_verify_binary_arch uv || failed=1
+  mise_command="$(tooling_mise_command)"
+  uv_command="$(tooling_uv_command)"
+  tooling_verify_binary_arch mise "$mise_command" || failed=1
+  tooling_verify_binary_arch uv "$uv_command" || failed=1
 
   for record in ${(f)"$(tooling_mise_files)"}; do
     IFS='|' read -r owner file <<< "$record"
@@ -327,11 +359,20 @@ tooling_verify() {
       failed=1
     fi
   done
-  if tooling_load_mise_tools && (( $+commands[mise] )); then
+  if tooling_load_mise_tools && [[ -x "$mise_command" ]]; then
     for tool in ${(ok)TOOLING_MISE_VERSION}; do
       mise_specs+=("${tool}@${TOOLING_MISE_VERSION[$tool]}")
+      if [[ "$DOTFILES_TEST_MODE" != 1 ]]; then
+        location="$("$mise_command" --no-hooks where "${tool}@${TOOLING_MISE_VERSION[$tool]}" 2>/dev/null)" || location=''
+        if [[ -z "$location" || ! -d "$location" ]]; then
+          print -u2 -- "verify: mise runtime ${tool}@${TOOLING_MISE_VERSION[$tool]} 没有精确安装目录"
+          failed=1
+        else
+          print -- "  mise ${tool}@${TOOLING_MISE_VERSION[$tool]} → $location"
+        fi
+      fi
     done
-    mise --no-hooks install --dry-run-code "${mise_specs[@]}" >/dev/null 2>&1 || {
+    "$mise_command" --no-hooks install --dry-run-code "${mise_specs[@]}" >/dev/null 2>&1 || {
       print -u2 -- 'verify: mise 合并配置仍有未安装的固定工具'
       failed=1
     }
@@ -346,8 +387,8 @@ tooling_verify() {
     print -u2 -- 'verify: uv 用户级配置未指向 personal uv.toml'
     failed=1
   fi
-  if tooling_load_python_versions && (( $+commands[uv] )); then
-    output="$(uv --config-file "$uv_config" --no-progress python list --only-installed --managed-python 2>/dev/null)" || {
+  if tooling_load_python_versions && [[ -x "$uv_command" ]]; then
+    output="$("$uv_command" --config-file "$uv_config" --no-progress python list --only-installed --managed-python 2>/dev/null)" || {
       print -u2 -- 'verify: 无法读取 uv managed Python 清单'
       failed=1
       output=''

@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 # Public entry point for Stage 2 installation and Stage 3 retirement.
-# Capability-specific implementation lives in my_setup/*/install.sh.
+# It consumes only the declarations in the current checkout.
 
 emulate -LR zsh
 setopt NO_UNSET PIPE_FAIL EXTENDED_GLOB
@@ -11,7 +11,7 @@ readonly script_dir="${0:A:h}"
 readonly repo_root="$(git -C "$script_dir" rev-parse --show-toplevel 2>/dev/null)"
 
 if [[ -z "$repo_root" || "$repo_root" != "$script_dir" ]]; then
-  print -u2 -- 'install.sh: 必须位于当前公开 Git 仓库根目录'
+  print -u2 -- 'install.sh: 必须位于当前公开 Git checkout 根目录'
   exit 1
 fi
 
@@ -45,12 +45,65 @@ fi
 
 typeset shared_dir=''
 if [[ -n "${DOTFILES_SHARED_DIR:-}" ]]; then
-  if [[ "${DOTFILES_SHARED_DIR}" != /* ]]; then
+  if [[ "$DOTFILES_SHARED_DIR" != /* ]]; then
     print -u2 -- 'install.sh: DOTFILES_SHARED_DIR 必须是绝对路径'
     exit 1
   fi
   shared_dir="${DOTFILES_SHARED_DIR:A}"
 fi
+
+typeset -g DOTFILES_NATIVE_ARCH=''
+typeset -g DOTFILES_PROCESS_ARCH=''
+typeset -g DOTFILES_ROSETTA_TRANSLATED=0
+typeset -g DOTFILES_HOMEBREW_PREFIX=''
+typeset -g DOTFILES_HOMEBREW_COMMAND=''
+
+detect_architecture() {
+  local hardware_arm64 translated
+
+  if [[ "$test_mode" == 1 ]]; then
+    DOTFILES_NATIVE_ARCH="${DOTFILES_TEST_NATIVE_ARCH:-arm64}"
+    DOTFILES_PROCESS_ARCH="${DOTFILES_TEST_PROCESS_ARCH:-$DOTFILES_NATIVE_ARCH}"
+    DOTFILES_ROSETTA_TRANSLATED="${DOTFILES_TEST_TRANSLATED:-0}"
+  else
+    if [[ "$(uname -s)" != Darwin ]]; then
+      print -u2 -- 'install.sh: 真实安装、验证和退役只支持 macOS'
+      return 1
+    fi
+    hardware_arm64="$(sysctl -in hw.optional.arm64 2>/dev/null)" || {
+      print -u2 -- 'install.sh: 无法读取原生硬件架构'
+      return 1
+    }
+    DOTFILES_PROCESS_ARCH="$(arch 2>/dev/null)" || return 1
+    if [[ "$hardware_arm64" == 1 ]]; then
+      DOTFILES_NATIVE_ARCH=arm64
+      translated="$(sysctl -in sysctl.proc_translated 2>/dev/null || print 0)"
+      DOTFILES_ROSETTA_TRANSLATED="$translated"
+    elif [[ "$hardware_arm64" == 0 ]]; then
+      DOTFILES_NATIVE_ARCH=x86_64
+      DOTFILES_ROSETTA_TRANSLATED=0
+    else
+      print -u2 -- "install.sh: 未知的原生硬件事实 hw.optional.arm64=$hardware_arm64"
+      return 1
+    fi
+  fi
+
+  case "$DOTFILES_NATIVE_ARCH" in
+    arm64)
+      DOTFILES_HOMEBREW_PREFIX=/opt/homebrew
+      ;;
+    x86_64)
+      DOTFILES_HOMEBREW_PREFIX=/usr/local
+      ;;
+    *)
+      print -u2 -- "install.sh: 不支持的原生架构 $DOTFILES_NATIVE_ARCH"
+      return 1
+      ;;
+  esac
+  DOTFILES_HOMEBREW_COMMAND="$DOTFILES_HOMEBREW_PREFIX/bin/brew"
+}
+
+detect_architecture || exit 1
 
 typeset -gr DOTFILES_INSTALLER_ACTIVE=1
 typeset -gr DOTFILES_REPO_ROOT="$repo_root"
@@ -61,19 +114,54 @@ typeset -gr DOTFILES_LOCAL_DIR="$HOME/.config/dotfiles/local"
 typeset -gr DOTFILES_LOCAL_FILE="$HOME/.config/dotfiles/local/parameters.zsh"
 typeset -gr DOTFILES_LOCAL_INTEGRATIONS_FILE="$HOME/.config/dotfiles/local/integrations.zsh"
 typeset -gr DOTFILES_PLUGIN_DIR="$HOME/.local/share/dotfiles/plugins"
+typeset -gr DOTFILES_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
+typeset -gr DOTFILES_INTEL_HANDOFF_FILE="$DOTFILES_STATE_DIR/intel_to_be_retired.tsv"
 typeset -gr DOTFILES_TEST_MODE="$test_mode"
+typeset -gi DOTFILES_MACOS_ENABLED=0
+typeset -gi DOTFILES_TOOLING_ENABLED=0
+typeset -gi DOTFILES_ZSH_ENABLED=0
+typeset -gi DOTFILES_HOOKS_ENABLED=0
 
-for module in \
-  "$DOTFILES_PERSONAL_DIR/zsh/install.sh" \
-  "$DOTFILES_PERSONAL_DIR/tooling/install.sh" \
-  "$DOTFILES_PERSONAL_DIR/macos/install.sh"; do
-  if [[ ! -r "$module" ]]; then
-    print -u2 -- "install.sh: 缺少内部能力模块 ${module#$repo_root/}"
-    exit 1
+load_required_module() {
+  local name="$1"
+  local directory="$2"
+  local module="$directory/install.sh"
+
+  if [[ ! -d "$directory" || ! -r "$module" ]]; then
+    print -u2 -- "install.sh: 最小 checkout 缺少完整 $name 模块：${directory#$repo_root/}/"
+    return 1
   fi
-  source "$module" || exit 1
-done
-unset module
+  source "$module" || return 1
+}
+
+load_optional_zsh_module() {
+  local directory="$DOTFILES_PERSONAL_DIR/zsh"
+  local module="$directory/install.sh"
+
+  if [[ ! -e "$directory" && ! -e "$module" ]]; then
+    DOTFILES_ZSH_ENABLED=0
+    return 0
+  fi
+  if [[ ! -d "$directory" || ! -r "$module" ]]; then
+    print -u2 -- 'install.sh: Zsh 模块只 checkout 了一部分；请完整 checkout my_setup/zsh/ 或整体移除'
+    return 1
+  fi
+  source "$module" || return 1
+  DOTFILES_ZSH_ENABLED=1
+}
+
+load_required_module macOS "$DOTFILES_PERSONAL_DIR/macos" || exit 1
+DOTFILES_MACOS_ENABLED=1
+load_required_module tooling "$DOTFILES_PERSONAL_DIR/tooling" || exit 1
+DOTFILES_TOOLING_ENABLED=1
+load_optional_zsh_module || exit 1
+
+if [[ -x "$DOTFILES_REPO_ROOT/.githooks/pre-commit" ]]; then
+  DOTFILES_HOOKS_ENABLED=1
+elif [[ -e "$DOTFILES_REPO_ROOT/.githooks/pre-commit" ]]; then
+  print -u2 -- 'install.sh: .githooks/pre-commit 存在但不可执行'
+  exit 1
+fi
 
 typeset runtime_dir=''
 cleanup_runtime() {
@@ -102,59 +190,54 @@ prepare_runtime() {
 }
 
 check_architecture() {
-  if [[ "$DOTFILES_TEST_MODE" == 1 ]]; then
-    print -- '- 架构：隔离测试模式'
-    return 0
-  fi
-  if [[ "$(uname -s)" != Darwin || "$(arch)" != arm64 ]]; then
-    print -u2 -- 'install.sh: 真实安装、验证和退役只允许在 macOS 原生 arm64 会话运行'
+  if [[ "$DOTFILES_NATIVE_ARCH" == arm64 \
+    && ( "$DOTFILES_PROCESS_ARCH" != arm64 || "$DOTFILES_ROSETTA_TRANSLATED" != 0 ) ]]; then
+    print -u2 -- 'install.sh: Apple Silicon 必须从原生 arm64 会话运行；不会回退使用 Intel Homebrew'
     return 1
   fi
-  print -- '- 架构：macOS arm64'
+  print -- "- 原生架构：$DOTFILES_NATIVE_ARCH；进程：$DOTFILES_PROCESS_ARCH；Rosetta：$DOTFILES_ROSETTA_TRANSLATED"
+  print -- "- 原生 Homebrew：$DOTFILES_HOMEBREW_COMMAND（prefix $DOTFILES_HOMEBREW_PREFIX）"
 }
 
 check_repositories() {
   local conflicts
 
-  if [[ ! -d "$DOTFILES_PERSONAL_DIR" ]]; then
-    print -u2 -- 'install.sh: 缺少 my_setup/'
-    return 1
-  fi
   if ! conflicts="$(git -C "$DOTFILES_REPO_ROOT" diff --name-only --diff-filter=U 2>/dev/null)"; then
-    print -u2 -- 'install.sh: 无法检查当前公开仓库冲突状态'
+    print -u2 -- 'install.sh: 无法检查当前 public checkout 冲突状态'
     return 1
   fi
   if [[ -n "$conflicts" ]]; then
-    print -u2 -- 'install.sh: 当前公开仓库存在未解决冲突，停止安装'
+    print -u2 -- 'install.sh: 当前 public checkout 存在未解决冲突'
     return 1
   fi
-  print -- "- personal：$DOTFILES_REPO_ROOT"
+  print -- "- public checkout：$DOTFILES_REPO_ROOT"
 
   if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" ]]; then
     if [[ ! -d "$DOTFILES_SHARED_DIR_RESOLVED" ]] \
       || ! git -C "$DOTFILES_SHARED_DIR_RESOLVED" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-      print -u2 -- 'install.sh: DOTFILES_SHARED_DIR 必须指向唯一的现有 Git 工作树'
+      print -u2 -- 'install.sh: DOTFILES_SHARED_DIR 必须指向现有 Git checkout'
       return 1
     fi
-    if ! conflicts="$(git -C "$DOTFILES_SHARED_DIR_RESOLVED" diff --name-only --diff-filter=U 2>/dev/null)"; then
-      print -u2 -- 'install.sh: 无法检查 shared 仓库冲突状态'
-      return 1
-    fi
+    conflicts="$(git -C "$DOTFILES_SHARED_DIR_RESOLVED" diff --name-only --diff-filter=U 2>/dev/null)" || return 1
     if [[ -n "$conflicts" ]]; then
-      print -u2 -- 'install.sh: shared 仓库存在未解决冲突，停止安装'
+      print -u2 -- 'install.sh: shared checkout 存在未解决冲突'
       return 1
     fi
-    print -- "- shared：$DOTFILES_SHARED_DIR_RESOLVED"
+    print -- "- shared checkout：$DOTFILES_SHARED_DIR_RESOLVED"
   else
-    print -- '- shared：未配置（可选）'
+    print -- '- shared checkout：未配置（可选）'
   fi
+  print -- '- 模块：macOS=启用，tooling=启用，Zsh='"$([[ "$DOTFILES_ZSH_ENABLED" == 1 ]] && print 启用 || print 未checkout)"
 }
 
 local_plan() {
-  local mode='missing'
-  local local_file local_name
+  local mode='missing' local_file local_name
   local -a present
 
+  if (( ! DOTFILES_ZSH_ENABLED )); then
+    print -- '- local Zsh：Zsh 模块未启用，不创建或修改 local 目录'
+    return 0
+  fi
   if [[ -L "$DOTFILES_LOCAL_DIR" ]]; then
     print -u2 -- 'install.sh: local 目录不得是 symlink'
     return 1
@@ -166,7 +249,6 @@ local_plan() {
     }
     mode="$(stat -f '%Lp' "$DOTFILES_LOCAL_DIR" 2>/dev/null)"
   fi
-
   for local_file in "$DOTFILES_LOCAL_FILE" "$DOTFILES_LOCAL_INTEGRATIONS_FILE"; do
     local_name="${local_file:t}"
     if [[ -e "$local_file" || -L "$local_file" ]]; then
@@ -178,13 +260,14 @@ local_plan() {
     fi
   done
   if (( ${#present[@]} > 0 )); then
-    print -- "- local：${(j:、:)present} 存在；目录权限 ${mode}，安装时收敛为 0700/0600（不读取内容）"
+    print -- "- local Zsh：${(j:、:)present} 存在；目录权限 ${mode}，安装时收敛为 0700/0600（不读取内容）"
   else
-    print -- '- local：parameters.zsh 与 integrations.zsh 均不存在；仅创建权限为 0700 的 local 目录'
+    print -- '- local Zsh：文件均不存在；安装时只创建 0700 local 目录'
   fi
 }
 
 local_apply() {
+  (( DOTFILES_ZSH_ENABLED )) || return 0
   command mkdir -p -- "$DOTFILES_LOCAL_DIR" || return 1
   chmod 700 "$DOTFILES_LOCAL_DIR" || return 1
   local local_file
@@ -197,23 +280,21 @@ local_apply() {
 
 local_verify() {
   local local_file local_name
-  if [[ ! -d "$DOTFILES_LOCAL_DIR" || -L "$DOTFILES_LOCAL_DIR" || ! -O "$DOTFILES_LOCAL_DIR" ]]; then
-    print -u2 -- 'verify: local 目录缺失、类型错误或 owner 错误'
-    return 1
+  if (( ! DOTFILES_ZSH_ENABLED )); then
+    print -- '✓ local Zsh 未启用（未触碰）'
+    return 0
   fi
-  if [[ "$(stat -f '%Lp' "$DOTFILES_LOCAL_DIR" 2>/dev/null)" != 700 ]]; then
-    print -u2 -- 'verify: local 目录权限必须是 0700'
+  if [[ ! -d "$DOTFILES_LOCAL_DIR" || -L "$DOTFILES_LOCAL_DIR" || ! -O "$DOTFILES_LOCAL_DIR" \
+    || "$(stat -f '%Lp' "$DOTFILES_LOCAL_DIR" 2>/dev/null)" != 700 ]]; then
+    print -u2 -- 'verify: local 目录缺失、类型/owner 错误或权限不是 0700'
     return 1
   fi
   for local_file in "$DOTFILES_LOCAL_FILE" "$DOTFILES_LOCAL_INTEGRATIONS_FILE"; do
     local_name="${local_file:t}"
     if [[ -e "$local_file" || -L "$local_file" ]]; then
-      if [[ -L "$local_file" || ! -f "$local_file" || ! -O "$local_file" ]]; then
-        print -u2 -- "verify: $local_name 类型或 owner 错误"
-        return 1
-      fi
-      if [[ "$(stat -f '%Lp' "$local_file" 2>/dev/null)" != 600 ]]; then
-        print -u2 -- "verify: $local_name 权限必须是 0600"
+      if [[ -L "$local_file" || ! -f "$local_file" || ! -O "$local_file" \
+        || "$(stat -f '%Lp' "$local_file" 2>/dev/null)" != 600 ]]; then
+        print -u2 -- "verify: $local_name 类型、owner 或权限错误"
         return 1
       fi
       /bin/zsh -n "$local_file" >/dev/null 2>&1 || {
@@ -221,52 +302,50 @@ local_verify() {
         return 1
       }
     fi
-    if git -C "$DOTFILES_REPO_ROOT" ls-files --error-unmatch "$local_file" >/dev/null 2>&1; then
-      print -u2 -- "verify: $local_name 不得被公开仓库跟踪"
-      return 1
-    fi
   done
   if git -C "$DOTFILES_REPO_ROOT" ls-files | grep -Eq '(^|/)(parameters|integrations)[.]zsh$'; then
-    print -u2 -- 'verify: 公开仓库不得跟踪 local parameters.zsh 或 integrations.zsh'
+    print -u2 -- 'verify: public checkout 不得跟踪 local Zsh 文件'
     return 1
   fi
   if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" ]] \
     && git -C "$DOTFILES_SHARED_DIR_RESOLVED" ls-files | grep -Eq '(^|/)(parameters|integrations)[.]zsh$'; then
-    print -u2 -- 'verify: shared 仓库不得跟踪 local parameters.zsh 或 integrations.zsh'
+    print -u2 -- 'verify: shared checkout 不得跟踪 local Zsh 文件'
     return 1
   fi
-  print -- '✓ local 类型、owner、权限与 Git 边界'
+  print -- '✓ local Zsh 类型、owner、权限与 Git 边界'
 }
 
 hooks_plan() {
   local current
-  current="$(git -C "$DOTFILES_REPO_ROOT" config --local --get core.hooksPath 2>/dev/null || true)"
-  if [[ "$current" == .githooks ]]; then
-    print -- '- pre-commit：core.hooksPath 已是 .githooks'
-  else
-    print -- "- pre-commit：设置 core.hooksPath=.githooks（当前 ${current:-未设置}）"
+  if (( ! DOTFILES_HOOKS_ENABLED )); then
+    print -- '- pre-commit hook：未 checkout/未启用'
+    return 0
   fi
+  current="$(git -C "$DOTFILES_REPO_ROOT" config --local --get core.hooksPath 2>/dev/null || true)"
+  print -- "- hook source：$DOTFILES_REPO_ROOT/.githooks/pre-commit"
+  print -- "- hook target：$DOTFILES_REPO_ROOT/.git/config core.hooksPath=.githooks（当前 ${current:-未设置}）"
 }
 
 hooks_apply() {
+  (( DOTFILES_HOOKS_ENABLED )) || return 0
   git -C "$DOTFILES_REPO_ROOT" config --local core.hooksPath .githooks
 }
 
 hooks_verify() {
-  if [[ "$(git -C "$DOTFILES_REPO_ROOT" config --local --get core.hooksPath 2>/dev/null)" != .githooks ]]; then
-    print -u2 -- 'verify: 当前公开仓库 core.hooksPath 不是 .githooks'
+  if (( ! DOTFILES_HOOKS_ENABLED )); then
+    print -- '✓ pre-commit hook 未启用'
+    return 0
+  fi
+  if [[ "$(git -C "$DOTFILES_REPO_ROOT" config --local --get core.hooksPath 2>/dev/null)" != .githooks \
+    || ! -x "$DOTFILES_REPO_ROOT/.githooks/pre-commit" ]]; then
+    print -u2 -- 'verify: 受管 pre-commit hook 未正确配置'
     return 1
   fi
-  if [[ ! -x "$DOTFILES_REPO_ROOT/.githooks/pre-commit" ]]; then
-    print -u2 -- 'verify: .githooks/pre-commit 缺失或不可执行'
-    return 1
-  fi
-  print -- '✓ 公开仓库 pre-commit hook'
+  print -- '✓ public checkout pre-commit hook'
 }
 
 show_install_plan() {
   typeset -i blocked=0
-
   print -- 'Dotfiles 安装摘要'
   print -- '================'
   check_architecture || blocked=1
@@ -274,23 +353,26 @@ show_install_plan() {
   local_plan || blocked=1
   hooks_plan || blocked=1
   print
-  print -- '[macos]'
+  print -- '[macOS]'
   macos_plan || blocked=1
   print
   print -- '[tooling]'
   tooling_plan || blocked=1
   print
-  print -- '[zsh]'
-  zsh_plan || blocked=1
+  print -- '[Zsh]'
+  if (( DOTFILES_ZSH_ENABLED )); then
+    zsh_plan || blocked=1
+  else
+    print -- '- 未 checkout，跳过 Zsh、plugin 与 HOME Zsh 入口'
+  fi
   print
   print -- '- 服务、数据库和 GUI 应用数据：仅报告，不自动迁移或启停'
-
+  print -- "- Intel 退役交接：$DOTFILES_INTEL_HANDOFF_FILE（只供 Stage 3 重新核验）"
   (( blocked == 0 ))
 }
 
 confirm_install() {
   local answer=''
-
   if [[ "$DOTFILES_TEST_MODE" != 1 && ( ! -t 0 || ! -t 1 ) ]]; then
     print -- 'install.sh: 非交互会话，默认 N；未执行任何安装'
     return 1
@@ -300,20 +382,39 @@ confirm_install() {
 }
 
 run_verify() {
-  typeset -i failed=0
+  typeset -i install_failed=0 handoff_failed=0
 
   prepare_runtime || return 1
-  print -- 'Dotfiles 验证'
-  print -- '============='
-  check_architecture || failed=1
-  check_repositories || failed=1
-  local_verify || failed=1
-  hooks_verify || failed=1
-  macos_verify || failed=1
-  tooling_verify || failed=1
-  zsh_verify || failed=1
+  print -- 'A. 安装完整性'
+  print -- '==============='
+  check_architecture || install_failed=1
+  check_repositories || install_failed=1
+  local_verify || install_failed=1
+  hooks_verify || install_failed=1
+  macos_verify || install_failed=1
+  tooling_verify || install_failed=1
+  if (( DOTFILES_ZSH_ENABLED )); then
+    zsh_verify || install_failed=1
+  else
+    print -- '✓ Zsh 模块未 checkout（不属于本次声明目标）'
+  fi
+  if (( install_failed )); then
+    print -u2 -- 'A. 安装完整性：失败'
+  else
+    print -- 'A. 安装完整性：通过'
+  fi
 
-  if (( failed != 0 )); then
+  print
+  print -- 'B. Intel 退役交接'
+  print -- '================='
+  macos_verify_retirement_handoff || handoff_failed=1
+  if (( handoff_failed )); then
+    print -u2 -- 'B. Intel 退役交接：失败'
+  else
+    print -- 'B. Intel 退役交接：通过'
+  fi
+
+  if (( install_failed || handoff_failed )); then
     print -u2 -- 'install.sh verify: 失败'
     return 1
   fi
@@ -331,37 +432,32 @@ run_install() {
     return 0
   fi
 
-  local_apply || return 1
   macos_apply || return 1
   tooling_apply || return 1
-  zsh_apply || return 1
+  if (( DOTFILES_ZSH_ENABLED )); then
+    local_apply || return 1
+    zsh_apply || return 1
+  fi
   hooks_apply || return 1
   run_verify
 }
 
 run_retire() {
   local apply_mode="$1"
-
   prepare_runtime || return 1
   check_architecture || return 1
   check_repositories || return 1
   run_verify || {
-    print -u2 -- 'install.sh retire: Stage 2 验证未通过，退役被阻止'
+    print -u2 -- 'install.sh retire: Stage 2 A/B 验证未通过，退役被阻止'
     return 1
   }
   macos_retire_plan || return 1
-
-  if [[ "$apply_mode" == 0 ]]; then
-    return 0
-  fi
-  if (( MACOS_RETIRE_CANDIDATE_COUNT == 0 )); then
-    return 0
-  fi
+  [[ "$apply_mode" == 1 ]] || return 0
+  (( MACOS_RETIRE_CANDIDATE_COUNT > 0 )) || return 0
   if [[ ! -t 0 || ! -t 1 ]]; then
     print -u2 -- 'install.sh retire --apply: 必须在 stdin/stdout 均为真实 TTY 时运行'
     return 1
   fi
-
   local answer=''
   read -r "answer?仅按上述清单正式退役？[y/N] " || answer=''
   if [[ "$answer" != [yY] ]]; then
@@ -377,8 +473,5 @@ case "$#:$*" in
   '1:verify') run_verify ;;
   '1:retire') run_retire 0 ;;
   '2:retire --apply') run_retire 1 ;;
-  *)
-    usage
-    exit 2
-    ;;
+  *) usage; exit 2 ;;
 esac

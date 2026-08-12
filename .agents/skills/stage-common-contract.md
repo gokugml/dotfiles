@@ -25,8 +25,10 @@ install.sh plan：独立建设 dump.sh、根 install.sh、三个内部能力安�
 
 Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 → Review Skill 先给工具一句话描述并审阅 → 跨结果自检 → 用户一次确认
   → Stage 1：应用已确认 Zsh 修复计划 → 用户确认完整 diff → 写入显式目标或默认仓库目标
-    → Stage 2：按原生机器架构运行 install.sh → verify 安装完整性 → 可选生成 Intel 退役交接清单
-      → Stage 3：仅 Apple Silicon 上读取交接清单并重新盘点 → install.sh retire 预览 → 用户确认 → 退役与验证
+
+Stage 2：在任意目标机器 checkout 根 install.sh + macOS/tooling 声明 → 按原生架构安装
+  → verify 安装完整性 → 可选生成 Intel 退役交接清单
+    → Stage 3：仅 Apple Silicon 上读取交接清单并重新盘点 → install.sh retire 预览 → 用户确认 → 退役与验证
 ```
 
 ### 2.1 所有 Skill 的执行前计划门
@@ -48,7 +50,7 @@ Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 �
 阶段之间只保留以下边界：
 
 1. Stage 0 的草稿未经用户确认，不写入 personal/shared 目标文件。
-2. Stage 1 的最新完整 Zsh diff 未经确认，不写入目标；实际采用的 `zsh-repair-plan.md` 未在全部验证通过后更新为唯一 `> 状态：Stage 1 已应用` 时，不进入 Stage 2。
+2. Stage 1 的最新完整 Zsh diff 未经确认，不写入 Stage 1 目标；其计划状态只服务于 Stage 1 自身交接，不构成 Stage 2 输入或门禁。
 3. [`install-sh-plan.md`](./install-sh-plan.md) 定义的根安装器、三个内部模块及目标路径/验证能力缺失或存在安全错误时，不用于真实机器安装；测试、pre-commit 和 CI 状态必须检查并在最终报告中呈现，但 CI 缺失、未运行或失败不构成 Stage 2 门禁。
 4. Stage 2 安装与验证未完成，不进入 Stage 3。
 5. Stage 3 只适用于 Apple Silicon，且不由 Stage 2 自动触发。
@@ -131,7 +133,7 @@ ${XDG_STATE_HOME:-$HOME/.local/state}/
 
 不存在实际内容时不创建空 shared 文件。详细 tooling 文件由实际工具决定，不为统一目录外观创建空 schema 或占位文件。
 
-Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 和可选 `shared.zsh`；用户显式提供目标文件时优先更新这些目标，否则先让用户选择默认无前置点或有前置点命名。Stage 2 接受 `my_setup/zsh/` 中恰好一套完整来源：`zprofile` + `zshrc` 或 `.zprofile` + `.zshrc`。两套并存、跨组混搭或文件残缺时根安装器必须在确认和写入前阻断，不猜优先级、不创建另一套副本；显式目标在仓库外时不得擅自复制或覆盖。安装器 smoke test 只能在临时仓库中使用最小 fixture。
+Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 和可选 `shared.zsh`；用户显式提供目标文件时优先更新这些目标，否则先让用户选择默认无前置点或有前置点命名。Stage 2 只读取当前 checkout：根安装器、`my_setup/macos/` 与 `my_setup/tooling/` 是最小集合，`my_setup/zsh/` 可选。启用 Zsh 时必须恰好存在 `zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中一套完整来源；两套并存、混搭或残缺时安装器在确认前阻断，不猜优先级、不生成文件。Stage 2 不读取 `zsh-repair-plan.md` 或判断这些配置由哪个阶段生成。安装器 smoke test 只能在临时仓库中使用最小 fixture。
 
 ## 5. Zsh 运行时边界
 
@@ -148,7 +150,7 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - shared、parameters 或 integrations 文件缺失时静默跳过；存在但语法错误时 `install.sh verify` 失败。
 - Stage 1 以目标现有内容为基线做最小修改，尽可能保留修复计划未涉及的 Oh My Zsh 官方模板注释、分区、选项和初始化形态；不得为了模板升级而整文件替换。
 - Stage 0 必须为源 `.zprofile`/`.zshrc` 中识别到的第三方功能块生成脱敏保全清单；Stage 1 写入前后都必须用同一确定性工具比较源文件与目标文件加 `integrations.zsh`，缺块、正文变化、阶段错误或同阶段错序时失败。
-- Stage 1 全部目标验证通过后，必须把每份实际采用的 `zsh-repair-plan.md` 状态更新为唯一 `> 状态：Stage 1 已应用`；失败或取消时不得更新，Stage 2 以此作为完成交接。
+- Stage 1 全部目标验证通过后，必须把每份实际采用的 `zsh-repair-plan.md` 状态更新为唯一 `> 状态：Stage 1 已应用`；失败或取消时不得更新。该状态不被 Stage 2 读取。
 - 日常配置必须优先激活当前机器原生 Homebrew：Intel 使用 `/usr/local`，Apple Silicon 使用 `/opt/homebrew`；受管命令和 symlink 不得最终解析到另一架构，也不得包含 Rosetta fallback 或 ARM→Intel wrapper。继承环境中的另一架构路径或旧软件可以暂时存在，但只能进入 Stage 2 的 Intel 交接清单，不能替代原生安装目标。
 
 `parameters.zsh` 可以直接保存密钥值和其他不可公开参数。默认安全要求：
@@ -182,7 +184,7 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 ```
 
 - `dump.sh` 属于 Stage 0，只读导出软件、tooling 和插件证据及同构候选文件；Zsh 证据由 Zsh Skill 内部脚本独立采集。
-- 无参数 `install.sh` 等于安装 apply。执行前即时展示摘要，并以默认 `N` 的 `y/N` 确认。
+- 无参数 `install.sh` 等于安装 apply。它只读取当前 checkout 的声明，执行前即时展示摘要，并以默认 `N` 的 `y/N` 确认。
 - `install.sh verify` 验证全部 Zsh/tooling symlink、架构、软件、runtime 和插件是否安装到当前系统定义的原生目标；Apple Silicon 上若仍有 Intel 残留，唯一允许的写入是原子维护本机 `intel_to_be_retired.tsv` 交接清单。
 - `install.sh retire` 属于 Stage 3，只读预览。
 - `install.sh retire --apply` 只在真实终端接受默认 `N` 的 `y/N` 确认。
@@ -212,7 +214,7 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - login 与 interactive shell 无加载错误；
 - symlink 指向 `my_setup/zsh/`；
 - 声明式加载顺序为 shared → personal → parameters，integrations 的 pre/post 阶段和固定标记位置正确；
-- Stage 1 的源 `.zprofile` + `.zshrc` 功能块清单全部由目标 Zsh 或 `integrations.zsh` 精确覆盖，除非用户逐项批准 retire；
+- Stage 1 自身验证源 `.zprofile` + `.zshrc` 功能块清单全部由目标 Zsh 或 `integrations.zsh` 精确覆盖，除非用户逐项批准 retire；Stage 2 不重复读取该清单；
 - local 权限正确且未被 Git 跟踪；
 - Homebrew、全部受管命令和 symlink 符合原生硬件架构：Intel 目标位于 `/usr/local`，Apple Silicon 目标位于 `/opt/homebrew`；另一架构前缀或旧软件可以残留，但不得成为受管目标，并须在 Apple Silicon 上写入 `intel_to_be_retired.tsv`；
 - Apple Silicon 的 Rosetta 会话不会回退使用 Intel Homebrew；

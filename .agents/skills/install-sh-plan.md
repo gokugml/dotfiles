@@ -8,7 +8,7 @@
 
 本计划建设可供其他用户和机器复用的仓库能力。核心交付是 `dump.sh`、根目录统一 `install.sh`、三个内部能力安装模块、配置目录、最小测试、默认中文 README、独立英文 README，以及只进入最终报告的 pre-commit/CI 状态。
 
-本计划只描述能力建设，不属于 Stage 0–3 主流程，也不在开发者真实 HOME 中安装配置或软件。主流程中的最终 Zsh 文件由 Stage 1 Skill 生成，真实安装由 Stage 2 调用本计划定义的 `install.sh` 完成。
+本计划只描述能力建设，不属于 Stage 0–3 主流程，也不在开发者真实 HOME 中安装配置或软件。Stage 2 在任意目标机器只以当前 checkout 为输入，调用本计划定义的 `install.sh`；它不读取 Stage 0/1 交接或 `zsh-repair-plan.md`。
 
 ## 2. 目标
 
@@ -20,17 +20,17 @@
 
 ## 3. 前置条件
 
-- Stage 0 已完成人工确认；
-- 当前 public/shared diff 与确认内容一致；
+- 当前 checkout 已包含准备部署的 macOS/tooling 声明与可选 Zsh 声明；
+- 当前 public/shared 工作树没有未解决冲突；
 - public 输出不含 shared 仓库专属信息、密钥或本机绝对路径；
 - 服务和数据迁移事项已标为人工处理；
 - 当前工作树冲突已由用户处理。
 
-如果输入需要重新分析，返回 Stage 0；本阶段不重新猜测源机器状态。
+如果仓库声明残缺或无法解析，报告精确文件并停止；安装器不调用 Stage 0/1，也不猜测源机器状态。
 
 ### 3.1 执行前计划门
 
-实现或更新本计划前，先只读检查 Stage 0/1 获准输入、public/shared 工作树、现有脚本/配置/测试/文档、Stage 2/3 接口和当前验证状态；不得在盘点阶段编辑文件、运行会写入候选的采集器、安装依赖或修改真实 HOME/软件。随后向用户展示完整计划，至少包含：
+实现或更新本计划前，先只读检查当前 checkout 的 public/shared 声明、工作树、现有脚本/配置/测试/文档、Stage 2/3 接口和当前验证状态；不得在盘点阶段编辑文件、运行会写入候选的采集器、安装依赖或修改真实 HOME/软件。随后向用户展示完整计划，至少包含：
 
 - 将新增、修改或删除的精确仓库路径和模块接口；
 - 根 `install.sh` 与三个内部 `install.sh` 的预期行为变化；
@@ -91,7 +91,7 @@ ${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/
 
 三个能力安装模块不是额外的用户命令面：它们被根安装器加载，只暴露带能力前缀的内部 plan/apply/verify 函数，直接执行时必须拒绝并引导用户使用根目录 `install.sh`。除上述精确交接文件外，不再建设额外管理 CLI、独立 migrate/retire 脚本、通用 schemas 目录、拆散的插件文件、大量场景 fixture 或长期状态目录。
 
-本计划及其安装器不根据修复计划生成最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 或 `shared.zsh`；这些文件由 [`$stage-1-apply-zsh-repair-plan`](./stage-1-apply-zsh-repair-plan/SKILL.md) 生成或更新并经用户审查。安装器必须接受 `zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中恰好一套完整来源；两套并存、跨组混搭或文件残缺时，在确认和写入前清楚阻断，不猜优先级，也不创建另一套副本。smoke test 只能在临时仓库中创建最小 Zsh fixture 验证安装能力。
+本计划及其安装器不生成最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 或 `shared.zsh`，也不读取任何 `zsh-repair-plan.md`。目标机最小 checkout 是根安装器、`my_setup/macos/` 与 `my_setup/tooling/`；`my_setup/zsh/` 整体可选。Zsh 启用时必须接受 `zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中恰好一套完整来源；两套并存、混搭或残缺时，在确认前阻断，不猜优先级，也不生成副本。smoke test 只能在临时仓库中创建最小 fixture。
 
 ## 5. `dump.sh`
 
@@ -128,26 +128,26 @@ ${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/
 
 无参数 `install.sh` 等于安装 apply。
 
-根安装器是唯一公开入口，负责参数解析、跨能力前置检查、汇总每个精确目标的变更摘要、一次默认 `N` 的 `y/N` 确认、按顺序调用内部模块以及最终汇总验证。内部职责固定为：
+根安装器是唯一公开入口，负责参数解析、跨能力前置检查、发现当前 checkout 中的模块、汇总每个精确目标的变更摘要、一次默认 `N` 的 `y/N` 确认、按顺序调用内部模块以及最终汇总验证。内部职责固定为：
 
-- `my_setup/zsh/install.sh`：Zsh 入口备份和 symlink、插件安装及 Zsh 验证；
+- 可选 `my_setup/zsh/install.sh`：目录完整 checkout 时负责 Zsh 入口备份和 symlink、插件安装及 Zsh 验证；
 - `my_setup/tooling/install.sh`：mise、uv 等 tooling 安装及版本验证；
 - `my_setup/macos/install.sh`：Homebrew、personal/shared Brewfile 安装、来源与架构验证，以及 Apple Silicon 上残留 Intel 项的确定性交接清单。
 
-内部模块不得独立提示用户、重复确认、解析根命令面或自动调用其他模块；被直接执行时必须安全失败。普通安装仍只产生一次整体摘要和一次确认。
+macOS 与 tooling 模块是最小 checkout 的必需项；Zsh 目录和内部入口都不存在时明确跳过，部分存在时阻断。内部模块不得独立提示用户、重复确认、解析根命令面或自动调用其他模块；被直接执行时必须安全失败。普通安装仍只产生一次整体摘要和一次确认。
 
-根安装器的真实 apply 顺序固定为 `macos → tooling → zsh → pre-commit hook → verify`，避免软件安装失败时提前切换真实 Zsh 入口。
+根安装器的真实 apply 顺序固定为 `macos → tooling → 可选 zsh → 可选 pre-commit hook → verify`，避免软件安装失败时提前切换真实 Zsh 入口。
 
 ### 6.1 无参数安装
 
 执行时：
 
-1. 验证当前仓库、`my_setup/` 和可选 shared 路径；
+1. 验证当前 checkout、必需 macOS/tooling 模块、可选完整 Zsh 模块和可选 shared 路径；
 2. 检查 macOS 原生硬件架构、当前进程是否运行在 Rosetta 下、本地 Zsh 入口和 local 权限；
-3. 计算并展示 Zsh 与 tooling 配置 symlink、Brewfile、mise/uv runtime、插件和 hook 的每个精确目标；
+3. 计算并展示每个启用模块的仓库 source、本机 target 和 action，包括 tooling symlink、Brewfile、mise/uv runtime、可选 Zsh/plugin 和 hook；
 4. 展示简短摘要并以默认 `N` 的 `y/N` 确认；
 5. 为已有本地 `.zsh` 文件或 symlink 创建副本；
-6. 将已选仓库组分别作为来源，建立固定 HOME 入口 `~/.zprofile` 和 `~/.zshrc` symlink；
+6. 仅当 Zsh 模块启用时，将唯一仓库来源组建立为固定 HOME 入口 `~/.zprofile` 和 `~/.zshrc` symlink；
 7. 为当前公开仓库配置受管的 `core.hooksPath=.githooks`；
 8. Intel Mac 使用 `/usr/local` Homebrew，Apple Silicon 原生会话使用 `/opt/homebrew` Homebrew，安装 personal/shared Brewfile、tooling、mise/uv 和固定 revision 插件；
 9. 调用同一脚本的验证逻辑，确认全部声明项安装到当前系统原生目标；Apple Silicon 上若仍有 Intel 残留，原子生成 `intel_to_be_retired.tsv`。
@@ -158,7 +158,7 @@ ${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/
 
 `./install.sh verify` 输出两个独立结论。A“安装完整性”至少检查：
 
-- Zsh 语法和两种常见启动场景；
+- Zsh 模块启用时检查语法和两种常见启动场景；未 checkout 时不要求 Zsh；
 - symlink 目标；
 - integrations pre → shared → personal → parameters → integrations post 阶段；
 - local `0700/0600` 权限及未被 Git 跟踪；
@@ -231,8 +231,8 @@ personal/shared 各自最多一份 `zsh/plugins.toml`。每个插件条目至少
 
 1. 四阶段流程，以及本计划是阶段外的安装能力建设需求；
 2. Stage 0 分别使用 Zsh 分析 Skill、`dump.sh` 和导出配置 Review Skill，并先为每个工具给出一句话描述；
-3. Stage 1 应用 Zsh 修复计划并优先更新用户显式目标；
-4. Stage 2 按原生硬件架构选择 Intel `/usr/local` 或 Apple Silicon `/opt/homebrew`，把所有摘要目标安装完毕；Apple Silicon 的 Intel 残留进入本机 `intel_to_be_retired.tsv`，不阻止原生安装完成；
+3. Stage 1 可以独立生产 Zsh 文件，但其 repair plan 与状态不是 Stage 2 输入；
+4. Stage 2 从当前 checkout 独立部署必需 macOS/tooling 与可选 Zsh，按原生硬件架构选择 Intel `/usr/local` 或 Apple Silicon `/opt/homebrew`，把所有摘要目标安装完毕；Apple Silicon 的 Intel 残留进入本机 `intel_to_be_retired.tsv`，不阻止原生安装完成；
 5. local parameters 可以保存密钥值，local integrations 可以保存第三方功能块，二者都永不进入 Git；
 6. Stage 3 只适用于 Apple Silicon，且 `retire` 不会被普通安装触发；
 7. 服务和数据需要人工处理。

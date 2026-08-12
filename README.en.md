@@ -8,7 +8,7 @@
 
 This public repository stores shareable personal configuration and migration capabilities for moving reviewed Zsh, Homebrew, mise, uv, and Zsh plugins to an Apple Silicon Mac. Configuration used jointly with other people belongs in an optional separate shared repository, while machine secrets live only in a local file outside every repository.
 
-Stage 1 applies the approved `zsh-repair-plan.md` to reviewed repository-owned Zsh files. It supports either the plain `zprofile` + `zshrc` names or the dotted `.zprofile` + `.zshrc` names, compares every source block against the targets plus local integrations before and after writing, and marks each adopted plan `Stage 1 applied` only after every validation passes. Stage 2 does not generate these files; the installer resolves the one complete pair under `my_setup/zsh/` and then creates the fixed HOME startup entries.
+Stage 1 independently produces and reviews repository-owned Zsh files from an approved `zsh-repair-plan.md`. Stage 2 does not read that plan or any Stage 1 status: on every target machine it uses only the current checkout's macOS/tooling declarations and optional Zsh module. When Zsh is enabled, the installer resolves the one complete pair under `my_setup/zsh/` and creates the fixed HOME startup entries.
 
 <!-- section:stages -->
 
@@ -16,7 +16,7 @@ Stage 1 applies the approved `zsh-repair-plan.md` to reviewed repository-owned Z
 
 1. **Stage 0 — analyze and export.** `./dump.sh` exports software, tooling, and plugin candidates read-only. A separate Zsh Skill collects value-free structural evidence plus a preservation manifest for third-party blocks and writes a repair plan. The Export Review Skill reviews candidate configuration. Formal drafts are written only after user confirmation.
 2. **Stage 1 — apply the Zsh repair plan.** Update explicit user-provided targets when present. Otherwise, first confirm `zprofile`/`zshrc` or `.zprofile`/`.zshrc`, use the official installer in an isolated HOME to fetch the latest Oh My Zsh template, then apply the plan, compare source and target blocks, and review the complete diff. After all targets pass validation, each adopted plan is updated to the exact handoff field `> 状态：Stage 1 已应用`. It never changes real Zsh entries; only the fixed local parameters/integrations files may be backed up and updated after separate confirmation, and it does not install software.
-3. **Stage 2 — configure and install.** Confirm that `my_setup/zsh/` contains exactly the complete pair selected in Stage 1, then run parameterless `./install.sh`. The script shows every exact target and one combined summary, asks once with a default-`N` `y/N` prompt, and uses `./install.sh verify` to check that every symlink, package, runtime, and plugin is installed at its native target. On Apple Silicon, residual Intel items are written to a machine-local `intel_to_be_retired.tsv`; their presence alone does not fail installation.
+3. **Stage 2 — configure and install.** On a target machine, check out root `install.sh`, `my_setup/macos/`, `my_setup/tooling/`, and optional `my_setup/zsh/`, then run parameterless `./install.sh`; no Stage 0/1 handoff is required. The script shows every exact enabled target and one combined summary, asks once with a default-`N` `y/N` prompt, and uses `./install.sh verify` to check native installation. On Apple Silicon, residual Intel items are written to a machine-local `intel_to_be_retired.tsv`; their presence alone does not fail installation.
 4. **Stage 3 — retire Intel software.** Read `intel_to_be_retired.tsv` as a hint, then run `./install.sh retire` for a fresh read-only inventory and preview. Run `./install.sh retire --apply` only after another review and an explicit confirmation in a real TTY. Normal installation and `verify` never trigger retirement.
 
 <!-- section:layout -->
@@ -31,7 +31,7 @@ dotfiles/
 ├── install.sh                    # only public installation entry point
 ├── my_setup/
 │   ├── zsh/install.sh            # internal Zsh/symlink/plugin module
-│   ├── zsh/{zprofile,zshrc}       # default plain Stage 1 sources
+│   ├── zsh/{zprofile,zshrc}       # optional Stage 2 Zsh module
 │   │   or zsh/{.zprofile,.zshrc}  # dotted sources when selected
 │   ├── tooling/install.sh        # internal mise/uv module
 │   └── macos/install.sh          # internal Homebrew module
