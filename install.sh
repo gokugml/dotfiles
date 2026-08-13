@@ -120,7 +120,6 @@ typeset -gr DOTFILES_TEST_MODE="$test_mode"
 typeset -gi DOTFILES_MACOS_ENABLED=0
 typeset -gi DOTFILES_TOOLING_ENABLED=0
 typeset -gi DOTFILES_ZSH_ENABLED=0
-typeset -gi DOTFILES_HOOKS_ENABLED=0
 
 load_required_module() {
   local name="$1"
@@ -155,13 +154,6 @@ DOTFILES_MACOS_ENABLED=1
 load_required_module tooling "$DOTFILES_PERSONAL_DIR/tooling" || exit 1
 DOTFILES_TOOLING_ENABLED=1
 load_optional_zsh_module || exit 1
-
-if [[ -x "$DOTFILES_REPO_ROOT/.githooks/pre-commit" ]]; then
-  DOTFILES_HOOKS_ENABLED=1
-elif [[ -e "$DOTFILES_REPO_ROOT/.githooks/pre-commit" ]]; then
-  print -u2 -- 'install.sh: .githooks/pre-commit 存在但不可执行'
-  exit 1
-fi
 
 typeset runtime_dir=''
 cleanup_runtime() {
@@ -315,35 +307,6 @@ local_verify() {
   print -- '✓ local Zsh 类型、owner、权限与 Git 边界'
 }
 
-hooks_plan() {
-  local current
-  if (( ! DOTFILES_HOOKS_ENABLED )); then
-    print -- '- pre-commit hook：未 checkout/未启用'
-    return 0
-  fi
-  current="$(git -C "$DOTFILES_REPO_ROOT" config --local --get core.hooksPath 2>/dev/null || true)"
-  print -- "- hook source：$DOTFILES_REPO_ROOT/.githooks/pre-commit"
-  print -- "- hook target：$DOTFILES_REPO_ROOT/.git/config core.hooksPath=.githooks（当前 ${current:-未设置}）"
-}
-
-hooks_apply() {
-  (( DOTFILES_HOOKS_ENABLED )) || return 0
-  git -C "$DOTFILES_REPO_ROOT" config --local core.hooksPath .githooks
-}
-
-hooks_verify() {
-  if (( ! DOTFILES_HOOKS_ENABLED )); then
-    print -- '✓ pre-commit hook 未启用'
-    return 0
-  fi
-  if [[ "$(git -C "$DOTFILES_REPO_ROOT" config --local --get core.hooksPath 2>/dev/null)" != .githooks \
-    || ! -x "$DOTFILES_REPO_ROOT/.githooks/pre-commit" ]]; then
-    print -u2 -- 'verify: 受管 pre-commit hook 未正确配置'
-    return 1
-  fi
-  print -- '✓ public checkout pre-commit hook'
-}
-
 show_install_plan() {
   typeset -i blocked=0
   print -- 'Dotfiles 安装摘要'
@@ -351,7 +314,6 @@ show_install_plan() {
   check_architecture || blocked=1
   check_repositories || blocked=1
   local_plan || blocked=1
-  hooks_plan || blocked=1
   print
   print -- '[macOS]'
   macos_plan || blocked=1
@@ -390,7 +352,6 @@ run_verify() {
   check_architecture || install_failed=1
   check_repositories || install_failed=1
   local_verify || install_failed=1
-  hooks_verify || install_failed=1
   macos_verify || install_failed=1
   tooling_verify || install_failed=1
   if (( DOTFILES_ZSH_ENABLED )); then
@@ -438,7 +399,6 @@ run_install() {
     local_apply || return 1
     zsh_apply || return 1
   fi
-  hooks_apply || return 1
   run_verify
 }
 

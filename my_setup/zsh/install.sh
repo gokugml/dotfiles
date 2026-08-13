@@ -203,6 +203,37 @@ zsh_resolve_personal_entries() {
   ZSH_PERSONAL_NAMING="$resolved_naming"
 }
 
+zsh_uses_external_oh_my_zsh() {
+  local rc="$1"
+  grep -Fq -- 'export ZSH="$HOME/.oh-my-zsh"' "$rc"
+}
+
+zsh_external_oh_my_zsh_plan() {
+  local rc="$1"
+  local target="$DOTFILES_TARGET_HOME/.oh-my-zsh"
+
+  zsh_uses_external_oh_my_zsh "$rc" || return 0
+  if [[ ! -d "$target" || ! -r "$target/oh-my-zsh.sh" \
+    || ! -r "$target/plugins/git/git.plugin.zsh" ]]; then
+    print -u2 -- 'zsh: ~/.oh-my-zsh 必须是现有可读安装，并包含 oh-my-zsh.sh 与 git plugin'
+    return 1
+  fi
+  print -- "- external Oh My Zsh：$target；action：复用现有安装，不 clone、checkout 或固定 revision"
+}
+
+zsh_external_oh_my_zsh_verify() {
+  local rc="$1"
+  local target="$DOTFILES_TARGET_HOME/.oh-my-zsh"
+
+  zsh_uses_external_oh_my_zsh "$rc" || return 0
+  if [[ ! -d "$target" || ! -r "$target/oh-my-zsh.sh" \
+    || ! -r "$target/plugins/git/git.plugin.zsh" ]]; then
+    print -u2 -- 'verify: 外部 ~/.oh-my-zsh 缺失或不能提供框架与 git plugin'
+    return 1
+  fi
+  print -- '  external Oh My Zsh → ~/.oh-my-zsh（不受管 revision）'
+}
+
 zsh_entry_plan() {
   local target="$1"
   local source="$2"
@@ -250,6 +281,7 @@ zsh_plan() {
   if (( blocked == 0 )); then
     zsh_entry_plan "$DOTFILES_TARGET_HOME/.zprofile" "$profile" || blocked=1
     zsh_entry_plan "$DOTFILES_TARGET_HOME/.zshrc" "$rc" || blocked=1
+    zsh_external_oh_my_zsh_plan "$rc" || blocked=1
   fi
 
   if zsh_load_plugins; then
@@ -319,12 +351,14 @@ zsh_install_git_plugin() {
   local revision="$3"
   local target="$DOTFILES_PLUGIN_DIR/$name"
   local current origin dirty
+  typeset -i created=0
 
   command mkdir -p -- "$DOTFILES_PLUGIN_DIR" || return 1
   chmod 700 "$DOTFILES_PLUGIN_DIR" || return 1
 
   if [[ ! -e "$target" ]]; then
     git clone --filter=blob:none --no-checkout -- "$source" "$target" || return 1
+    created=1
   elif [[ ! -d "$target/.git" ]]; then
     print -u2 -- "zsh: 插件目标已存在但不是 Git 仓库：$target"
     return 1
@@ -335,17 +369,20 @@ zsh_install_git_plugin() {
     print -u2 -- "zsh: 插件 $name 的现有 origin 与声明不一致"
     return 1
   fi
-  dirty="$(git -C "$target" status --porcelain)"
-  if [[ -n "$dirty" ]]; then
-    print -u2 -- "zsh: 插件 $name 存在本地修改，拒绝 checkout"
-    return 1
+  if (( ! created )); then
+    dirty="$(git -C "$target" status --porcelain)"
+    if [[ -n "$dirty" ]]; then
+      print -u2 -- "zsh: 插件 $name 存在本地修改，拒绝 checkout"
+      return 1
+    fi
   fi
   if ! git -C "$target" cat-file -e "$revision^{commit}" 2>/dev/null; then
     git -C "$target" fetch --depth=1 origin "$revision" || return 1
   fi
   git -C "$target" checkout --detach "$revision" >/dev/null || return 1
   current="$(git -C "$target" rev-parse HEAD 2>/dev/null)" || return 1
-  [[ "$current" == "$revision" ]] || return 1
+  dirty="$(git -C "$target" status --porcelain)"
+  [[ "$current" == "$revision" && -z "$dirty" ]] || return 1
 }
 
 zsh_apply() {
@@ -491,6 +528,7 @@ zsh_verify() {
     zsh_verify_integration_loader "$rc" zshrc-pre || failed=1
     zsh_verify_integration_loader "$rc" zshrc-post || failed=1
     zsh_verify_plugin_load_order "$rc" || failed=1
+    zsh_external_oh_my_zsh_verify "$rc" || failed=1
 
     if [[ ! -L "$DOTFILES_TARGET_HOME/.zprofile" \
       || "$(readlink "$DOTFILES_TARGET_HOME/.zprofile" 2>/dev/null)" != "$profile" ]]; then

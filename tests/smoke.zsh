@@ -203,6 +203,28 @@ write_fake_tools() {
   chmod 700 "$bin_dir/brew" "$bin_dir/mise" "$bin_dir/uv"
 }
 
+write_fixture_git() {
+  local bin_dir="$1"
+  local plugin_remote="$2"
+  {
+    print -r -- '#!/bin/zsh'
+    print -r -- 'if [[ "$1" == clone ]]; then'
+    print -r -- '  source_url="${@[-2]}"'
+    print -r -- '  target="${@[-1]}"'
+    print -r -- '  GIT_CONFIG_COUNT=2 \'
+    print -r -- "    GIT_CONFIG_KEY_0='url.file://$plugin_remote.insteadOf' \\"
+    print -r -- "    GIT_CONFIG_VALUE_0='https://example.invalid/personal.git' \\"
+    print -r -- "    GIT_CONFIG_KEY_1='protocol.file.allow' \\"
+    print -r -- "    GIT_CONFIG_VALUE_1='always' \\"
+    print -r -- '    /usr/bin/git "$@" || exit 1'
+    print -r -- '  /usr/bin/git -C "$target" remote set-url origin "$source_url"'
+    print -r -- '  exit $?'
+    print -r -- 'fi'
+    print -r -- 'exec /usr/bin/git "$@"'
+  } > "$bin_dir/git"
+  chmod 700 "$bin_dir/git"
+}
+
 write_fake_intel_brew() {
   local target="$1"
   {
@@ -328,6 +350,7 @@ write_shared_fixture() {
 
 run_full_checks() {
   local test_root fixture_repo fixture_home fixture_bin shared_repo dump_repo dump_home intel_brew
+  local plugin_remote
   local output default_output apply_output verify_output handoff_output retire_output retire_apply_output
   local dotted_output ambiguous_output mixed_output profile_link_before rc_link_before
   local before_status after_status profile_backup_count rc_backup_count home_before home_after
@@ -356,6 +379,10 @@ run_full_checks() {
     "$fixture_repo/my_setup/macos/install.sh" \
     "$fixture_repo/.githooks/pre-commit"
   plugin_revision="$(seed_fixture_plugin "$fixture_home")" || fail '无法创建固定 revision 插件 fixture'
+  plugin_remote="$test_root/plugin-remote.git"
+  git clone --bare -- "$fixture_home/.local/share/dotfiles/plugins/fixture-plugin" \
+    "$plugin_remote" >/dev/null 2>&1 || fail '无法创建插件远端 fixture'
+  command rm -rf -- "$fixture_home/.local/share/dotfiles/plugins/fixture-plugin"
   write_fixture_zsh "$fixture_repo" "$plugin_revision" plain
   {
     print -r -- 'brew "ast-grep"'
@@ -365,6 +392,7 @@ run_full_checks() {
 
   write_shared_fixture "$shared_repo"
   write_fake_tools "$fixture_bin"
+  write_fixture_git "$fixture_bin" "$plugin_remote"
   write_fake_intel_brew "$intel_brew"
 
   command mkdir -p -- "$fixture_home/.config/dotfiles/local"
@@ -438,6 +466,12 @@ run_full_checks() {
     || fail 'integrations.zsh 权限不是 0600'
   [[ "$(git -C "$fixture_repo" config --local --get core.hooksPath)" == .githooks ]] \
     || fail '未配置受管 hooksPath'
+  [[ "$(git -C "$fixture_home/.local/share/dotfiles/plugins/fixture-plugin" rev-parse HEAD)" \
+    == "$plugin_revision" ]] || fail '首次 clone 未固定到声明 revision'
+  [[ "$(git -C "$fixture_home/.local/share/dotfiles/plugins/fixture-plugin" remote get-url origin)" \
+    == 'https://example.invalid/personal.git' ]] || fail '首次 clone 改写了声明 origin'
+  [[ -z "$(git -C "$fixture_home/.local/share/dotfiles/plugins/fixture-plugin" status --porcelain)" ]] \
+    || fail '首次 clone 固定 revision 后工作树不干净'
 
   profile_backup_count=${#profile_backup_count}
   rc_backup_count=${#rc_backup_count}
