@@ -262,7 +262,7 @@ macos_path_architecture() {
 }
 
 macos_collect_handoff_rows() {
-  local intel_brew formula version rest reason path architecture service_names
+  local intel_brew formula version rest reason formula_path architecture service_names
   local formula_lines cask_lines path_entry command_name command_path
   local -a current_path
   typeset -A desired arm_installed services seen_command
@@ -298,8 +298,8 @@ macos_collect_handoff_rows() {
       version="${rest#$formula}"
       version="${version##[[:space:]]#}"
       [[ -n "$version" ]] || version=unknown
-      path="$($intel_brew --prefix "$formula" 2>/dev/null)"
-      [[ "$path" == /usr/local/* ]] || path="/usr/local/opt/$formula"
+      formula_path="$($intel_brew --prefix "$formula" 2>/dev/null)"
+      [[ "$formula_path" == /usr/local/* ]] || formula_path="/usr/local/opt/$formula"
       architecture=unknown
       command_name="$(macos_formula_command "$formula" 2>/dev/null)" || command_name=''
       if [[ -n "$command_name" ]]; then
@@ -314,7 +314,7 @@ macos_collect_handoff_rows() {
       else
         reason='保留：未证明为当前声明目标或项目依赖，等待人工分类'
       fi
-      macos_handoff_add formula homebrew "$formula" "$version" "$path" "$architecture" "$reason" || return 1
+      macos_handoff_add formula homebrew "$formula" "$version" "$formula_path" "$architecture" "$reason" || return 1
     done
 
     cask_lines="$($intel_brew list --versions --cask 2>/dev/null)" || cask_lines=''

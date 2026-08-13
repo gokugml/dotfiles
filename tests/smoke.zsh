@@ -78,6 +78,12 @@ quick_checks() {
   for file in "${shell_files[@]}"; do
     /bin/zsh -n "$repo_root/$file" || fail "Zsh 语法失败：$file"
   done
+  if grep -En '^[[:space:]]*local .*([[:space:]]|^)path([=[:space:]]|$)' \
+    "$repo_root/my_setup/macos/install.sh" \
+    "$repo_root/my_setup/tooling/install.sh" \
+    "$repo_root/my_setup/zsh/install.sh" >/dev/null 2>&1; then
+    fail '安装模块不得声明会覆盖 PATH 的 Zsh 特殊参数 path'
+  fi
   for file in "${markdown_files[@]}"; do
     if grep -nE '[[:blank:]]+$' "$repo_root/$file" >/dev/null 2>&1; then
       fail "Markdown 存在行尾空白：$file"
@@ -269,6 +275,7 @@ write_fixture_zsh() {
     print -r -- 'export PATH'
   } > "$fixture_repo/my_setup/zsh/$profile_name"
   {
+    print -r -- '# dotfiles: local-regression-before-shared'
     print -r -- '# dotfiles: shared'
     print -r -- 'if [[ -n "${DOTFILES_SHARED_DIR:-}" && -r "$DOTFILES_SHARED_DIR/zsh/shared.zsh" ]]; then'
     print -r -- '  source "$DOTFILES_SHARED_DIR/zsh/shared.zsh"'

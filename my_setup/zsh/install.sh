@@ -411,9 +411,9 @@ zsh_verify_load_order() {
   local rc="$1"
   local shared_line personal_line local_line
 
-  shared_line="$(grep -n -m1 'dotfiles: shared' "$rc" 2>/dev/null | cut -d: -f1)"
-  personal_line="$(grep -n -m1 'dotfiles: personal' "$rc" 2>/dev/null | cut -d: -f1)"
-  local_line="$(grep -n -m1 'dotfiles: local' "$rc" 2>/dev/null | cut -d: -f1)"
+  shared_line="$(grep -n -F -x -m1 -- '# dotfiles: shared' "$rc" 2>/dev/null | cut -d: -f1)"
+  personal_line="$(grep -n -F -x -m1 -- '# dotfiles: personal' "$rc" 2>/dev/null | cut -d: -f1)"
+  local_line="$(grep -n -F -x -m1 -- '# dotfiles: local' "$rc" 2>/dev/null | cut -d: -f1)"
   if [[ -z "$shared_line" || -z "$personal_line" || -z "$local_line" \
     || "$shared_line" -ge "$personal_line" || "$personal_line" -ge "$local_line" ]]; then
     print -u2 -- 'verify: .zshrc 必须按 dotfiles: shared → personal → local 标记顺序加载'

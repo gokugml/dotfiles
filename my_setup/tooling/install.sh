@@ -318,19 +318,19 @@ tooling_apply() {
 }
 
 tooling_verify_binary_arch() {
-  local name="$1" path="$2" expected_arch
-  [[ -n "$path" && -x "$path" ]] || {
+  local name="$1" binary_path="$2" expected_arch
+  [[ -n "$binary_path" && -x "$binary_path" ]] || {
     print -u2 -- "verify: $name 不在原生目标路径"
     return 1
   }
   if [[ "$DOTFILES_TEST_MODE" != 1 ]]; then
-    if [[ "$path" != "$DOTFILES_HOMEBREW_PREFIX"/* ]]; then
+    if [[ "$binary_path" != "$DOTFILES_HOMEBREW_PREFIX"/* ]]; then
       print -u2 -- "verify: $name 必须来自 $DOTFILES_HOMEBREW_PREFIX"
       return 1
     fi
     expected_arch='x86_64|universal binary'
     [[ "$DOTFILES_NATIVE_ARCH" == arm64 ]] && expected_arch='arm64|universal binary'
-    if ! file -L "$path" | grep -Eq "$expected_arch"; then
+    if ! file -L "$binary_path" | grep -Eq "$expected_arch"; then
       print -u2 -- "verify: $name 架构不符合 $DOTFILES_NATIVE_ARCH"
       return 1
     fi
