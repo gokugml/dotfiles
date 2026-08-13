@@ -36,7 +36,9 @@ dotfiles/
 │   ├── tooling/install.sh        # internal mise/uv module
 │   └── macos/install.sh          # internal Homebrew module
 ├── tests/smoke.zsh
-├── .githooks/pre-commit
+├── .githooks/
+│   ├── install.sh               # one-time repository development setup
+│   └── pre-commit               # tracked check entry point
 └── .github/workflows/verify.yml
 ```
 
@@ -54,7 +56,15 @@ The three nested `install.sh` files are internal modules sourced by the root ins
 ./install.sh retire --apply
 ```
 
-The parameterless install order is `macos → tooling → zsh → pre-commit hook → verify`. If Apple Silicon Homebrew is missing, the installer stops and asks the user to review and install official Homebrew first; it never runs an opaque `curl | shell` command.
+The parameterless install order is `macos → tooling → zsh → verify`. If Apple Silicon Homebrew is missing, the installer stops and asks the user to review and install official Homebrew first; it never runs an opaque `curl | shell` command. Stage 2 does not install Git hooks or run or report smoke, pre-commit, or CI.
+
+Repository developers run this once in each new checkout:
+
+```zsh
+./.githooks/install.sh
+```
+
+This command independently prepares pinned Gitleaks and installs a managed shim at Git's default `.git/hooks/pre-commit`; it never sets `core.hooksPath`. An unknown existing hook or a configured custom hooks path stops safely.
 
 Stage 2 must uniquely authorize the optional shared repository and pass its absolute path to the root installer:
 
@@ -98,12 +108,13 @@ Managed symlinks expose mise configuration under `~/.config/mise/conf.d/`, with 
 ```zsh
 ./tests/smoke.zsh
 ./tests/smoke.zsh --quick
-.githooks/pre-commit
+./.githooks/install.sh
+.git/hooks/pre-commit
 ```
 
 The full smoke test uses a temporary repository and HOME to verify both plain and dotted repository source names, ambiguity/mixed-name blocking, default `N`, backups, symlinks, idempotency, shared/personal merging, local-value non-disclosure, read-only retirement, and non-TTY blocking. Quick mode checks syntax, Markdown, section parity between the Chinese and English documentation, safety boundaries, and forbidden Intel runtime paths.
 
-The pre-commit hook never installs dependencies. It requires `gitleaks 8.30.0`, installed from the Stage 2 mise declaration, and scans the current public tree. CI uses the same pinned version to scan both the current tree and complete Git history. The Stage 2 final report includes quick-check, full-smoke, pre-commit, and CI status, but missing, unrun, or failing CI does not block installation or Stage 2 completion after its A/B verification succeeds.
+`./.githooks/install.sh` is a one-time repository-development setup outside every Stage. It prepares Gitleaks `8.30.0` through mise and uses Git's default `.git/hooks/pre-commit`. The hook itself never installs dependencies and scans only the current public tree; CI uses the same pinned version to scan the current tree and complete Git history. Stage 2 does not collect, run, or report these repository-quality checks.
 
 <!-- section:manual -->
 

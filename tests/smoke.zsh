@@ -358,6 +358,8 @@ run_full_checks() {
   local repo_state_output symlink_state_output external_state_dir
   local minimal_repo minimal_home minimal_bin minimal_output intel_home intel_bin intel_output
   local rosetta_home rosetta_output
+  local hook_repo hook_custom_repo hook_output hook_target hook_before hook_after hook_conflict_output
+  local hook_custom_output
 
   test_root="$(mktemp -d /private/tmp/dotfiles-smoke.XXXXXX)" || fail '无法创建隔离测试目录'
   SMOKE_TEST_ROOT="$test_root"
@@ -371,13 +373,10 @@ run_full_checks() {
 
   command cp -- "$repo_root/install.sh" "$repo_root/dump.sh" "$repo_root/.gitignore" "$fixture_repo/"
   command cp -R -- "$repo_root/my_setup" "$fixture_repo/"
-  command mkdir -p -- "$fixture_repo/.githooks"
-  command cp -- "$repo_root/.githooks/pre-commit" "$fixture_repo/.githooks/"
   chmod 700 "$fixture_repo/install.sh" "$fixture_repo/dump.sh" \
     "$fixture_repo/my_setup/zsh/install.sh" \
     "$fixture_repo/my_setup/tooling/install.sh" \
-    "$fixture_repo/my_setup/macos/install.sh" \
-    "$fixture_repo/.githooks/pre-commit"
+    "$fixture_repo/my_setup/macos/install.sh"
   plugin_revision="$(seed_fixture_plugin "$fixture_home")" || fail '无法创建固定 revision 插件 fixture'
   plugin_remote="$test_root/plugin-remote.git"
   git clone --bare -- "$fixture_home/.local/share/dotfiles/plugins/fixture-plugin" \
@@ -464,8 +463,10 @@ run_full_checks() {
     || fail 'parameters.zsh 权限不是 0600'
   [[ "$(stat -f '%Lp' "$fixture_home/.config/dotfiles/local/integrations.zsh")" == 600 ]] \
     || fail 'integrations.zsh 权限不是 0600'
-  [[ "$(git -C "$fixture_repo" config --local --get core.hooksPath)" == .githooks ]] \
-    || fail '未配置受管 hooksPath'
+  [[ -z "$(git -C "$fixture_repo" config --get core.hooksPath 2>/dev/null)" ]] \
+    || fail 'Stage 2 意外配置了 core.hooksPath'
+  [[ ! -e "$fixture_repo/.git/hooks/pre-commit" ]] \
+    || fail 'Stage 2 意外安装了默认 pre-commit hook'
   [[ "$(git -C "$fixture_home/.local/share/dotfiles/plugins/fixture-plugin" rev-parse HEAD)" \
     == "$plugin_revision" ]] || fail '首次 clone 未固定到声明 revision'
   [[ "$(git -C "$fixture_home/.local/share/dotfiles/plugins/fixture-plugin" remote get-url origin)" \
@@ -750,8 +751,8 @@ run_full_checks() {
     || fail '最小 checkout 意外创建 Zsh 入口'
   [[ ! -e "$minimal_home/.config/dotfiles/local" ]] \
     || fail '最小 checkout 意外创建 local Zsh 目录'
-  [[ -z "$(git -C "$minimal_repo" config --local --get core.hooksPath 2>/dev/null)" ]] \
-    || fail '未 checkout hook 时仍修改了 hooksPath'
+  [[ -z "$(git -C "$minimal_repo" config --get core.hooksPath 2>/dev/null)" ]] \
+    || fail '最小 Stage 2 意外配置了 core.hooksPath'
   [[ ! -e "$minimal_home/.local/state/dotfiles/intel_to_be_retired.tsv" ]] \
     || fail '无 Intel 残留的最小 checkout 生成了交接文件'
 
@@ -791,6 +792,67 @@ run_full_checks() {
   assert_contains "$rosetta_output" '必须从原生 arm64 会话运行'
   assert_contains "$rosetta_output" '摘要包含阻断项，未请求确认，也未执行写入'
   [[ ! -e "$rosetta_home/.config/mise" ]] || fail 'Rosetta 阻断后仍写入 tooling'
+
+  hook_repo="$test_root/hook-repo"
+  hook_output="$test_root/hook-install.out"
+  command mkdir -p -- "$hook_repo/.githooks"
+  command cp -- "$repo_root/.githooks/install.sh" "$repo_root/.githooks/pre-commit" \
+    "$hook_repo/.githooks/"
+  chmod 700 "$hook_repo/.githooks/install.sh" "$hook_repo/.githooks/pre-commit"
+  git -C "$hook_repo" init -q
+  (
+    cd "$hook_repo" || exit 1
+    PATH="$fixture_bin:/usr/bin:/bin" ./.githooks/install.sh > "$hook_output" 2>&1
+  ) || {
+    sed -n '1,160p' "$hook_output" >&2
+    fail '一次性默认 Git hook 安装失败'
+  }
+  hook_target="$hook_repo/.git/hooks/pre-commit"
+  [[ -f "$hook_target" && ! -L "$hook_target" && -x "$hook_target" ]] \
+    || fail '一次性命令未安装默认 .git/hooks/pre-commit'
+  command head -n 2 "$hook_target" | grep -Fxq '# dotfiles-managed-pre-commit-v1' \
+    || fail '默认 pre-commit 缺少受管标记'
+  [[ -z "$(git -C "$hook_repo" config --get core.hooksPath 2>/dev/null)" ]] \
+    || fail '一次性命令定义了 core.hooksPath'
+  hook_before="$(cksum "$hook_target")"
+  (
+    cd "$hook_repo" || exit 1
+    PATH="$fixture_bin:/usr/bin:/bin" ./.githooks/install.sh >/dev/null 2>&1
+  ) || fail '一次性 Git hook 第二次安装失败'
+  hook_after="$(cksum "$hook_target")"
+  [[ "$hook_before" == "$hook_after" ]] || fail '一次性 Git hook 安装不是幂等输出'
+
+  print -r -- 'unknown-hook-must-survive' > "$hook_target"
+  chmod 700 "$hook_target"
+  hook_before="$(cksum "$hook_target")"
+  hook_conflict_output="$test_root/hook-conflict.out"
+  if (
+    cd "$hook_repo" || exit 1
+    PATH="$fixture_bin:/usr/bin:/bin" ./.githooks/install.sh > "$hook_conflict_output" 2>&1
+  ); then
+    fail '一次性命令覆盖了未知默认 hook'
+  fi
+  assert_contains "$hook_conflict_output" '默认目标已存在且不属于本安装器'
+  hook_after="$(cksum "$hook_target")"
+  [[ "$hook_before" == "$hook_after" ]] || fail '未知默认 hook 在阻断后被修改'
+
+  hook_custom_repo="$test_root/hook-custom-repo"
+  hook_custom_output="$test_root/hook-custom.out"
+  command mkdir -p -- "$hook_custom_repo/.githooks"
+  command cp -- "$repo_root/.githooks/install.sh" "$repo_root/.githooks/pre-commit" \
+    "$hook_custom_repo/.githooks/"
+  chmod 700 "$hook_custom_repo/.githooks/install.sh" "$hook_custom_repo/.githooks/pre-commit"
+  git -C "$hook_custom_repo" init -q
+  git -C "$hook_custom_repo" config --local core.hooksPath custom-hooks
+  if (
+    cd "$hook_custom_repo" || exit 1
+    PATH="$fixture_bin:/usr/bin:/bin" ./.githooks/install.sh > "$hook_custom_output" 2>&1
+  ); then
+    fail '一次性命令接受了自定义 core.hooksPath'
+  fi
+  assert_contains "$hook_custom_output" '检测到自定义 core.hooksPath=custom-hooks'
+  [[ ! -e "$hook_custom_repo/.git/hooks/pre-commit" ]] \
+    || fail '自定义 hooksPath 阻断后仍写入默认 hook'
 
   dump_repo="$test_root/dump-repo"
   dump_home="$test_root/dump-home"

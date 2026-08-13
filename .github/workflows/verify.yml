@@ -28,10 +28,11 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: "1"
         run: brew install mise
 
-      - name: Run pre-commit-equivalent checks with pinned Gitleaks
-        run: >-
-          mise --no-config exec ubi:gitleaks/gitleaks@8.30.0 --
-          .githooks/pre-commit
+      - name: Initialize the default Git hook once
+        run: ./.githooks/install.sh
+
+      - name: Run checks through the default Git hook
+        run: .git/hooks/pre-commit
 
       - name: Scan complete Git history with pinned Gitleaks
         run: >-

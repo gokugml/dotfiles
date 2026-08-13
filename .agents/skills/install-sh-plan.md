@@ -6,7 +6,7 @@
 
 ## 1. 阶段定位
 
-本计划建设可供其他用户和机器复用的仓库能力。核心交付是 `dump.sh`、根目录统一 `install.sh`、三个内部能力安装模块、配置目录、最小测试、默认中文 README、独立英文 README，以及只进入最终报告的 pre-commit/CI 状态。
+本计划建设可供其他用户和机器复用的仓库能力。核心交付是 `dump.sh`、根目录统一 `install.sh`、三个内部能力安装模块、配置目录、最小测试、默认中文 README、独立英文 README，以及与 Stage 2 分离的一次性仓库开发初始化和 CI。
 
 本计划只描述能力建设，不属于 Stage 0–3 主流程，也不在开发者真实 HOME 中安装配置或软件。Stage 2 在任意目标机器只以当前 checkout 为输入，调用本计划定义的 `install.sh`；它不读取 Stage 0/1 交接或 `zsh-repair-plan.md`。
 
@@ -16,7 +16,7 @@
 2. 生成根目录统一 `install.sh`，同时承担 Stage 2 安装和 Stage 3 退役入口；`zsh`、`tooling`、`macos` 各自提供一个只由根安装器编排的内部 `install.sh`。
 3. 建立 `my_setup/`、shared 和 local 的轻量契约。
 4. 用最小 smoke test 验证关键路径，不建设额外管理 CLI。
-5. 保留 pre-commit、分离且互链的完整中英文 README 和 CI 检查，但不把 CI 状态作为 Stage 2 安装或完成门禁。
+5. 用独立的 `./.githooks/install.sh` 一次性准备固定开发检查并安装 Git 默认 `.git/hooks/pre-commit`；pre-commit 与 CI 不进入 Stage 2。
 
 ## 3. 前置条件
 
@@ -66,7 +66,9 @@ dotfiles/
 │       └── install.sh
 ├── tests/
 │   └── smoke.zsh
-├── .githooks/pre-commit
+├── .githooks/
+│   ├── install.sh              # 一次性仓库开发初始化
+│   └── pre-commit              # 仓库跟踪的实际检查入口
 └── .github/workflows/verify.yml
 ```
 
@@ -136,7 +138,7 @@ ${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/
 
 macOS 与 tooling 模块是最小 checkout 的必需项；Zsh 目录和内部入口都不存在时明确跳过，部分存在时阻断。内部模块不得独立提示用户、重复确认、解析根命令面或自动调用其他模块；被直接执行时必须安全失败。普通安装仍只产生一次整体摘要和一次确认。
 
-根安装器的真实 apply 顺序固定为 `macos → tooling → 可选 zsh → 可选 pre-commit hook → verify`，避免软件安装失败时提前切换真实 Zsh 入口。
+根安装器的真实 apply 顺序固定为 `macos → tooling → 可选 zsh → verify`，避免软件安装失败时提前切换真实 Zsh 入口。它不发现、安装或验证 Git hook，也不运行或报告 smoke、pre-commit、CI。
 
 ### 6.1 无参数安装
 
@@ -144,13 +146,12 @@ macOS 与 tooling 模块是最小 checkout 的必需项；Zsh 目录和内部入
 
 1. 验证当前 checkout、必需 macOS/tooling 模块、可选完整 Zsh 模块和可选 shared 路径；
 2. 检查 macOS 原生硬件架构、当前进程是否运行在 Rosetta 下、本地 Zsh 入口和 local 权限；
-3. 计算并展示每个启用模块的仓库 source、本机 target 和 action，包括 tooling symlink、Brewfile、mise/uv runtime、可选 Zsh/plugin 和 hook；
+3. 计算并展示每个启用模块的仓库 source、本机 target 和 action，包括 tooling symlink、Brewfile、mise/uv runtime 和可选 Zsh/plugin；
 4. 展示简短摘要并以默认 `N` 的 `y/N` 确认；
 5. 为已有本地 `.zsh` 文件或 symlink 创建副本；
 6. 仅当 Zsh 模块启用时，将唯一仓库来源组建立为固定 HOME 入口 `~/.zprofile` 和 `~/.zshrc` symlink；
-7. 为当前公开仓库配置受管的 `core.hooksPath=.githooks`；
-8. Intel Mac 使用 `/usr/local` Homebrew，Apple Silicon 原生会话使用 `/opt/homebrew` Homebrew，安装 personal/shared Brewfile、tooling、mise/uv 和固定 revision 插件；
-9. 调用同一脚本的验证逻辑，确认全部声明项安装到当前系统原生目标；Apple Silicon 上若仍有 Intel 残留，原子生成 `intel_to_be_retired.tsv`。
+7. Intel Mac 使用 `/usr/local` Homebrew，Apple Silicon 原生会话使用 `/opt/homebrew` Homebrew，安装 personal/shared Brewfile、tooling、mise/uv 和固定 revision 插件；
+8. 调用同一脚本的验证逻辑，确认全部声明项安装到当前系统原生目标；Apple Silicon 上若仍有 Intel 残留，原子生成 `intel_to_be_retired.tsv`。
 
 安装器不得打印、复制或持久化 `parameters.zsh`、`integrations.zsh` 内容；只允许检查文件类型、owner、权限和无输出语法。
 
@@ -237,9 +238,23 @@ personal/shared 各自最多一份 `zsh/plugins.toml`。每个插件条目至少
 6. Stage 3 只适用于 Apple Silicon，且 `retire` 不会被普通安装触发；
 7. 服务和数据需要人工处理。
 
-## 9. pre-commit
+## 9. 一次性仓库开发初始化与 pre-commit
 
-仓库跟踪 `.githooks/pre-commit`。它至少运行快速检查：
+仓库开发者在每个新 checkout 中显式运行一次：
+
+```text
+./.githooks/install.sh
+```
+
+该命令不属于 Stage 0–3，不由根 `install.sh` 调用。它负责：
+
+- 要求当前 checkout 未配置任意作用域的 `core.hooksPath`；发现自定义路径时在写入和依赖安装前阻断，不擅自清除；
+- 通过 mise 独立准备固定的 Gitleaks `8.30.0`，不把该 CI/开发工具写入 Stage 2 tooling 声明；
+- 把带固定归属标记的轻量 shim 安装到 Git 默认 `.git/hooks/pre-commit`；普通 checkout 使用 `.git/hooks`，不定义替代路径；
+- 未知同名 hook 不覆盖，已受管 hook 可幂等刷新；
+- shim 调用仓库跟踪的 `.githooks/pre-commit`，因此 checkout 移动后仍按当前仓库根定位检查入口。
+
+仓库跟踪的 `.githooks/pre-commit` 至少运行快速检查：
 
 - Markdown 和 shell 基础格式；
 - `zsh -n`；
@@ -247,7 +262,7 @@ personal/shared 各自最多一份 `zsh/plugins.toml`。每个插件条目至少
 - 与目标机器原生架构不匹配的 Homebrew 运行时路径，以及 Apple Silicon 上的 Rosetta fallback；
 - `README.md` 与 `README.en.md` 的章节结构一致性及靠前互链。
 
-hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确失败或安装提示。
+hook 本身不安装依赖、不修改用户文件；固定工具缺失时要求重新运行一次性初始化命令。
 
 ## 10. 测试与 CI 状态报告
 
@@ -269,7 +284,7 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 - 使用固定版本扫描器检查公开仓库当前内容和完整 Git 历史；
 - `README.md` 与 `README.en.md` 的中英文一致性及靠前互链。
 
-在 Stage 2 前后采集 smoke、pre-commit 与 CI 的最近状态并写入最终报告。缺失、未运行或失败的 CI 是需要跟进的仓库质量信号，但不得阻止 Stage 2 展示安装计划、运行安装器或在 A/B 验证通过后报告完成。不得因完整 CI 而重新引入管理 CLI、多套 schema 或复杂 fixture。
+smoke、pre-commit 与 CI 只表达仓库开发质量，不由 Stage 2 采集、运行或报告，也不参与 Stage 2 输入和完成判定。不得因完整 CI 而重新引入管理 CLI、多套 schema 或复杂 fixture。
 
 ## 11. 完成条件
 
@@ -280,10 +295,11 @@ hook 不安装依赖、不修改用户文件；检查工具缺失时给出明确
 - [ ] shared/personal/local 加载顺序正确；
 - [ ] 插件已收敛为单一 `plugins.toml`；
 - [ ] local 密钥不会被脚本、测试或 CI 读取；
-- [ ] smoke test、pre-commit、分离且互链的中英文 README 和 CI 状态可采集并进入最终报告；CI 结果不是 Stage 2 阻断条件；
+- [ ] `./.githooks/install.sh` 可在默认 `.git/hooks/pre-commit` 安全、幂等地完成一次性仓库开发初始化，且不设置 `core.hooksPath`；
+- [ ] smoke test、pre-commit、分离且互链的中英文 README 和 CI 独立工作，不进入 Stage 2；
 - [ ] 未修改开发者真实 HOME 或软件；
 
-根安装器与三个内部模块必须具备当前机器所需的精确目标安装、A/B verify 和安全交接能力后，才用于 [Stage 2](./stage-2-target-machine-configuration-and-software-migration/SKILL.md) 真实安装；CI 状态不参与这一判定。它不改变 `Stage 0 → Stage 1 → Stage 2 → Stage 3` 的主流程。
+根安装器与三个内部模块必须具备当前机器所需的精确目标安装、A/B verify 和安全交接能力后，才用于 [Stage 2](./stage-2-target-machine-configuration-and-software-migration/SKILL.md) 真实安装。仓库开发初始化与 CI 走独立命令和 workflow，不改变 `Stage 0 → Stage 1 → Stage 2 → Stage 3` 的主流程。
 
 ## 12. 计划边界
 

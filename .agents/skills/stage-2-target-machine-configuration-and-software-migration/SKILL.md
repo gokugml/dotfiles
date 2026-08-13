@@ -22,9 +22,9 @@ Stage 2 是独立部署阶段。不得读取或验证 Stage 0/1 产物、`zsh-re
 
 - 当前 checkout 的 commit、diff、public/shared 来源和启用/跳过模块；
 - 每个仓库 source、本机 target、安装动作及原生 Homebrew 前缀；
-- Brewfile 软件、mise/uv runtime、可选 Zsh/plugin、hook、网络与磁盘影响；
+- Brewfile 软件、mise/uv runtime、可选 Zsh/plugin、网络与磁盘影响；
 - Apple Silicon 上 `intel_to_be_retired.tsv` 的路径、schema、权限和仅供 Stage 3 参考的语义；
-- 服务/数据人工事项、A/B 验证、失败停止点、测试/CI 状态，以及不会执行的配置生成、Stage 3、commit 和 push。
+- 服务/数据人工事项、A/B 验证、失败停止点，以及不会执行的仓库开发初始化、配置生成、Stage 3、commit 和 push。
 
 展示后停止并等待用户明确确认。执行前重新检查 checkout、声明、目标和架构；实质变化时更新计划并再次确认。该确认只授权进入安装器，不替代 `install.sh` 内默认 `N` 的 `y/N`。
 
@@ -77,6 +77,7 @@ Stage 2 是独立部署阶段。不得读取或验证 Stage 0/1 产物、`zsh-re
 - 不启停服务，不迁移数据库、Homebrew service 或 GUI 数据，不清理未知软件、项目 runtime 或另一架构目录。
 - 本机 Intel 盘点只写 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`；不写入仓库，也不构成删除授权。
 - 不调用 `install.sh retire` 或 `retire --apply`，不进入 Stage 3，不 commit 或 push。
+- 不安装 Git hook，不设置 `core.hooksPath`，不运行或报告 smoke、pre-commit、CI；这些仓库开发能力独立于多机 Stage 2。
 
 ## 安装工作流
 
@@ -84,7 +85,7 @@ Stage 2 是独立部署阶段。不得读取或验证 Stage 0/1 产物、`zsh-re
 
 1. 检查 public/shared `git status --short`，记录已有用户变更和冲突。
 2. 发现模块并验证每个已启用模块的声明可解析、目标唯一、内部入口不可直接执行。
-3. 让安装器能力能够列出每个精确 `source → target → action`；记录 smoke、pre-commit 和 CI 状态，CI 只报告不阻断。
+3. 让安装器能力能够列出每个精确 `source → target → action`。
 4. 判定原生架构、Rosetta、Homebrew 前缀与关键目标路径。
 5. 只检查 local 和既有目标的元数据，不读取 local 正文。
 
@@ -96,9 +97,9 @@ Stage 2 是独立部署阶段。不得读取或验证 Stage 0/1 产物、`zsh-re
 ./install.sh
 ```
 
-不添加参数，不代替用户输入 `y`。确认安装器在任何写入前展示：架构与原生前缀、启用/跳过模块、每个精确 source/target/action、软件/runtime/plugin 版本、local 元数据、hook 和人工服务/数据事项。
+不添加参数，不代替用户输入 `y`。确认安装器在任何写入前展示：架构与原生前缀、启用/跳过模块、每个精确 source/target/action、软件/runtime/plugin 版本、local 元数据和人工服务/数据事项。
 
-用户在默认 `N` 的集中确认中同意后，由根安装器按 `macOS → tooling → 可选 Zsh → hook → verify` 执行。缺失或跳过模块不得被调用；已启用模块的任一声明目标必须全部安装，不能以旧软件已存在代替原生目标。
+用户在默认 `N` 的集中确认中同意后，由根安装器按 `macOS → tooling → 可选 Zsh → verify` 执行。缺失或跳过模块不得被调用；已启用模块的任一声明目标必须全部安装，不能以旧软件已存在代替原生目标。
 
 ### 3. 验证
 
@@ -116,7 +117,6 @@ Stage 2 是独立部署阶段。不得读取或验证 Stage 0/1 产物、`zsh-re
 - 所有受管命令优先解析到当前机器原生 Homebrew/runtime；另一架构残留不得成为受管目标；
 - macOS+tooling 最小 checkout 不要求 Zsh；启用 Zsh 时才验证语法、HOME symlink、加载顺序、启动场景和插件；
 - local 为 `0700/0600`、未被 Git 跟踪且内容未泄露；
-- hook 只在仓库包含可执行 `.githooks/pre-commit` 时受管；
 - 再次安装不会重复备份或破坏正确 symlink；服务和数据仍只报告。
 
 任一已启用声明项未到位则 A 失败。未 checkout 的可选模块不计为缺失。
@@ -140,7 +140,7 @@ Stage 2 只有 A 通过，且 Apple Silicon 上 B 为“已生成”或“无残
 
 ### 4. 报告并停止
 
-报告 checkout commit/diff、架构与前缀、启用/跳过模块、每个精确目标及结果、备份、A/B 结论、Intel 清单路径和条目摘要、人工服务/数据事项、测试/pre-commit/CI 状态与未解决缺口。Apple Silicon 上说明 Stage 3 需单独触发；Intel Mac 上说明不适用。
+报告 checkout commit/diff、架构与前缀、启用/跳过模块、每个精确目标及结果、备份、A/B 结论、Intel 清单路径和条目摘要、人工服务/数据事项与未解决缺口。Apple Silicon 上说明 Stage 3 需单独触发；Intel Mac 上说明不适用。
 
 ## 失败与完成判定
 
@@ -150,4 +150,4 @@ Stage 2 只有 A 通过，且 Apple Silicon 上 B 为“已生成”或“无残
 - 部分安装后失败：保留实际状态，报告失败模块和人工修复，不自动卸载。
 - A 通过但 B 失败：报告安装目标已到位但 Stage 2 未完成，不删除 Intel 项。
 
-只有当前 checkout 的所有已启用声明目标完成安装、用户已在安装器内确认、A 通过、B 在适用时通过，且服务/数据未被自动迁移，才报告 Stage 2 完成。`zsh-repair-plan.md`、Stage 0/1 状态和 CI 结果均不参与完成判定。
+只有当前 checkout 的所有已启用声明目标完成安装、用户已在安装器内确认、A 通过、B 在适用时通过，且服务/数据未被自动迁移，才报告 Stage 2 完成。`zsh-repair-plan.md`、Stage 0/1 状态和仓库开发/CI 能力均不参与完成判定。

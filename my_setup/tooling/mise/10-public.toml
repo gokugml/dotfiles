@@ -15,10 +15,5 @@ node = "24.14.1"
 # AI-REVIEW: 归属=personal；验证=mise exec -- pnpm --version 输出 10.33.0。
 pnpm = "10.33.0"
 
-# AI-REVIEW: 功能=扫描 Git 内容中的密钥；最佳实践=固定供应链来源和版本。
-# AI-REVIEW: 修改级别=建议修改；建议=由 mise ubi backend 提供，供 pre-commit 与 CI 使用。
-# AI-REVIEW: 归属=personal；验证=mise exec -- gitleaks version 输出 8.30.0。
-"ubi:gitleaks/gitleaks" = "8.30.0"
-
 # AI-RETIRE: Intel NVM、直接 Bun 安装和 Intel yarn 仅在上述 runtime 与项目验证通过后进入 Stage 3。
 # AI-MANUAL: npm 原生清单中的全局 CLI 不自动迁移到 mise；逐项确认是否应由项目依赖、uv tool、Brewfile 或 local 安装器管理。

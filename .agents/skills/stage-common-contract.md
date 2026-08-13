@@ -51,7 +51,7 @@ Stage 2：在任意目标机器 checkout 根 install.sh + macOS/tooling 声明 �
 
 1. Stage 0 的草稿未经用户确认，不写入 personal/shared 目标文件。
 2. Stage 1 的最新完整 Zsh diff 未经确认，不写入 Stage 1 目标；其计划状态只服务于 Stage 1 自身交接，不构成 Stage 2 输入或门禁。
-3. [`install-sh-plan.md`](./install-sh-plan.md) 定义的根安装器、三个内部模块及目标路径/验证能力缺失或存在安全错误时，不用于真实机器安装；测试、pre-commit 和 CI 状态必须检查并在最终报告中呈现，但 CI 缺失、未运行或失败不构成 Stage 2 门禁。
+3. [`install-sh-plan.md`](./install-sh-plan.md) 定义的根安装器、三个内部模块及目标路径/验证能力缺失或存在安全错误时，不用于真实机器安装；仓库开发初始化、pre-commit 和 CI 独立于 Stage 2。
 4. Stage 2 安装与验证未完成，不进入 Stage 3。
 5. Stage 3 只适用于 Apple Silicon，且不由 Stage 2 自动触发。
 
@@ -98,7 +98,9 @@ dotfiles/
 │   └── tooling/
 │       └── install.sh
 ├── tests/
-├── .githooks/pre-commit
+├── .githooks/
+│   ├── install.sh
+│   └── pre-commit
 └── .github/workflows/
 ```
 
@@ -233,4 +235,4 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - Zsh 修改建议只由 Zsh Skill 生成；按需读取其内置的 [Zsh 配置诊断与优化指南](./analyze-zsh-configuration/references/zshrc-diagnostics-guide.md)，不得复制回编排或 Review Skill。
 - 导出配置 Review Skill 只审阅 `dump.sh` 已导出的软件、tooling 和插件文件，不读取 Zsh 证据或修改 `zsh-repair-plan.md`。
 - 后续转化为真正 Skill 时，`SKILL.md` 只保留触发条件和核心工作流；确定性检查再沉淀为 scripts。
-- `README.md` 保持完整中文正文并作为默认入口，`README.en.md` 保持完整英文正文；两份文件在标题后的靠前位置互相链接，pre-commit 与 CI 负责报告结构同步及基础安全结果，CI 状态不作为 Stage 2 门禁。
+- `README.md` 保持完整中文正文并作为默认入口，`README.en.md` 保持完整英文正文；两份文件在标题后的靠前位置互相链接。pre-commit 与 CI 负责仓库结构同步及基础安全结果，通过独立的一次性仓库初始化接入 Git 默认 hooks 路径，不属于 Stage 2。

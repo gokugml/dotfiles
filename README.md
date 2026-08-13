@@ -36,7 +36,9 @@ dotfiles/
 │   ├── tooling/install.sh        # 内部 mise/uv 模块
 │   └── macos/install.sh          # 内部 Homebrew 模块
 ├── tests/smoke.zsh
-├── .githooks/pre-commit
+├── .githooks/
+│   ├── install.sh               # 一次性仓库开发初始化
+│   └── pre-commit               # 仓库跟踪的检查入口
 └── .github/workflows/verify.yml
 ```
 
@@ -54,7 +56,15 @@ dotfiles/
 ./install.sh retire --apply
 ```
 
-无参数安装的执行顺序是 `macos → tooling → zsh → pre-commit hook → verify`。如果 Apple Silicon Homebrew 缺失，脚本会阻断并要求先人工审查、安装官方 Homebrew；它不会执行不透明的 `curl | shell`。
+无参数安装的执行顺序是 `macos → tooling → zsh → verify`。如果 Apple Silicon Homebrew 缺失，脚本会阻断并要求先人工审查、安装官方 Homebrew；它不会执行不透明的 `curl | shell`。Stage 2 不安装 Git hook，也不运行或报告 smoke、pre-commit、CI。
+
+仓库开发者在每个新 checkout 中单独执行一次：
+
+```zsh
+./.githooks/install.sh
+```
+
+该命令独立准备固定的 Gitleaks，并把受管 shim 安装到 Git 默认 `.git/hooks/pre-commit`；它不设置 `core.hooksPath`。未知的现有 hook 或已配置的自定义 hooks 路径会安全阻断。
 
 可选 shared 仓库必须由 Stage 2 唯一确认，并在调用根安装器时以绝对路径传入：
 
@@ -98,12 +108,13 @@ mise 配置通过受管 symlink 进入 `~/.config/mise/conf.d/`，shared 文件�
 ```zsh
 ./tests/smoke.zsh
 ./tests/smoke.zsh --quick
-.githooks/pre-commit
+./.githooks/install.sh
+.git/hooks/pre-commit
 ```
 
 完整 smoke 使用临时仓库和临时 HOME 验证无前置点与有前置点两种仓库来源、歧义/混搭阻断、默认 `N`、副本、symlink、幂等、shared/personal 合并、local 不泄露、retire 只读以及非 TTY 阻断。快速模式执行语法、Markdown、中英文文档章节结构、安全边界和 Intel 路径扫描。
 
-pre-commit 不安装依赖。它要求 `gitleaks 8.30.0` 已由 Stage 2 的 mise 配置安装，并扫描当前公开工作树；CI 还会使用同一固定版本扫描当前内容和完整 Git 历史。Stage 2 最终报告会列出快速检查、完整 smoke、pre-commit 和 CI 状态，但 CI 缺失、未运行或失败不阻止安装或 A/B 验证通过后的 Stage 2 完成。
+`./.githooks/install.sh` 是 Stage 之外的一次性仓库开发初始化：它通过 mise 准备 Gitleaks `8.30.0`，并使用 Git 默认 `.git/hooks/pre-commit`。pre-commit 本身不安装依赖，只扫描当前公开工作树；CI 使用同一固定版本扫描当前内容和完整 Git 历史。这些仓库质量检查不由 Stage 2 采集、运行或报告。
 
 <!-- section:manual -->
 
