@@ -24,9 +24,10 @@
 install.sh plan：独立建设 dump.sh、根 install.sh、三个内部能力安装模块与可复用仓库能力
 
 Stage 0：dump.sh 导出软件/tooling/plugin → Zsh Skill 生成修改建议 → Review Skill 先给工具一句话描述并审阅 → 跨结果自检 → 用户一次确认
-  → Stage 1：应用已确认 Zsh 修复计划 → 用户确认完整 diff → 写入显式目标或默认仓库目标
+  → Stage 1：应用已确认 Zsh 修复计划 → 用户确认完整 diff → 写入显式目标或默认仓库目标 → 导出受 runtime/PATH 变更影响的本机全局 CLI 清单
+    → Stage 1.1：用户可选确认并生成可分享全局 CLI 迁移声明
 
-Stage 2：在任意目标机器 checkout 根 install.sh + macOS/tooling 声明 → 按原生架构安装
+Stage 2：在任意目标机器 checkout 根 install.sh + macOS/tooling 声明 → 可选询问全局 CLI 迁移声明 → 按原生架构安装
   → verify 安装完整性 → 可选生成 Intel 退役交接清单
     → Stage 3：仅 Apple Silicon 上读取交接清单并重新盘点 → install.sh retire 预览 → 用户确认 → 退役与验证
 ```
@@ -50,7 +51,7 @@ Stage 2：在任意目标机器 checkout 根 install.sh + macOS/tooling 声明 �
 阶段之间只保留以下边界：
 
 1. Stage 0 的草稿未经用户确认，不写入 personal/shared 目标文件。
-2. Stage 1 的最新完整 Zsh diff 未经确认，不写入 Stage 1 目标；其计划状态只服务于 Stage 1 自身交接，不构成 Stage 2 输入或门禁。
+2. Stage 1 的最新完整 Zsh diff 未经确认，不写入 Stage 1 目标；其计划状态只服务于 Stage 1 自身交接，不构成 Stage 2 输入或门禁。Stage 1.1 生成的 `my_setup/tooling/global-cli-migration.toml` 只是当前 checkout 的可选 tooling 声明，缺失或目标机用户跳过时均不阻断 Stage 2。
 3. [`install-sh-plan.md`](./install-sh-plan.md) 定义的根安装器、三个内部模块及目标路径/验证能力缺失或存在安全错误时，不用于真实机器安装；仓库开发初始化、pre-commit 和 CI 独立于 Stage 2。
 4. Stage 2 安装与验证未完成，不进入 Stage 3。
 5. Stage 3 只适用于 Apple Silicon，且不由 Stage 2 自动触发。
@@ -63,6 +64,7 @@ Stage 2：在任意目标机器 checkout 根 install.sh + macOS/tooling 声明 �
 | personal | 公开仓库固定 `my_setup/` | 可分享的 Zsh、Brewfile、tooling、插件和软件期望状态 | shared 增量、本机密钥 |
 | shared | 可选独立共享仓库 | 与他人共用的 Zsh、Brewfile、tooling 和插件增量 | 通用脚本、纯个人偏好、本机密钥 |
 | local | `~/.config/dotfiles/local/parameters.zsh` 与 `integrations.zsh` | 前者保存密钥值、账号和机器参数；后者保存源机器上由第三方安装器追加且不能公开的功能块 | Brewfile、软件清单、插件选择、普通共享配置 |
+| 全局 CLI 迁移本机状态 | `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/global_cli_to_be_migrated.tsv` | Stage 1 记录因 NVM、PNPM_HOME、BUN_INSTALL 或本次移除 PATH 而可能失去解析的直接全局 CLI 与本机来源 | Git 声明、认证数据、自动安装授权 |
 | 本机状态 | `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv` | Stage 2 verify 在 Apple Silicon 上确定性记录残留 Intel 软件与精确路径，供 Stage 3 重新核验 | 声明式软件期望、删除授权、密钥或服务数据正文 |
 
 `personal configuration` 是语义分类；它在磁盘上的固定映射是：
@@ -96,7 +98,8 @@ dotfiles/
 │   │   ├── install.sh
 │   │   └── Brewfile
 │   └── tooling/
-│       └── install.sh
+│       ├── install.sh
+│       └── global-cli-migration.toml  # 可选；Stage 1.1 确认的 prompt 声明
 ├── tests/
 ├── .githooks/
 │   ├── install.sh
@@ -125,17 +128,18 @@ shared-dotfiles/
     └── integrations.zsh   # 可选；单一四阶段第三方功能块文件
 ```
 
-Stage 2/3 本机交接状态：
+Stage 1/2/3 本机交接状态：
 
 ```text
 ${XDG_STATE_HOME:-$HOME/.local/state}/
 └── dotfiles/
-    └── intel_to_be_retired.tsv   # 仅 Apple Silicon 且仍有 Intel 残留时存在
+    ├── global_cli_to_be_migrated.tsv  # Stage 1 可选；只保存生成机器的来源状态
+    └── intel_to_be_retired.tsv        # 仅 Apple Silicon 且仍有 Intel 残留时存在
 ```
 
 不存在实际内容时不创建空 shared 文件。详细 tooling 文件由实际工具决定，不为统一目录外观创建空 schema 或占位文件。
 
-Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 和可选 `shared.zsh`；用户显式提供目标文件时优先更新这些目标，否则先让用户选择默认无前置点或有前置点命名。Stage 2 只读取当前 checkout：根安装器、`my_setup/macos/` 与 `my_setup/tooling/` 是最小集合，`my_setup/zsh/` 可选。启用 Zsh 时必须恰好存在 `zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中一套完整来源；两套并存、混搭或残缺时安装器在确认前阻断，不猜优先级、不生成文件。Stage 2 不读取 `zsh-repair-plan.md` 或判断这些配置由哪个阶段生成。安装器 smoke test 只能在临时仓库中使用最小 fixture。
+Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`、`zshrc`/`.zshrc` 和可选 `shared.zsh`；用户显式提供目标文件时优先更新这些目标，否则先让用户选择默认无前置点或有前置点命名。会改变 runtime/PATH owner 时，Stage 1 先生成本机全局 CLI 迁移状态，完成后由 Stage 1.1 可选生成 `my_setup/tooling/global-cli-migration.toml`；该 public 文件不得含本机绝对路径。Stage 2 只读取当前 checkout：根安装器、`my_setup/macos/` 与 `my_setup/tooling/` 是最小集合，`my_setup/zsh/` 可选；不读取 Stage 1 本机 TSV。启用 Zsh 时必须恰好存在 `zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中一套完整来源；两套并存、混搭或残缺时安装器在确认前阻断，不猜优先级、不生成文件。Stage 2 不读取 `zsh-repair-plan.md` 或判断这些配置由哪个阶段生成。安装器 smoke test 只能在临时仓库中使用最小 fixture。
 
 ## 5. Zsh 运行时边界
 
@@ -174,6 +178,7 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - personal 与 shared 分别声明自己的 Brewfile 和 tooling；完全相同的项目去重，可覆盖字段按 shared → personal 处理，管理器或版本所有权不兼容时停止并报告。
 - personal 与 shared 各自最多使用一份 `plugins.toml`，同一条目内记录来源、固定 revision、启用状态和加载顺序。
 - local 不定义软件、版本或插件期望状态；`integrations.zsh` 只保留安装器已经追加的机器级加载块。
+- Stage 1 本机全局 CLI TSV 只保存迁移证据与决定；可分享安装意图只进入 `my_setup/tooling/global-cli-migration.toml`。Stage 2 不要求该 TOML 存在，存在时必须按目标机重新询问，只有用户选择的条目进入该次安装与验证条件。
 
 ## 7. 命令契约
 
@@ -202,6 +207,7 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - `dump.sh` 必须覆盖子进程的临时目录和可重定向缓存位置；只读使用 Homebrew 已有 metadata cache 时必须禁用 refresh、自动更新和 description 查询，使原生工具采集不会写入仓库外目录。
 - 服务、数据库和 GUI 应用数据只检测并报告，不自动迁移。
 - `intel_to_be_retired.tsv` 使用 `0700` 父目录与 `0600` 文件权限，不进入 Git；只记录精确管理器项目/路径和保留理由，不递归枚举 `/usr/local`，也不构成 Stage 3 删除授权。
+- `global_cli_to_be_migrated.tsv` 同样使用 `0700` 父目录与 `0600` 文件权限，不进入 Git；只记录本次 Zsh/runtime 变更影响的直接全局 CLI、本机精确来源和迁移状态，不记录认证数据，也不构成安装授权。
 - 未处理服务数据、未知 Intel 项、项目级依赖或未验证的原生架构替代不得删除。
 - 不递归删除 `/usr/local`，不整体改变其 owner。
 - 不透明的 `curl | shell` 不得作为安装或退役实现。
@@ -222,6 +228,7 @@ Stage 1 根据已确认修复计划生成或更新最终 `zprofile`/`.zprofile`�
 - Apple Silicon 的 Rosetta 会话不会回退使用 Intel Homebrew；
 - Brewfile、mise/uv 和 `plugins.toml` 可解析；
 - 导出配置 Review Skill 范围内的每个直接期望项目都有一句话描述、最佳实践、修改级别、建议、归属和验证评论；Stage 0 摘要先显示该描述再显示建议；
+- Stage 1 改变 runtime/global home/PATH owner 时，本机全局 CLI 清单 schema、权限、稳定排序和影响覆盖正确；Stage 1.1 public 声明只含用户选择的固定 package/version/binaries/target manager，且不含本机路径；
 - 已安装命令的实际路径、版本和架构符合期望；
 - `install.sh` 再次执行不会重复破坏已有配置；
 - `intel_to_be_retired.tsv` 可确定性解析、权限正确、没有误把未知路径或 service/data 标为可删除；Stage 3 会重新盘点而不直接信任该快照；

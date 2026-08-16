@@ -28,6 +28,10 @@ _避免使用_：第四配置层、本机软件清单
 Stage 2 在 Apple Silicon 上由 `install.sh verify` 生成的本机 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`，记录仍存在的 Intel 软件与精确路径供 Stage 3 重新盘点。它不是声明式配置或删除授权。
 _避免使用_：退役批准清单、自动删除列表
 
+**全局 CLI 迁移交接（Global CLI Migration Handoff）**：
+Stage 1 在 NVM、`PNPM_HOME`、`BUN_INSTALL` 或其他工具 PATH/initializer 被替换时，写入本机 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/global_cli_to_be_migrated.tsv`，记录会失去解析的直接全局 CLI 和本机来源；Stage 1.1 可在用户确认后生成不含本机路径的 `my_setup/tooling/global-cli-migration.toml`。Stage 2 不读取本机 TSV，也不要求 public 声明存在；声明存在时按目标机询问是否迁移。
+_避免使用_：自动重装列表、Stage 2 强制依赖、认证迁移文件
+
 **活动配置（Active Configuration）**：
 第三方 pre 钩子、共享配置、个人配置、本机私有参数和第三方 post 钩子按固定阶段加载后的运行时结果。
 _避免使用_：public-shared-local 三层栈
@@ -45,7 +49,7 @@ _避免使用_：public-shared-local 三层栈
 通过独立 Zsh Skill 的确定性脚本提取启动文件的脱敏结构证据与第三方功能块保全清单，再由 AI 按 Skill 内置手册生成 `zsh-repair-plan.md` 修改建议。它不生成或修改最终 Zsh 文件。
 
 **Zsh 修复应用（Zsh Repair Application）**：
-Stage 1 通过独立 Skill 把已确认的 `zsh-repair-plan.md` 应用到用户显式提供的 `zshrc`/`.zshrc`、`zprofile`/`.zprofile` 目标；没有显式目标时先让用户选择无前置点或有前置点仓库命名，再更新对应文件、可选 shared 增量和获准的本机 `integrations.zsh`。写入前后逐块比较源 Zsh 与目标加本机 integrations，缺块即失败。它尽可能保留现有 Oh My Zsh 模板配置，不建立 symlink 或安装软件。
+Stage 1 通过独立 Skill 把已确认的 `zsh-repair-plan.md` 应用到用户显式提供的 `zshrc`/`.zshrc`、`zprofile`/`.zprofile` 目标；没有显式目标时先让用户选择无前置点或有前置点仓库命名，再更新对应文件、可选 shared 增量和获准的本机 `integrations.zsh`。写入前后逐块比较源 Zsh 与目标加本机 integrations，缺块即失败；runtime/PATH owner 改变时先保全受影响的本机全局 CLI 清单。它尽可能保留现有 Oh My Zsh 模板配置，不建立 symlink 或安装软件；Stage 1.1 只确认可分享迁移声明。
 
 **install.sh 能力计划（Install Capability Plan）**：
 独立于 Stage 编号的仓库能力建设需求，定义根 `install.sh`、内部安装模块、`dump.sh`、测试、文档和 CI。它不生成最终 Zsh 文件，也不代表 `./install.sh plan` 子命令。
@@ -54,7 +58,7 @@ Stage 1 通过独立 Skill 把已确认的 `zsh-repair-plan.md` 应用到用户�
 通过独立 Review Skill 审阅当前仓库 `tmp/` 中由 `dump.sh` 已导出的 Brewfile、tooling 和插件候选，补充结构化 AI 评论。它不运行采集、不分析 Zsh 文件、不执行正式写入。
 
 **安装（Install）**：
-Stage 2 在每台目标机只读取当前 checkout 的根安装器、必需 `my_setup/macos/`、`my_setup/tooling/` 和可选 `my_setup/zsh/`，按原生硬件架构把声明的配置、软件、runtime 和插件安装到精确目标。它不读取 Stage 0/1 或 `zsh-repair-plan.md`；启用 Zsh 时才从唯一完整命名组备份并建立 HOME symlink。Apple Silicon 的 Rosetta 会话不得回退使用 Intel Homebrew；旧 Intel 项可以保留，但须进入 Intel 退役交接清单且不得成为受管目标。
+Stage 2 在每台目标机只读取当前 checkout 的根安装器、必需 `my_setup/macos/`、`my_setup/tooling/` 和可选 `my_setup/zsh/`，按原生硬件架构把声明的配置、软件、runtime 和插件安装到精确目标。它不读取 Stage 0/1 状态、本机全局 CLI 迁移 TSV 或 `zsh-repair-plan.md`；若 checkout 含可分享全局 CLI 迁移声明，则按目标机询问是否迁移，缺失或跳过不阻断基础安装。启用 Zsh 时才从唯一完整命名组备份并建立 HOME symlink。Apple Silicon 的 Rosetta 会话不得回退使用 Intel Homebrew；旧 Intel 项可以保留，但须进入 Intel 退役交接清单且不得成为受管目标。
 
 **退役（Retire）**：
 Stage 3 只在 Apple Silicon 上读取 Intel 退役交接清单作为线索，通过 `install.sh retire` 实时重新盘点和预览，并通过 `install.sh retire --apply` 删除已有 ARM 替代或已明确淘汰的旧 Intel 软件；Intel Mac 不进入 Stage 3。
@@ -68,6 +72,8 @@ Stage 3 只在 Apple Silicon 上读取 Intel 退役交接清单作为线索，�
 | 共享配置 | 可选的独立 shared 仓库 |
 | 本机私有参数 | `~/.config/dotfiles/local/parameters.zsh` |
 | 本机功能集成 | `~/.config/dotfiles/local/integrations.zsh`（可选） |
+| 全局 CLI 迁移本机状态 | `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/global_cli_to_be_migrated.tsv`（Stage 1 可选） |
+| 全局 CLI 可分享声明 | `<public-repository>/my_setup/tooling/global-cli-migration.toml`（Stage 1.1 可选） |
 | Intel 退役交接清单 | `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`（Apple Silicon 可选） |
 
 声明式 Zsh 覆盖顺序固定为 `shared → personal → parameters`，因此覆盖优先级为 `shared < personal < parameters`；`integrations.zsh` 通过 `zprofile-pre/post` 与 `zshrc-pre/post` 阶段钩子加载，不参与覆盖层命名。

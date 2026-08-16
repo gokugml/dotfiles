@@ -1,4 +1,4 @@
 interface:
   display_name: "Stage 1：应用 Zsh 修复计划"
-  short_description: "应用并验证 Zsh 修复计划，完成后更新采用计划的交接状态"
-  default_prompt: "使用 $stage-1-apply-zsh-repair-plan，审查完整 diff、应用 Zsh 修复计划，并在全部验证通过后更新采用计划的状态。"
+  short_description: "应用 Zsh 修复计划并保全受影响的全局 CLI 迁移清单"
+  default_prompt: "使用 $stage-1-apply-zsh-repair-plan，应用并验证 Zsh 修复计划，导出受 runtime/PATH 变更影响的全局 CLI 清单，并进入可选 Stage 1.1 确认。"

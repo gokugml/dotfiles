@@ -1,6 +1,6 @@
 ---
 name: stage-1-apply-zsh-repair-plan
-description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应用为可审查的 `zprofile`、`zshrc`、可选 `shared.zsh` 和本机 `integrations.zsh`；优先更新用户显式目标，否则先确认无前置点或有前置点命名。以最小修改保留 Oh My Zsh 模板，并用确定性清单逐块比较源 `.zprofile`/`.zshrc` 与目标及本机 integrations；全部写入与验证完成后，把实际采用的 `zsh-repair-plan.md` 状态从 Stage 0 候选/已确认更新为 `Stage 1 已应用`。用于应用 zsh-repair-plan、保全 Kiro/Docker/gcloud/kimi 等软件追加块、生成或修复目标 Zsh 文件，或进入 Dotfiles Stage 1 时；不用于重新诊断源 Zsh、建立 HOME symlink、安装软件、运行 Stage 2/3、commit 或 push。
+description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应用为可审查的 `zprofile`、`zshrc`、可选 `shared.zsh` 和本机 `integrations.zsh`；优先更新用户显式目标，否则先确认无前置点或有前置点命名。以最小修改保留 Oh My Zsh 模板，并用确定性清单逐块比较源 `.zprofile`/`.zshrc` 与目标及本机 integrations；当 NVM、PNPM_HOME、BUN_INSTALL 或其他工具 PATH 被替换时，额外导出本机全局 CLI 待迁移清单，并在 Stage 1 完成后的 Stage 1.1 让用户选择是否生成可分享 tooling 声明。用于应用 zsh-repair-plan、保全 Kiro/Docker/gcloud/kimi 等软件追加块、生成或修复目标 Zsh 文件、盘点受 runtime/PATH 迁移影响的 npm/pnpm/Bun 全局 CLI，或进入 Dotfiles Stage 1/1.1 时；不用于重新诊断源 Zsh、建立 HOME symlink、安装软件、运行 Stage 2/3、commit 或 push。
 ---
 
 # Stage 1：应用 Zsh 修复计划
@@ -8,9 +8,9 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 把已确认的修改建议转换为精确的目标文件变更：
 
 ```text
-确认文件名 → 核对源功能块清单 → 确认计划与目标 → 生成候选
+确认文件名 → 核对源功能块与全局 CLI 影响 → 确认计划与目标 → 生成候选
   → 源/目标/local 覆盖比较 → 用户确认完整 diff → 写入 → 再比较
-  → 更新所采用修复计划的状态 → 验证交接并停止
+  → 更新所采用修复计划的状态 → Stage 1.1 可选声明确认 → 停止
 ```
 
 ## 文件名确认门
@@ -38,6 +38,7 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 - 修复计划涉及 Homebrew/PATH 时的目标架构或可移植判定；
 - 将保留的现有内容、计划修改的逻辑区域，以及是否从官方安装工具联网取得最新 Oh My Zsh 模板、隔离临时 HOME 和清理范围；
 - 候选与临时文件范围、验证命令、敏感信息风险和失败停止点；
+- 是否会因 NVM、`PNPM_HOME`、`BUN_INSTALL` 或其他工具 PATH/initializer 的移除而让现有全局 CLI 失去解析；将只读检查的精确旧 owner/目录、本机迁移清单路径、public 声明路径和 Stage 1.1 的独立确认边界；
 - 明确只会在隔离临时 HOME 运行官方模板工具，不会执行真实 HOME symlink、软件安装、退役、commit 和 push。
 
 展示后停止并等待用户明确确认。确认只授权生成候选和进入 diff 审查，不授权写入未展示的目标。输入、目标、工作树或 diff 发生实质变化时，更新完整计划并再次等待确认。
@@ -54,7 +55,7 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 - 针对 pnpm 的 `pnpm --version`、`pnpm config get global-bin-dir`、`pnpm bin -g`、`pnpm root -g` 等必要检查；
 - `uname`、`arch`、`sysctl` 等只读系统事实。
 
-执行前确认命令不会安装、更新、删除、写配置、刷新 metadata/cache、启动服务或访问不必要的网络；不能确认只读性时先查看本机帮助或跳过该命令。只采集回答当前问题的字段，路径和环境值按 public/shared/local 边界脱敏，不输出完整环境或敏感值。
+执行前确认命令不会安装、更新、删除、写配置、刷新 metadata/cache、启动服务或访问不必要的网络；不能确认只读性时先查看本机帮助或跳过该命令。已安装的业务 CLI 即使提供 `--version`、`version`、`doctor` 或首次运行命令，也不得用于全局 CLI 盘点，因为它们可能自更新或初始化；版本优先从 manager metadata 或安装目录 manifest 读取。只采集回答当前问题的字段，路径和环境值按 public/shared/local 边界脱敏，不输出完整环境或敏感值。
 
 处理查询结果时：
 
@@ -102,13 +103,21 @@ description: 将 Stage 0 已确认或用户明确提供的 Zsh 修复计划应�
 
 记录目标是否存在、是否为普通文件、是否为 symlink、是否有未提交修改。不要跟随未披露的 symlink 写入；只有用户显式提供并确认解析后的真实目标时才允许更新。不得因为检测到 `~/.zshrc` 或 `~/.zprofile` 就把它当作目标；真实 HOME 文件只有作为用户显式目标并通过两次确认时才在本阶段更新，本 Skill 仍不建立或替换 symlink。
 
-`~/.config/dotfiles/local/integrations.zsh` 和 `parameters.zsh` 是本 Skill 仅有的固定 HOME 私有数据例外，不属于仓库 Zsh 入口目标。只有修复计划要求迁移功能块或私有赋值、执行前计划已逐项展示且最新 diff 已确认时才允许更新；不得借此修改其他 HOME 文件。
+`~/.config/dotfiles/local/integrations.zsh` 和 `parameters.zsh` 是本 Skill 仅有的固定 HOME 私有配置例外，不属于仓库 Zsh 入口目标。只有修复计划要求迁移功能块或私有赋值、执行前计划已逐项展示且最新 diff 已确认时才允许更新；不得借此修改其他 HOME 配置。另只允许按全局 CLI 迁移协议维护 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/global_cli_to_be_migrated.tsv` 这一份 `0600` 本机状态文件，不得扩张到其他 HOME 路径。
 
 ## 建立源功能块基线
 
 使用 [`../analyze-zsh-configuration/scripts/zsh-functional-blocks.zsh`](../analyze-zsh-configuration/scripts/zsh-functional-blocks.zsh) 的 `inventory`，对 Stage 0 对应的源 `.zprofile` 和 `.zshrc` 重新生成安全清单并逐项核对修复计划：块 ID、出现序号、源顺序和 `zprofile-pre/post`、`zshrc-pre/post` 阶段必须一致。源文件缺失、清单缺项或从 Stage 0 后发生变化时停止，重新生成计划或让用户明确确认最新完整清单；不得继续使用旧行号抽取。
 
 Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对用户显式提供的源文件生成清单，展示后让用户确认补充计划；无法获得精确源文件时保留现有目标，不得以 Git HEAD、Oh My Zsh 模板或空文件代替源基线。
+
+## 建立全局 CLI 迁移基线
+
+当修复计划或候选会移除、替换或改变 NVM、`PNPM_HOME`、`BUN_INSTALL`、npm/pnpm/Bun 全局目录或其他工具 PATH/initializer 时，必须完整读取并执行[全局 CLI 迁移交接协议](./references/global-cli-migration.md)。覆盖 npm、pnpm、Bun 及本次 Zsh 修改明确移除的工具目录，只保全直接全局 CLI，不执行这些业务 CLI。
+
+在展示 Zsh diff 前确认每个受影响旧 owner 的直接安装项、版本、binaries、旧 prefix、失效原因和安全目标建议，并生成本机 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/global_cli_to_be_migrated.tsv` 候选。无法安全盘点某个即将失去解析的旧 owner 时，阻止对应 Zsh 退役变更或保持为 `manual`；不得因为 runtime 本身已经由 mise/Bun 替代，就假定其全局 CLI 也已迁移。
+
+本机 TSV 属于 Stage 1 获准写入范围并先于会使 CLI 失去解析的 Zsh 目标原子落盘；对话只展示脱敏结构摘要。可分享的 `my_setup/tooling/global-cli-migration.toml` 不在 Stage 1 主写入中自动生成，只能在 Stage 1 全部验证通过后的 Stage 1.1 由用户确认完整 diff 后写入。
 
 ## 生成最小候选
 
@@ -165,7 +174,8 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 4. 扫描 public 候选中的密钥模式、shared 仓库专属标识、本机绝对路径、与已确认目标架构不匹配的 Homebrew 前缀和 Rosetta fallback。
 5. 对比原文件，确认 Oh My Zsh 模板和用户配置只发生必要变化。
 6. 运行功能块工具的 `compare`，逐块比较源 `.zprofile` + `.zshrc` 与目标 `zprofile` + `zshrc` + 私有 integrations 候选。只有 `preserved-target`、已校验阶段 loader 的 `migrated-local` 或精确获准的 `approved-retired` 通过；`missing`、`content-changed`、`phase-changed`、`order-changed`、`missing-loader` 均阻止展示可写 diff。
-7. 展示每个仓库目标和每份实际采用的 `zsh-repair-plan.md` 状态迁移完整 diff，以及私有文件按变量名/块 ID/阶段/顺序/数量生成的脱敏结构 diff；不得显示私有正文、值或内容摘要。一起展示目标类型、候选验证、模板保留摘要、功能块覆盖表和未解决缺口。
+7. 验证全局 CLI 迁移清单只覆盖本次变更影响的直接安装项，稳定排序、权限/schema/ownership marker 正确，public 候选不含源绝对路径、认证数据或环境值。
+8. 展示每个仓库目标和每份实际采用的 `zsh-repair-plan.md` 状态迁移完整 diff，以及私有文件和本机迁移清单按变量名/块 ID/manager/package/binaries/impact/数量生成的脱敏结构 diff；不得显示私有正文、值、源绝对路径或内容摘要。一起展示目标类型、候选验证、模板保留摘要、功能块覆盖表和未解决缺口。
 
 随后只给出以下选择并停止等待：
 
@@ -183,14 +193,29 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 
 写入后：
 
+- 先确认本机全局 CLI 迁移 TSV 已按获准结构原子落盘；若它失败，不得继续写入会让对应 CLI 失去解析的 Zsh 变更；
 - 再次运行 `zsh -n` 和全部静态边界检查；
 - 针对实际落盘文件再次运行同一源/目标/local 功能块 `compare`；任一块缺失、变化、错序或 loader 阶段错误都报告失败，不得标为完成；
 - 只有上述验证通过后，才把每份实际采用的 `zsh-repair-plan.md` 原子更新为唯一的 `> 状态：Stage 1 已应用`；旧标题同时按已确认 diff 去掉 Stage 0 候选字样；
 - 确认实际 diff 与获准 diff 完全一致；
-- 报告更新的目标、最终文件命名方案、模板保留情况、计划覆盖结果、每份修复计划的最终状态和证据缺口；
-- 停在“Zsh 修复计划已应用”，不要运行 `install.sh` 或自动进入 Stage 2。
+- 报告更新的目标、最终文件命名方案、模板保留情况、计划覆盖结果、每份修复计划的最终状态、全局 CLI 迁移清单摘要和证据缺口；
+- Stage 1 完成后按下节进入 Stage 1.1；不要安装全局 CLI、运行 `install.sh` 或自动进入 Stage 2。
 
 不要修改真实 Zsh 入口的 symlink，不在真实 HOME 安装 Oh My Zsh、插件、Homebrew 或 tooling，不让 AI 读取 local 正文，不 commit 或 push。
+
+## Stage 1.1：确认全局 CLI 可分享声明
+
+Stage 1.1 是 Stage 1 成功后的可选确认阶段，不改变 `> 状态：Stage 1 已应用`，也不执行软件迁移。只有本机迁移 TSV 存在待处理候选时才进入；没有候选时不创建空 public 文件并直接停止。
+
+完整读取[全局 CLI 迁移交接协议](./references/global-cli-migration.md)，展示待迁移 package/version/binaries、受影响原因、建议 target manager、兼容性缺口，以及 `my_setup/tooling/global-cli-migration.toml` 的完整候选 diff，然后只询问：
+
+```text
+1. 把全部可自动迁移项写入可分享声明
+2. 逐项选择并重新审查完整声明 diff
+3. 暂不迁移，保留本机清单
+```
+
+只有用户确认已展示的最新声明 diff 后才写入 public 文件并原子更新本机 TSV 的决定状态。选择跳过、只有 manual 项或 Stage 1.1 写入失败不回滚已经完成的 Stage 1；按实际结果报告后停止。Stage 2 不强依赖该文件，但文件存在时会在每台目标机重新询问是否迁移。
 
 ## 完成判定
 
@@ -201,10 +226,11 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 - 用户已确认最新完整 diff；
 - 只更新了显式目标或没有显式目标时的默认仓库目标；
 - 所有写入文件通过语法和边界检查；
+- 本次 Zsh 变更影响的 npm/pnpm/Bun/工具 PATH 已完成安全盘点；存在受影响项时，本机迁移 TSV 已先于对应 Zsh 写入原子落盘，无法盘点的旧 owner 未被静默退役；
 - 源 `.zprofile` + `.zshrc` 的每个功能块都由最终目标文件或正确阶段加载的 `integrations.zsh` 精确覆盖，或有用户明确批准的精确 retire 记录；
 - 修改过的既有 `integrations.zsh`/`parameters.zsh` 均已先完成 `0600` 同目录备份，且 local 父目录为 `0700`；
 - Oh My Zsh 模板来自本次获准运行的官方最新安装工具，官方 commit 已记录；用户配置已保留，所有偏离都有获准理由；
 - 每份实际采用的 `zsh-repair-plan.md` 都只含一个 `> 状态：Stage 1 已应用`，且状态迁移包含在用户确认的完整 diff 中；
-- 没有建立 symlink、在真实 HOME 安装软件、退役、commit 或 push。
+- 没有建立 symlink、在真实 HOME 安装软件、退役、commit 或 push；Stage 1.1 只生成用户确认的可分享声明。
 
-若用户取消、目标变化或验证失败，按实际状态报告，不把候选或部分写入标为完成。
+若用户取消、目标变化或验证失败，按实际状态报告，不把候选或部分写入标为完成。Stage 1.1 被跳过或失败时，必须把“Stage 1 已完成”和“全局 CLI 声明未生成/未完成”分别报告。

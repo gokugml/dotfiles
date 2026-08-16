@@ -1,4 +1,4 @@
 interface:
   display_name: "Stage 2：从仓库部署目标机"
-  short_description: "独立部署 checkout 中的 macOS、tooling 与可选 Zsh 配置"
-  default_prompt: "使用 $stage-2-target-machine-configuration-and-software-migration，从当前 checkout 独立配置这台 macOS 并验证所有原生安装目标。"
+  short_description: "部署 macOS、tooling、可选全局 CLI 与 Zsh 配置"
+  default_prompt: "使用 $stage-2-target-machine-configuration-and-software-migration，从当前 checkout 独立配置这台 macOS；若存在可选全局 CLI 声明，先询问本机是否迁移，再验证所有已选原生目标。"
