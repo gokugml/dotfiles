@@ -27,6 +27,7 @@ path=(
   ${dotfiles_brew_prefix:+"$dotfiles_brew_prefix/bin"}
   ${dotfiles_brew_prefix:+"$dotfiles_brew_prefix/sbin"}
   "$HOME/.local/share/mise/shims"
+  "$BUN_INSTALL/bin"
   "$PNPM_HOME"
   "$HOME/.local/bin"
   "${path[@]}"
