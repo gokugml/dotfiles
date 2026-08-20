@@ -14,6 +14,203 @@ tooling_trim() {
   print -r -- "$value"
 }
 
+tooling_global_cli_file() {
+  print -r -- "$DOTFILES_PERSONAL_DIR/tooling/global-cli-migration.toml"
+}
+
+tooling_global_cli_append() {
+  local description="$1" package="$2" version="$3" binaries="$4"
+  local source_manager="$5" target_manager="$6" target_spec="$7" reason="$8"
+
+  [[ -n "$description" && -n "$package" && -n "$version" && -n "$binaries" \
+    && -n "$source_manager" && -n "$target_manager" && -n "$target_spec" && -n "$reason" ]] || {
+    print -u2 -- 'tooling: global CLI 声明存在缺失字段'
+    return 1
+  }
+  [[ "$description$package$version$binaries$source_manager$target_manager$target_spec$reason" != *'|'* ]] || {
+    print -u2 -- 'tooling: global CLI 声明不得包含管道符'
+    return 1
+  }
+  [[ "$package" != *[[:space:]]* && "$package" != /* && "$package" != *..* ]] || {
+    print -u2 -- "tooling: global CLI package 非法：$package"
+    return 1
+  }
+  [[ "$version" == <->.<->.<->* ]] || {
+    print -u2 -- "tooling: global CLI 源版本必须是精确版本：$package@$version"
+    return 1
+  }
+  [[ "$source_manager" == npm || "$source_manager" == pnpm \
+    || "$source_manager" == bun || "$source_manager" == path ]] || {
+    print -u2 -- "tooling: global CLI source_manager 不受支持：$source_manager"
+    return 1
+  }
+  [[ "$target_manager" == npm ]] || {
+    print -u2 -- "tooling: 当前安装器只支持 mise Node 下的 npm global CLI：$package"
+    return 1
+  }
+  [[ "$target_spec" == "${package}@latest" ]] || {
+    print -u2 -- "tooling: global CLI target_spec 必须为 ${package}@latest"
+    return 1
+  }
+  [[ -z "${TOOLING_GLOBAL_CLI_PACKAGE_SEEN[$package]:-}" ]] || {
+    print -u2 -- "tooling: global CLI 重复声明 package：$package"
+    return 1
+  }
+  TOOLING_GLOBAL_CLI_PACKAGE_SEEN[$package]=1
+  TOOLING_GLOBAL_CLI_RECORDS+=("$description|$package|$version|$binaries|$source_manager|$target_manager|$target_spec|$reason")
+}
+
+tooling_global_cli_parse_binaries() {
+  local value="$1" inner item binary
+  local -a binaries
+
+  [[ "$value" == \[*\] ]] || return 1
+  inner="${value[2,-2]}"
+  for item in ${(s:,:)inner}; do
+    item="$(tooling_trim "$item")"
+    [[ "$item" == \"*\" && ${#item} -ge 3 ]] || return 1
+    binary="${item[2,-2]}"
+    [[ -n "$binary" && "$binary" != *[!A-Za-z0-9._-]* ]] || return 1
+    binaries+=("$binary")
+  done
+  (( ${#binaries} > 0 )) || return 1
+  print -r -- "${(j:,:)${(ou)binaries}}"
+}
+
+tooling_load_global_cli_declaration() {
+  local file line key value schema_version='' install_policy=''
+  local description='' package='' version='' binaries=''
+  local source_manager='' target_manager='' target_spec='' reason=''
+  local in_tool=0 parsed
+
+  typeset -ga TOOLING_GLOBAL_CLI_RECORDS
+  typeset -gA TOOLING_GLOBAL_CLI_PACKAGE_SEEN
+  TOOLING_GLOBAL_CLI_RECORDS=()
+  TOOLING_GLOBAL_CLI_PACKAGE_SEEN=()
+  file="$(tooling_global_cli_file)"
+  [[ -e "$file" ]] || return 0
+  [[ -f "$file" && ! -L "$file" ]] || {
+    print -u2 -- 'tooling: global-cli-migration.toml 必须是普通文件'
+    return 1
+  }
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="$(tooling_trim "$line")"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    if [[ "$line" == '[[tools]]' ]]; then
+      if (( in_tool )); then
+        tooling_global_cli_append "$description" "$package" "$version" "$binaries" \
+          "$source_manager" "$target_manager" "$target_spec" "$reason" || return 1
+      fi
+      in_tool=1
+      description='' package='' version='' binaries=''
+      source_manager='' target_manager='' target_spec='' reason=''
+      continue
+    fi
+    [[ "$line" == *=* ]] || {
+      print -u2 -- 'tooling: global CLI TOML 存在无法解析的行'
+      return 1
+    }
+    key="$(tooling_trim "${line%%=*}")"
+    value="$(tooling_trim "${line#*=}")"
+    if (( ! in_tool )); then
+      case "$key:$value" in
+        'schema_version:1') schema_version=1 ;;
+        'install_policy:"prompt"') install_policy=prompt ;;
+        *)
+          print -u2 -- "tooling: global CLI 顶层 schema 非法：$key"
+          return 1
+          ;;
+      esac
+      continue
+    fi
+    if [[ "$key" == binaries ]]; then
+      parsed="$(tooling_global_cli_parse_binaries "$value")" || {
+        print -u2 -- 'tooling: global CLI binaries 必须是非空唯一字符串数组'
+        return 1
+      }
+      binaries="$parsed"
+      continue
+    fi
+    [[ "$value" == \"*\" && ${#value} -ge 2 ]] || {
+      print -u2 -- "tooling: global CLI 字段必须是字符串：$key"
+      return 1
+    }
+    value="${value[2,-2]}"
+    case "$key" in
+      description) description="$value" ;;
+      package) package="$value" ;;
+      version) version="$value" ;;
+      source_manager) source_manager="$value" ;;
+      target_manager) target_manager="$value" ;;
+      target_spec) target_spec="$value" ;;
+      reason) reason="$value" ;;
+      *)
+        print -u2 -- "tooling: global CLI 声明包含未知字段：$key"
+        return 1
+        ;;
+    esac
+  done < "$file"
+
+  if (( in_tool )); then
+    tooling_global_cli_append "$description" "$package" "$version" "$binaries" \
+      "$source_manager" "$target_manager" "$target_spec" "$reason" || return 1
+  fi
+  [[ "$schema_version" == 1 && "$install_policy" == prompt ]] || {
+    print -u2 -- 'tooling: global CLI schema_version/install_policy 非法'
+    return 1
+  }
+  (( ${#TOOLING_GLOBAL_CLI_RECORDS} > 0 )) || {
+    print -u2 -- 'tooling: global CLI 声明不得为空'
+    return 1
+  }
+}
+
+tooling_select_global_cli() {
+  local selection="${DOTFILES_GLOBAL_CLI_SELECTION:-skip}"
+  local requested package record description version binaries source_manager target_manager target_spec reason
+  local -a requested_packages
+  local -A requested_seen matched
+  typeset -ga TOOLING_SELECTED_GLOBAL_CLI_RECORDS
+  typeset -g TOOLING_GLOBAL_CLI_SELECTION_LABEL
+  TOOLING_SELECTED_GLOBAL_CLI_RECORDS=()
+  TOOLING_GLOBAL_CLI_SELECTION_LABEL='skip'
+
+  case "$selection" in
+    skip) ;;
+    all)
+      TOOLING_SELECTED_GLOBAL_CLI_RECORDS=("${TOOLING_GLOBAL_CLI_RECORDS[@]}")
+      TOOLING_GLOBAL_CLI_SELECTION_LABEL="all（${#TOOLING_GLOBAL_CLI_RECORDS} 项）"
+      ;;
+    *)
+      requested_packages=(${(s:,:)selection})
+      for requested in "${requested_packages[@]}"; do
+        requested="$(tooling_trim "$requested")"
+        [[ -n "$requested" && -z "${requested_seen[$requested]:-}" ]] || {
+          print -u2 -- 'tooling: global CLI 逐项选择不得为空或重复'
+          return 1
+        }
+        requested_seen[$requested]=1
+      done
+      for record in "${TOOLING_GLOBAL_CLI_RECORDS[@]}"; do
+        IFS='|' read -r description package version binaries source_manager target_manager target_spec reason <<< "$record"
+        if [[ -n "${requested_seen[$package]:-}" ]]; then
+          TOOLING_SELECTED_GLOBAL_CLI_RECORDS+=("$record")
+          matched[$package]=1
+        fi
+      done
+      for requested in "${requested_packages[@]}"; do
+        requested="$(tooling_trim "$requested")"
+        [[ -n "${matched[$requested]:-}" ]] || {
+          print -u2 -- "tooling: global CLI 逐项选择包含未声明 package：$requested"
+          return 1
+        }
+      done
+      TOOLING_GLOBAL_CLI_SELECTION_LABEL="${#TOOLING_SELECTED_GLOBAL_CLI_RECORDS} / ${#TOOLING_GLOBAL_CLI_RECORDS} 项"
+      ;;
+  esac
+}
+
 tooling_mise_files() {
   local file
 
@@ -218,6 +415,114 @@ tooling_uv_command() {
   fi
 }
 
+tooling_global_cli_plan() {
+  local record description package version binaries source_manager target_manager target_spec reason
+  local selection="${DOTFILES_GLOBAL_CLI_SELECTION:-skip}"
+
+  [[ -e "$(tooling_global_cli_file)" ]] || {
+    print -- '- 声明不存在，跳过'
+    return 0
+  }
+  if [[ "$selection" == skip ]]; then
+    if ! tooling_load_global_cli_declaration; then
+      print -- '- 声明无效；本机已选择 skip，仅跳过可选全局 CLI'
+      return 0
+    fi
+  else
+    tooling_load_global_cli_declaration || return 1
+  fi
+  tooling_select_global_cli || return 1
+  if (( ${#TOOLING_SELECTED_GLOBAL_CLI_RECORDS} == 0 )); then
+    print -- '- 本机选择：skip（不影响基础 tooling）'
+    return 0
+  fi
+  tooling_load_mise_tools || return 1
+  [[ -n "${TOOLING_MISE_VERSION[node]:-}" ]] || {
+    print -u2 -- 'tooling: global CLI 迁移需要 mise Node 声明'
+    return 1
+  }
+  print -- "- 本机选择：$TOOLING_GLOBAL_CLI_SELECTION_LABEL"
+  for record in "${TOOLING_SELECTED_GLOBAL_CLI_RECORDS[@]}"; do
+    IFS='|' read -r description package version binaries source_manager target_manager target_spec reason <<< "$record"
+    print -- "- npm via mise node@$TOOLING_MISE_VERSION[node] → $target_spec"
+    print -- "  source：$package@$version；binaries：$binaries；reason：$reason"
+  done
+}
+
+tooling_apply_global_cli() {
+  local record description package version binaries source_manager target_manager target_spec reason
+  local mise_command
+  local -a specs
+
+  [[ -e "$(tooling_global_cli_file)" ]] || return 0
+  [[ "${DOTFILES_GLOBAL_CLI_SELECTION:-skip}" == skip ]] && return 0
+  tooling_load_global_cli_declaration || return 1
+  tooling_select_global_cli || return 1
+  (( ${#TOOLING_SELECTED_GLOBAL_CLI_RECORDS} > 0 )) || return 0
+  tooling_load_mise_tools || return 1
+  [[ -n "${TOOLING_MISE_VERSION[node]:-}" ]] || return 1
+  mise_command="$(tooling_mise_command)"
+  [[ -n "$mise_command" && -x "$mise_command" ]] || return 1
+  for record in "${TOOLING_SELECTED_GLOBAL_CLI_RECORDS[@]}"; do
+    IFS='|' read -r description package version binaries source_manager target_manager target_spec reason <<< "$record"
+    specs+=("$target_spec")
+  done
+  "$mise_command" --no-hooks exec "node@$TOOLING_MISE_VERSION[node]" -- \
+    npm install --global "${specs[@]}" || return 1
+  print -- '✓ 可选全局 CLI 已安装到 mise Node npm prefix'
+}
+
+tooling_verify_global_cli() {
+  local record description package version binaries source_manager target_manager target_spec reason
+  local mise_command node_version node_prefix manifest binary binary_path resolved
+  local node_check
+  local -a expected_binaries
+
+  [[ -e "$(tooling_global_cli_file)" ]] || return 0
+  [[ "${DOTFILES_GLOBAL_CLI_SELECTION:-skip}" == skip ]] && return 0
+  tooling_load_global_cli_declaration || return 1
+  tooling_select_global_cli || return 1
+  (( ${#TOOLING_SELECTED_GLOBAL_CLI_RECORDS} > 0 )) || return 0
+  tooling_load_mise_tools || return 1
+  node_version="${TOOLING_MISE_VERSION[node]:-}"
+  [[ -n "$node_version" ]] || return 1
+  mise_command="$(tooling_mise_command)"
+  node_prefix="$("$mise_command" --no-hooks where "node@$node_version" 2>/dev/null)" || node_prefix=''
+  [[ -n "$node_prefix" && -d "$node_prefix" ]] || {
+    print -u2 -- "verify: 无法定位 mise Node $node_version prefix"
+    return 1
+  }
+  node_check='const fs=require("fs");const [p,n,b]=process.argv.slice(1);const x=JSON.parse(fs.readFileSync(p,"utf8"));const bins=typeof x.bin==="string"?[n.split("/").pop()]:Object.keys(x.bin||{});if(x.name!==n||!x.version||b.split(",").some(v=>!bins.includes(v)))process.exit(1);process.stdout.write(x.version);'
+  for record in "${TOOLING_SELECTED_GLOBAL_CLI_RECORDS[@]}"; do
+    IFS='|' read -r description package version binaries source_manager target_manager target_spec reason <<< "$record"
+    manifest="$node_prefix/lib/node_modules/$package/package.json"
+    [[ -f "$manifest" && ! -L "$manifest" ]] || {
+      print -u2 -- "verify: mise Node npm global 缺少 $package"
+      return 1
+    }
+    version="$("$mise_command" --no-hooks exec "node@$node_version" -- \
+      node -e "$node_check" "$manifest" "$package" "$binaries" 2>/dev/null)" || {
+      print -u2 -- "verify: $package manifest 的 package/version/binaries 不匹配"
+      return 1
+    }
+    expected_binaries=(${(s:,:)binaries})
+    for binary in "${expected_binaries[@]}"; do
+      binary_path="$node_prefix/bin/$binary"
+      [[ -x "$binary_path" ]] || {
+        print -u2 -- "verify: $binary 不在 mise Node npm global bin"
+        return 1
+      }
+      resolved="${binary_path:A}"
+      [[ "$resolved" == "$node_prefix"/* ]] || {
+        print -u2 -- "verify: $binary 解析到 mise Node prefix 之外"
+        return 1
+      }
+    done
+    print -- "  npm $package@$version → mise node@$node_version"
+  done
+  print -- '✓ 可选全局 CLI package/version/binaries 与 mise Node owner'
+}
+
 tooling_plan() {
   local record owner file target uv_config tool version
   typeset -i mise_count=0
@@ -264,6 +569,10 @@ tooling_plan() {
   else
     blocked=1
   fi
+
+  print
+  print -- '[可选全局 CLI 迁移]'
+  tooling_global_cli_plan || blocked=1
 
   (( blocked == 0 ))
 }
@@ -314,7 +623,8 @@ tooling_apply() {
   tooling_create_managed_link "$DOTFILES_TARGET_HOME/.config/uv/uv.toml" "$uv_config" || return 1
   tooling_load_python_versions || return 1
   versions=(${(ok)TOOLING_PYTHON_OWNER})
-  "$uv_command" --config-file "$uv_config" --no-progress python install "${versions[@]}"
+  "$uv_command" --config-file "$uv_config" --no-progress python install "${versions[@]}" || return 1
+  tooling_apply_global_cli
 }
 
 tooling_verify_binary_arch() {
@@ -402,6 +712,8 @@ tooling_verify() {
   else
     failed=1
   fi
+
+  tooling_verify_global_cli || failed=1
 
   if (( failed == 0 )); then
     print -- '✓ mise/uv 配置、固定版本、受管 symlink 与二进制架构'

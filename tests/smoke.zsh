@@ -196,6 +196,30 @@ write_fake_tools() {
   {
     print -r -- '#!/bin/zsh'
     print -r -- 'if [[ "$1" == --version ]]; then print -- "2026.8.0-test"; fi'
+    print -r -- 'if [[ "$*" == *" where node@"* ]]; then print -r -- "$DOTFILES_TEST_MISE_NODE_PREFIX"; exit 0; fi'
+    print -r -- 'if [[ "$*" == *" exec node@"*" -- npm install --global "* ]]; then'
+    print -r -- '  prefix="$DOTFILES_TEST_MISE_NODE_PREFIX"'
+    print -r -- '  command mkdir -p -- "$prefix/lib/node_modules" "$prefix/bin"'
+    print -r -- '  typeset after_global=0 spec package package_dir binary'
+    print -r -- '  for spec in "$@"; do'
+    print -r -- '    if (( ! after_global )); then [[ "$spec" == --global ]] && after_global=1; continue; fi'
+    print -r -- '    package="${spec%@latest}"'
+    print -r -- '    package_dir="$prefix/lib/node_modules/$package"'
+    print -r -- '    case "$package" in'
+    print -r -- '      @google/gemini-cli) binary=gemini ;;'
+    print -r -- '      @openai/codex) binary=codex ;;'
+    print -r -- '      agent-browser) binary=agent-browser ;;'
+    print -r -- '      playwright) binary=playwright ;;'
+    print -r -- '      *) exit 64 ;;'
+    print -r -- '    esac'
+    print -r -- '    command mkdir -p -- "$package_dir"'
+    print -r -- '    print -r -- "{\"name\":\"$package\",\"version\":\"99.0.0\",\"bin\":{\"$binary\":\"bin/$binary\"}}" > "$package_dir/package.json"'
+    print -r -- '    print -r -- "#!/bin/zsh\nexit 0" > "$prefix/bin/$binary"'
+    print -r -- '    chmod 700 "$prefix/bin/$binary"'
+    print -r -- '  done'
+    print -r -- '  exit 0'
+    print -r -- 'fi'
+    print -r -- 'if [[ "$*" == *" exec node@"*" -- node -e "* ]]; then exit 0; fi'
     print -r -- 'exit 0'
   } > "$bin_dir/mise"
 
@@ -364,6 +388,8 @@ run_full_checks() {
   local plugin_revision handoff_file handoff_before handoff_after handoff_backup foreign_output cleanup_output
   local repo_state_output symlink_state_output external_state_dir
   local minimal_repo minimal_home minimal_bin minimal_output intel_home intel_bin intel_output
+  local selective_home selective_prefix selective_output
+  local invalid_skip_home invalid_skip_output declaration_backup
   local rosetta_home rosetta_output
   local hook_repo hook_custom_repo hook_output hook_target hook_before hook_after hook_conflict_output
   local hook_custom_output
@@ -447,6 +473,8 @@ run_full_checks() {
     print -r -- y | HOME="$fixture_home" \
       PATH="$fixture_bin:/usr/bin:/bin" \
       DOTFILES_INSTALL_TEST_MODE=1 \
+      DOTFILES_GLOBAL_CLI_SELECTION=all \
+      DOTFILES_TEST_MISE_NODE_PREFIX="$fixture_home/.local/share/mise/installs/node/24.14.1" \
       DOTFILES_SHARED_DIR="$shared_repo" \
       ./install.sh > "$apply_output" 2>&1
   ) || {
@@ -454,6 +482,14 @@ run_full_checks() {
     fail '隔离安装失败'
   }
   assert_absent "$apply_output" 'fixture-secret-value'
+  assert_absent "$apply_output" 'parameter not set'
+  assert_contains "$apply_output" '[可选全局 CLI 迁移]'
+  assert_contains "$apply_output" 'npm via mise node@24.14.1 → @google/gemini-cli@latest'
+  assert_contains "$apply_output" '✓ 可选全局 CLI 已安装到 mise Node npm prefix'
+  [[ -x "$fixture_home/.local/share/mise/installs/node/24.14.1/bin/gemini" ]] \
+    || fail 'Gemini 未安装到 mise Node prefix'
+  [[ -x "$fixture_home/.local/share/mise/installs/node/24.14.1/bin/codex" ]] \
+    || fail 'Codex 未安装到 mise Node prefix'
   [[ "$(readlink "$fixture_home/.zprofile")" == "$fixture_repo/my_setup/zsh/zprofile" ]] \
     || fail '.zprofile symlink 错误'
   [[ "$(readlink "$fixture_home/.zshrc")" == "$fixture_repo/my_setup/zsh/zshrc" ]] \
@@ -762,6 +798,50 @@ run_full_checks() {
     || fail '最小 Stage 2 意外配置了 core.hooksPath'
   [[ ! -e "$minimal_home/.local/state/dotfiles/intel_to_be_retired.tsv" ]] \
     || fail '无 Intel 残留的最小 checkout 生成了交接文件'
+
+  selective_home="$test_root/selective-home"
+  selective_prefix="$selective_home/.local/share/mise/installs/node/24.14.1"
+  selective_output="$test_root/selective-install.out"
+  command mkdir -p -- "$selective_home"
+  (
+    cd "$minimal_repo" || exit 1
+    print -r -- y | HOME="$selective_home" PATH="$minimal_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_TEST_NATIVE_ARCH=arm64 \
+      DOTFILES_TEST_PROCESS_ARCH=arm64 \
+      DOTFILES_GLOBAL_CLI_SELECTION='@openai/codex,playwright' \
+      DOTFILES_TEST_MISE_NODE_PREFIX="$selective_prefix" \
+      ./install.sh > "$selective_output" 2>&1
+  ) || {
+    sed -n '1,320p' "$selective_output" >&2
+    fail '可选全局 CLI 逐项选择安装失败'
+  }
+  assert_contains "$selective_output" '本机选择：2 / 4 项'
+  assert_absent "$selective_output" 'parameter not set'
+  [[ -x "$selective_prefix/bin/codex" && -x "$selective_prefix/bin/playwright" ]] \
+    || fail '逐项选择的 CLI 未安装到 mise Node prefix'
+  [[ ! -e "$selective_prefix/bin/gemini" && ! -e "$selective_prefix/bin/agent-browser" ]] \
+    || fail '逐项选择意外安装了未选 CLI'
+
+  invalid_skip_home="$test_root/invalid-skip-home"
+  invalid_skip_output="$test_root/invalid-skip.out"
+  declaration_backup="$test_root/global-cli-migration.toml"
+  command mkdir -p -- "$invalid_skip_home"
+  command cp -- "$minimal_repo/my_setup/tooling/global-cli-migration.toml" "$declaration_backup"
+  print -r -- 'unexpected = "blocked"' >> "$minimal_repo/my_setup/tooling/global-cli-migration.toml"
+  (
+    cd "$minimal_repo" || exit 1
+    print -r -- y | HOME="$invalid_skip_home" PATH="$minimal_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_TEST_NATIVE_ARCH=arm64 \
+      DOTFILES_TEST_PROCESS_ARCH=arm64 DOTFILES_GLOBAL_CLI_SELECTION=skip \
+      ./install.sh > "$invalid_skip_output" 2>&1
+  )
+  local invalid_skip_status=$?
+  command mv -f -- "$declaration_backup" "$minimal_repo/my_setup/tooling/global-cli-migration.toml"
+  (( invalid_skip_status == 0 )) || {
+    sed -n '1,320p' "$invalid_skip_output" >&2
+    fail '无效可选声明在本机 skip 时阻断了基础 Stage 2'
+  }
+  assert_contains "$invalid_skip_output" '声明无效；本机已选择 skip，仅跳过可选全局 CLI'
 
   intel_home="$test_root/intel-home"
   intel_bin="$test_root/intel-bin"
