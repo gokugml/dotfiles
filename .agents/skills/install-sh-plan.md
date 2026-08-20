@@ -57,7 +57,6 @@ dotfiles/
 │   │   ├── install.sh
 │   │   ├── zprofile 或 .zprofile  # Stage 1 选择并生成其中一个
 │   │   ├── zshrc 或 .zshrc        # 与 zprofile 使用同一命名方案
-│   │   ├── zsh-repair-plan.md
 │   │   └── plugins.toml
 │   ├── macos/
 │   │   ├── install.sh
@@ -78,7 +77,6 @@ dotfiles/
 shared-dotfiles/
 ├── zsh/
 │   ├── shared.zsh
-│   ├── zsh-repair-plan.md
 │   └── plugins.toml
 ├── macos/Brewfile
 └── tooling/

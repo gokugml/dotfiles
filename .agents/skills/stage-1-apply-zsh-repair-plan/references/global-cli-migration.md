@@ -92,18 +92,19 @@ reason = "runtime-owner-replaced"
 
 ## 只读发现算法
 
-1. 对比已确认源 Zsh 功能块/PATH 与 Stage 1 候选，只处理本次变更明确移除、替换或改变语义的 runtime initializer、global home 和 PATH 目录。
-2. 覆盖 npm、pnpm、Bun，以及这些被移除目录中的直接可执行文件；不要扫描无关 PATH、整个 HOME、`/usr/local` 或项目目录。
+1. 对比已确认源 Zsh 功能块/PATH 与 Stage 1 最终候选，先建立“源可达、候选不再可达或改由错误 owner 解析”的影响集；逐项列出本次变更明确移除、替换或改变语义的 runtime initializer、global home 和 PATH 目录。
+2. 对影响集中的每个旧 owner/目录分别覆盖 npm、pnpm、Bun 的直接全局安装项，以及明确移除 PATH 目录中的直接可执行文件；不能因为当前默认 runtime 属于其中一个 manager 就跳过另外两个。不要扫描无关 PATH、整个 HOME、`/usr/local` 或项目目录。
 3. 优先读取已经存在的包管理器结构化清单、lock/manifest、包目录 `package.json`、bin symlink 和精确 runtime metadata。只在本机帮助能够证明命令完全只读且不会维护全局目录时，才调用 manager 的 list/root/bin/prefix 查询。
 4. 不执行已安装的业务 CLI，不调用可能自更新的 `--version`、`version`、首次运行、login 或 doctor 命令。版本从 manager metadata 或安装目录 manifest 取得。
 5. 排除 runtime 自带的 npm、Corepack、包管理器自身、传递依赖、项目依赖、缓存和没有暴露 CLI binary 的库包。
 6. 计算最终 Zsh/runtime 下的命令可达性。只有命令会失去解析、解析到错误架构/旧 owner，或相同 package 尚未存在于目标 owner 时才进入清单。
 7. 相同 package/version/binaries 已在目标 owner 精确存在且命令解析正确时，记录为已覆盖证据，不进入待迁移清单。
 8. 无法安全读取旧 prefix、无法确认直接/传递关系、package identity 或版本时，阻止自动退役对应旧 initializer/PATH；把该项标为 `manual`，不要猜测或静默遗漏。
+9. 用户明确排除某个 owner 或目录时不得读取该范围；同时从本轮可应用 Zsh 变更中移除对应 PATH/initializer 退役。其他独立变更可以继续，但本轮只能报告“Stage 1 部分应用”，修复计划不得标为已应用，也不得进入 Stage 1.1。
 
 ## Stage 1 写入时序
 
-1. 在展示 Zsh 完整 diff 前完成只读发现，并在执行前计划中列出将检查的精确旧 owner/目录。
+1. 在展示 Zsh 完整 diff 前完成只读发现，并在执行前计划中列出将检查的精确旧 owner/目录，以及 npm、pnpm、Bun、直接 PATH CLI 四类的逐项覆盖结果。
 2. 把本机 TSV 的新增、更新或安全移除作为 Stage 1 写入范围；对话只展示 manager/package/version/binaries/impact/decision 的脱敏结构摘要，不展示源绝对路径。
 3. 用户确认完整 Stage 1 diff 后，先原子写入本机 TSV，再写 Zsh 目标；TSV 写入失败时不得应用会让对应 CLI 失去解析的 Zsh 变更。
 4. Zsh、功能块和修复计划状态全部验证通过后，Stage 1 才完成；随后才进入可选 Stage 1.1。

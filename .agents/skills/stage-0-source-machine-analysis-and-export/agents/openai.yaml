@@ -1,4 +1,4 @@
 interface:
   display_name: "Stage 0：源机器分析与导出编排"
-  short_description: "编排 Zsh 功能块保全、配置导出审阅与一次正式写入确认"
-  default_prompt: "使用 $stage-0-source-machine-analysis-and-export 编排 Zsh 功能块保全、配置导出、审阅和一次正式写入确认。"
+  short_description: "编排 Zsh 分析、配置导出审阅与本机修复计划交接"
+  default_prompt: "使用 $stage-0-source-machine-analysis-and-export 编排 Zsh 功能块保全、配置导出和审阅，并在确认后把 Zsh 修复计划安全写入 ~/.config/dotfiles/zsh-repair/。"

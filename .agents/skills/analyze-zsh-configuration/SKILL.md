@@ -32,7 +32,7 @@ description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件�
 - 采集脚本不得启动会加载真实配置的交互/登录 shell，不得执行 `brew doctor`、包清单导出、工具健康检查、网络请求或性能 profiling；未测量的运行时效果必须保留为证据缺口。
 - 不读取 Keychain、shell 历史、完整环境或 `~/.config/dotfiles/local/parameters.zsh`、`integrations.zsh` 内容。
 - 不修改真实 Zsh、symlink、软件或服务，不调用 `install.sh`，不安装或退役项目。
-- 不把本机绝对路径、shared 仓库专属信息、账号、远程地址或敏感值写入 public 修复计划。
+- 不把本机绝对路径、shared 仓库专属信息、账号、远程地址或敏感值写入修复计划候选；Stage 0 即使把获准计划写入本机目录，也不得降低该脱敏标准。
 - 不把推断当作证据。未知 source 表达式、被脱敏路径和无法确认的工具所有权统一标记 `manual`。
 - 不负责审阅 `dump.sh` 导出的 Brewfile、tooling 或 `plugins.toml`；该职责属于 `$review-exported-dotfiles`。
 
@@ -193,10 +193,10 @@ tmp/shared/zsh/zsh-repair-plan.md    # 仅存在明确共享增量时
 - 顶部结论和问题一览表均存在，覆盖全部详细发现，并标注证据等级。
 - 功能块保全清单逐项覆盖证据中的全部块，顺序与加载阶段一致，没有隐式丢弃；`retire` 均有用户明确决定。
 - 已逐项检查安全、架构、功能、补全、PATH、作用域、工具职责和性能覆盖门；缺失证据已显式列出。
-- public 计划不含 shared 仓库专属信息、本机绝对路径、账号、远程地址或敏感值。
+- 修复计划候选不含 shared 仓库专属信息、本机绝对路径、账号、远程地址或敏感值。
 - shared/local/retire/manual 未混入 personal 活动配置建议。
 - 计划没有生成或修改最终 Zsh 文件，没有安装、退役、commit 或 push。
 - 建议包含明确目标、风险和可执行验收，而不是只复述最佳实践；未测量项没有虚构运行时结果。
 - 交接说明准确区分“采集脚本只读扫描了启动文件”和“AI 未直接读取文件内容”；不要笼统声称整个 Skill 未读取源文件。
 
-完成后把修复计划路径、发现摘要、证据缺口和自检结果交回 `$stage-0-source-machine-analysis-and-export`。不要自行请求最终写入确认，也不要把 `tmp/` 候选写入正式目录。
+完成后把修复计划候选路径、发现摘要、证据缺口和自检结果交回 `$stage-0-source-machine-analysis-and-export`。正式本机路径、权限、备份和原子写入由 Stage 0 负责；不要自行请求最终写入确认，也不要把 `tmp/` 候选写入正式目录。

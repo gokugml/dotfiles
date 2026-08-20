@@ -1,6 +1,6 @@
 ---
 name: stage-0-source-machine-analysis-and-export
-description: 编排源机器 Stage 0：运行 dump.sh 导出软件/tooling/plugin 候选，调用独立 Zsh 分析 Skill 生成含第三方功能块保全清单的修改建议，再调用独立导出 Review Skill 为每个工具先给出一句话描述并完成 AI 审阅、自检和一次用户确认，最后只写入获准草稿。用于用户要求分析当前 Zsh、保全软件安装器追加块、dump 本地配置、盘点源 Mac 或为 macOS dotfiles 迁移准备候选配置时；不直接承担 Zsh 诊断或导出文件逐项 Review，也不安装、退役、commit 或 push。
+description: 编排源机器 Stage 0：运行 dump.sh 导出软件/tooling/plugin 候选，调用独立 Zsh 分析 Skill 生成含第三方功能块保全清单的修改建议，再调用独立导出 Review Skill 为每个工具先给出一句话描述并完成 AI 审阅、自检和一次用户确认；确认后把 Zsh 修复计划写入本机 `~/.config/dotfiles/zsh-repair/`，其他获准草稿写入对应仓库。用于用户要求分析当前 Zsh、保全软件安装器追加块、dump 本地配置、盘点源 Mac 或为 macOS dotfiles 迁移准备候选配置时；不直接承担 Zsh 诊断或导出文件逐项 Review，也不安装、退役、commit 或 push。
 ---
 
 # Stage 0：源机器分析与配置导出编排
@@ -9,12 +9,12 @@ description: 编排源机器 Stage 0：运行 dump.sh 导出软件/tooling/plugi
 
 ```text
 dump.sh → Zsh 分析 Skill → 导出配置 Review Skill
-  → 跨结果自检 → 用户一次确认 → 写入获准草稿 → 精确清理
+  → 跨结果自检 → 用户一次确认 → 写入本机 Zsh 修复计划与获准仓库草稿 → 精确清理
 ```
 
 ## 执行前计划门
 
-先只读检查公开仓库、可选 shared 目标、工作树、`tmp/` 边界、`dump.sh`、两个子 Skill、共用契约和正式目标现状；此时不得运行 `dump.sh` 或 Zsh 采集器，也不得生成、编辑或清理候选。随后向用户展示完整计划：三个能力的执行顺序、将读取/生成/审阅/清理的精确路径、可能写入的正式草稿、部分证据缺失与安全失败的处理、验证方式，以及明确不会修改 HOME/软件/服务、commit、push 或进入后续阶段。展示后停止并等待用户明确确认，再进入执行工作流。
+先只读检查公开仓库、可选 shared 目标、工作树、`tmp/` 边界、`dump.sh`、两个子 Skill、共用契约、本机 Zsh 修复计划目录和正式目标现状；此时不得运行 `dump.sh` 或 Zsh 采集器，也不得生成、编辑或清理候选。随后向用户展示完整计划：三个能力的执行顺序、将读取/生成/审阅/清理的精确路径、可能写入的本机修复计划与仓库草稿、部分证据缺失与安全失败的处理、验证方式，以及除获准修复计划目录外不会修改 HOME，也不会修改软件/服务、commit、push 或进入后续阶段。展示后停止并等待用户明确确认，再进入执行工作流。
 
 该初始确认可以覆盖计划中已逐项列明的两个子 Skill 受管动作，子 Skill 不重复询问；任何未展示的新路径、shared 范围、网络/系统影响或风险都必须先更新计划并再次等待确认。执行前重新检查工作树。初始计划确认不替代第 6 步的正式草稿写入确认，也不授权安装或退役。
 
@@ -31,7 +31,7 @@ dump.sh → Zsh 分析 Skill → 导出配置 Review Skill
 
 - 不直接读取、输出或 source 真实 Zsh 文件；Zsh 内容只由子 Skill 的脱敏采集脚本处理。第三方功能块只交接安全 ID、出现序号、顺序、行范围、阶段和处置，不交接正文或内容摘要。
 - 不读取 Keychain、shell 历史、完整环境或 `~/.config/dotfiles/local/parameters.zsh`、`integrations.zsh` 内容。
-- 不修改真实 Zsh、symlink、软件、服务或应用数据，不调用 `install.sh`。
+- 除获准写入固定的本机 Zsh 修复计划目录外，不修改真实 HOME；不修改真实 Zsh、symlink、软件、服务或应用数据，不调用 `install.sh`。
 - 不在 Stage 0 生成最终 `.zprofile`、`.zshrc` 或 `shared.zsh`。
 - 不创建远程仓库，不改变可见性，不 commit 或 push。
 - 保护用户已有工作区变更。目标文件在确认前后发生变化时，重新展示最新完整 diff，不应用过期确认。
@@ -55,9 +55,15 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 |---|---|
 | personal | 当前公开仓库 `my_setup/` |
 | shared | 可选独立共享仓库，只保存与他人共用的配置增量 |
+| personal Zsh 修复计划 | `~/.config/dotfiles/zsh-repair/zsh-repair-plan.md` |
+| shared Zsh 修复计划 | `~/.config/dotfiles/zsh-repair/shared-zsh-repair-plan.md`，仅确有 shared 增量时 |
 | local | 只报告参数类别，不生成或审阅内容 |
 | retire | 候选配置内的 `AI-RETIRE` 评论与 Stage 3 提示 |
 | manual | 集中审查摘要 |
+
+`~/.config/dotfiles/zsh-repair/` 是 Stage 0 → Stage 1 的本机实施交接目录，不是 Zsh 运行时配置，也不进入 Git、shared 仓库或 Stage 2 checkout。目录必须是当前用户拥有的普通目录且权限为 `0700`；计划必须是当前用户拥有的普通文件且权限为 `0600`，不得跟随 symlink。已有计划在获准覆盖前先备份为同目录 `0600` 时间戳副本，再通过同目录临时文件原子替换。任何类型、owner、权限或备份异常都阻止对应计划写入。
+
+不得再把正式 `zsh-repair-plan.md` 写入 `my_setup/zsh/` 或 shared 仓库。发现这些旧位置已有计划时只把它们列为 legacy，除非其删除已经包含在本次完整 diff 且得到用户明确确认，否则不自动移动或删除。
 
 只有当前目录不是有效仓库、仓库根不唯一，或确有 shared 增量但目标仓库无法唯一定位时，才把所有歧义合并成一次提问。
 
@@ -66,7 +72,7 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 ### 1. 预检
 
 1. 定位当前公开 Git 仓库根目录，确认 `./dump.sh` 和两个子 Skill 均存在。
-2. 检查 `git status --short` 和正式目标文件当前 diff；把已有修改视为用户内容。
+2. 检查 `git status --short`、仓库正式目标当前 diff，以及固定本机 Zsh 修复计划目标的类型、owner、权限和现有状态；把已有修改视为用户内容。
 3. 确认 `tmp/` 被 Git 忽略、不是 symlink，且没有上次未处理的受管候选。未知 `tmp/` 内容不得删除。
 4. 记录 personal 与可选 shared 的唯一目标位置。
 
@@ -117,10 +123,10 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 
 展示：
 
-1. Zsh 修改建议摘要、功能块保全清单和证据缺口；
+1. Zsh 修改建议摘要、功能块保全清单、证据缺口，以及将写入固定本机目录的精确计划文件；
 2. 导出配置的逐项调整摘要和 manual 项；每个工具先显示一句话描述，再显示修改级别和建议；
-3. public/shared 正式目标；
-4. 正式目录到候选目录的全部新增、修改和删除 diff；
+3. public/shared 正式目标与本机 Zsh 修复计划目标；
+4. 仓库正式目录到候选目录的全部新增、修改和删除 diff，以及本机修复计划的完整安全 diff；
 5. local 参数类别，但不显示值；
 6. Stage 1 将生成或更新的 Zsh 目标，以及 Stage 2 将安装或验证的内容；
 7. Stage 3 的退役建议；
@@ -138,7 +144,7 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 
 ### 7. 按决定收尾
 
-- 确认时，先重新检查正式目标和工作区是否发生变化；没有变化时只写入已展示且获准的文件。
+- 确认时，先重新检查正式目标、工作区和本机修复计划目标是否发生变化；没有变化时只写入已展示且获准的文件。本机计划按 `0700/0600`、同目录备份和原子替换规则写入，仓库不得获得其正式副本。
 - 要求调整时，把 Zsh 建议交回 Zsh Skill，把导出配置调整交回 Review Skill；重新执行对应自检和完整跨结果审查，不直接在编排器里修改内容。
 - 取消时不写任何正式文件。
 - 确认写入完成、取消或安全失败后，只清理本次已知的 `tmp/zsh-evidence.md`、`tmp/dump.md`、`tmp/my_setup/`、`tmp/shared/` 和 `tmp/.runtime/`，不清空整个 `tmp/`。
@@ -146,4 +152,4 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 
 ## 完成判定
 
-只有两个子 Skill、跨结果自检、用户一次确认和获准草稿写入全部完成，才报告 Stage 0 完成。若用户取消，报告“已取消并清理候选文件”；若任一采集器越界或子 Skill 失败，报告具体阻断原因，不把部分结果标为完成。
+只有两个子 Skill、跨结果自检、用户一次确认、本机 Zsh 修复计划及其他获准草稿写入全部完成，才报告 Stage 0 完成。若用户取消，报告“已取消并清理候选文件”；若本机计划安全写入、任一采集器或子 Skill 失败，报告具体阻断原因，不把部分结果标为完成。

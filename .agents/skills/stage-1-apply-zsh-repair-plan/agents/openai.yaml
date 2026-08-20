@@ -1,4 +1,4 @@
 interface:
   display_name: "Stage 1：应用 Zsh 修复计划"
-  short_description: "应用 Zsh 修复计划并保全受影响的全局 CLI 迁移清单"
-  default_prompt: "使用 $stage-1-apply-zsh-repair-plan，应用并验证 Zsh 修复计划，导出受 runtime/PATH 变更影响的全局 CLI 清单，并进入可选 Stage 1.1 确认。"
+  short_description: "应用本机 Zsh 修复计划并盘点会失去解析的直接全局 CLI"
+  default_prompt: "使用 $stage-1-apply-zsh-repair-plan，从 ~/.config/dotfiles/zsh-repair/ 应用并验证计划；替换 runtime/PATH 前，完整盘点会失去解析的 npm、pnpm、Bun 和明确移除目录中的直接全局 CLI。"

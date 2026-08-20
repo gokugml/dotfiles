@@ -24,6 +24,10 @@ _避免使用_：本地配置层、机器配置
 单台机器可选的 `~/.config/dotfiles/local/integrations.zsh`，保存由第三方安装器追加且不能公开的 Zsh 功能块，并通过四个 pre/post 阶段加载。
 _避免使用_：第四配置层、本机软件清单
 
+**本机 Zsh 修复交接（Local Zsh Repair Handoff）**：
+Stage 0 把用户确认的 personal `zsh-repair-plan.md` 和可选 shared 修复计划写入 `~/.config/dotfiles/zsh-repair/`，Stage 1 从该目录读取并更新状态。它不被 Zsh 加载，不进入 Git，也不是 Stage 2 安装输入。
+_避免使用_：公开 Zsh 声明、Stage 2 配置、本机运行时参数
+
 **Intel 退役交接清单（Intel Retirement Handoff）**：
 Stage 2 在 Apple Silicon 上由 `install.sh verify` 生成的本机 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`，记录仍存在的 Intel 软件与精确路径供 Stage 3 重新盘点。它不是声明式配置或删除授权。
 _避免使用_：退役批准清单、自动删除列表
@@ -46,10 +50,10 @@ _避免使用_：public-shared-local 三层栈
 通过只读 `dump.sh` 优先调用软件和工具的原生 Dump/List，把脱敏状态写入当前仓库被忽略的 `tmp/` 同构候选树。它不读取 Zsh 启动文件，不修改真实配置或软件。
 
 **Zsh 分析（Zsh Analysis）**：
-通过独立 Zsh Skill 的确定性脚本提取启动文件的脱敏结构证据与第三方功能块保全清单，再由 AI 按 Skill 内置手册生成 `zsh-repair-plan.md` 修改建议。它不生成或修改最终 Zsh 文件。
+通过独立 Zsh Skill 的确定性脚本提取启动文件的脱敏结构证据与第三方功能块保全清单，再由 AI 按 Skill 内置手册生成 `zsh-repair-plan.md` 候选；Stage 0 在用户确认后把计划写入 `~/.config/dotfiles/zsh-repair/`。它不生成或修改最终 Zsh 文件。
 
 **Zsh 修复应用（Zsh Repair Application）**：
-Stage 1 通过独立 Skill 把已确认的 `zsh-repair-plan.md` 应用到用户显式提供的 `zshrc`/`.zshrc`、`zprofile`/`.zprofile` 目标；没有显式目标时先让用户选择无前置点或有前置点仓库命名，再更新对应文件、可选 shared 增量和获准的本机 `integrations.zsh`。写入前后逐块比较源 Zsh 与目标加本机 integrations，缺块即失败；runtime/PATH owner 改变时先保全受影响的本机全局 CLI 清单。它尽可能保留现有 Oh My Zsh 模板配置，不建立 symlink 或安装软件；Stage 1.1 只确认可分享迁移声明。
+Stage 1 通过独立 Skill 把 `~/.config/dotfiles/zsh-repair/` 中已确认的计划应用到用户显式提供的 `zshrc`/`.zshrc`、`zprofile`/`.zprofile` 目标；没有显式目标时先让用户选择无前置点或有前置点仓库命名，再更新对应文件、可选 shared 增量和获准的本机 `integrations.zsh`。写入前后逐块比较源 Zsh 与目标加本机 integrations，缺块即失败；runtime/PATH owner 改变时，先完整盘点会失去解析的 npm、pnpm、Bun 直接全局 CLI 和明确移除 PATH 目录中的直接 CLI。它尽可能保留现有 Oh My Zsh 模板配置，不建立 symlink 或安装软件；Stage 1.1 只确认可分享迁移声明。
 
 **install.sh 能力计划（Install Capability Plan）**：
 独立于 Stage 编号的仓库能力建设需求，定义根 `install.sh`、内部安装模块、`dump.sh`、测试、文档和 CI。它不生成最终 Zsh 文件，也不代表 `./install.sh plan` 子命令。
@@ -72,6 +76,7 @@ Stage 3 只在 Apple Silicon 上读取 Intel 退役交接清单作为线索，�
 | 共享配置 | 可选的独立 shared 仓库 |
 | 本机私有参数 | `~/.config/dotfiles/local/parameters.zsh` |
 | 本机功能集成 | `~/.config/dotfiles/local/integrations.zsh`（可选） |
+| 本机 Zsh 修复交接 | `~/.config/dotfiles/zsh-repair/zsh-repair-plan.md` 与可选 `shared-zsh-repair-plan.md` |
 | 全局 CLI 迁移本机状态 | `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/global_cli_to_be_migrated.tsv`（Stage 1 可选） |
 | 全局 CLI 可分享声明 | `<public-repository>/my_setup/tooling/global-cli-migration.toml`（Stage 1.1 可选） |
 | Intel 退役交接清单 | `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`（Apple Silicon 可选） |
