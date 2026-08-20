@@ -22,9 +22,11 @@ if [[ -n "$dotfiles_brew_prefix" && -x "$dotfiles_brew_prefix/bin/brew" ]]; then
 fi
 
 export PNPM_HOME="$HOME/Library/pnpm"
+export BUN_INSTALL="$HOME/.bun"
 path=(
   ${dotfiles_brew_prefix:+"$dotfiles_brew_prefix/bin"}
   ${dotfiles_brew_prefix:+"$dotfiles_brew_prefix/sbin"}
+  "$HOME/.local/share/mise/shims"
   "$PNPM_HOME"
   "$HOME/.local/bin"
   "${path[@]}"
