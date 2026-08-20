@@ -4,6 +4,44 @@
 
 本协议只迁移软件安装意图，不迁移项目依赖、认证数据、token、缓存、服务数据、alias 或第三方 Zsh 功能块。alias 和功能块仍走 Stage 1 的功能块保全流程。
 
+## 默认 runtime 与全局 CLI PATH ownership
+
+把“runtime/manager 命令的主要入口”和“该 manager 安装的全局 CLI”分开管理。默认推荐各 manager 的官方原生全局目录，不默认把所有命令统一到 `~/.local/bin`。
+
+### 默认推荐：manager 官方原生目录
+
+- `node`、`bun`、`pnpm` runtime 由 mise 管理，通过 `mise activate` 或 shims 暴露；`npm` 随当前 mise Node 提供。`~/.bun/bin/bun`、`~/.bun/bin/bunx`、独立 pnpm/npm 安装不得抢占主要 runtime 入口。
+- Bun 的状态与全局包保存在 `$HOME/.bun/`，Zsh 只把实际可执行目录 `$HOME/.bun/bin` 加入 PATH。由于该目录也包含 `bun`、`bunx`，mise shims/当前 runtime bin 必须排在它之前。
+- pnpm 使用用户确认并由当前版本只读查询证明的 `PNPM_HOME`/global bin。优先核对 `pnpm config get global-bin-dir`、`pnpm bin -g` 和 `pnpm root -g`；不得固定猜测 `$PNPM_HOME/bin`。确认当前版本以 `$PNPM_HOME` 本身保存全局命令时，把 `$PNPM_HOME` 加入 PATH。
+- npm 全局 CLI 位于当前 mise Node prefix 的 `bin`；由 mise 激活或 shims 暴露，不在 public Zsh 中硬编码 `~/.local/share/mise/installs/node/<version>/bin`。更换或退役 Node 版本前，必须逐个盘点该 prefix 的直接 npm 全局 CLI。
+- `uv` 本体同样只能有一个已确认 owner；不要为了目录统一复制或链接第二个 `uv`。若启用 `uv tool` 的用户级 bin，只把其只读查询确认的 bin 目录作为独立全局 CLI owner 处理。
+
+默认 PATH 优先级为：
+
+```text
+原生 Homebrew
+→ mise shims / 当前 mise runtime
+→ pnpm global bin
+→ Bun global bin
+→ ~/.local/bin（用户脚本与 wrapper，可选）
+→ 继承 PATH
+```
+
+该策略保留 manager 官方安装、升级和卸载语义，无需额外复制或 symlink；代价是 PATH 入口较多，npm 全局 CLI 还会绑定具体 mise Node prefix。
+
+### 可选：统一 `~/.local/bin`
+
+每次 Stage 1 涉及 runtime/global CLI PATH 时，都要让用户选择是否改用统一 `~/.local/bin`，并先说明：统一目录提供稳定的 XDG 用户命令入口，便于 PATH 管理、迁移和备份；但可能隐藏真实 owner，并要求逐个 manager 证明官方支持自定义 global bin，或使用用户明确批准且可验证的 wrapper。
+
+选择统一目录不授权复制、移动或 symlink `node`、`bun`、`bunx`、`pnpm`、`npm`、`uv` 等 runtime/manager 本体，也不允许为同一命令建立第二个 owner。某个 manager 不支持安全统一时，保持其官方原生目录并把偏离理由展示给用户；不要为了目录外观破坏安装器语义。
+
+### 验证
+
+- `command -v`/`type -a` 确认 `node`、`bun`、`bunx`、`pnpm`、`npm` 的首个解析结果来自 mise 管理的当前 runtime。
+- Bun、pnpm、npm 安装的每个全局 CLI 解析到已确认的对应 global bin/Node prefix；同名命令不得由错误 manager 或旧 PATH 抢占。
+- public Zsh 不包含版本化 mise Node prefix，不把 `$HOME/.bun` 状态根本身加入 PATH，也不把未经版本查询确认的 `$PNPM_HOME/bin` 写成固定规则。
+- 选择统一 `~/.local/bin` 时，逐项记录 owner、官方配置或 wrapper 依据，并验证移除旧入口后命令仍可达；无法证明时保持 manager 原生目录或标为 `manual`。
+
 ## 双文件边界
 
 ### 本机迁移清单

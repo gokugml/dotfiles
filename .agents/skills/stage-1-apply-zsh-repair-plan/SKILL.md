@@ -26,6 +26,19 @@ description: 从 Stage 0 固定本机目录 `~/.config/dotfiles/zsh-repair/` 或
 
 用户已经显式提供一个或多个精确目标路径时，不要要求其改名，也不要对已提供目标重复询问命名方案。只提供部分目标而修复计划还需要其他文件时，先询问缺失文件的精确路径；不要把命名选择自动套用到缺失目标。
 
+## 全局 CLI PATH 策略确认门
+
+当修复计划或候选涉及 runtime、全局包管理器、`PNPM_HOME`、`BUN_INSTALL`、npm prefix 或其 PATH 时，在文件名确认后、执行前计划门之前，先展示[全局 CLI 迁移交接协议](./references/global-cli-migration.md)中的两种 PATH 策略及简短利弊，然后只询问：
+
+```text
+1. 使用各 manager 官方原生全局目录（推荐）
+2. 评估统一使用 ~/.local/bin
+```
+
+选项 1 是默认推荐，但不得代替用户作答。它保留 manager 官方安装、升级和卸载语义；代价是 PATH 入口较多，且 npm 全局 CLI 随具体 mise Node prefix 迁移。选项 2 提供稳定的 XDG 用户命令入口、便于迁移和备份；代价是必须逐个证明 manager 官方支持该目录或使用明确 wrapper，不能用复制、临时 symlink 或重复 runtime owner 冒充统一。
+
+记录本次选择并停止等待。后续计划、候选和验证必须始终使用同一策略；输入或选择变化时重新展示计划并再次确认。无论选择哪种策略，`node`、`bun`、`bunx`、`pnpm`、`npm` 等 runtime/manager 命令都只能有一个主要 owner，不得为了统一目录复制或链接出第二套入口。
+
 ## 执行前计划门
 
 完成文件名确认后，只读检查修复计划、用户显式目标、已选默认仓库目标、工作树、已有 Zsh 文件和可选 shared 仓库；不要生成候选或编辑文件。随后展示：
@@ -37,6 +50,7 @@ description: 从 Stage 0 固定本机目录 `~/.config/dotfiles/zsh-repair/` 或
 - 每个 `zprofile`/`.zprofile`、`zshrc`/`.zshrc`、`shared.zsh` 的精确目标、命名选择和选择依据；
 - 是否创建或修改固定本机文件 `~/.config/dotfiles/local/integrations.zsh`、`parameters.zsh`，已有文件的备份路径规则和只展示脱敏结构 diff 的原因；
 - 修复计划涉及 Homebrew/PATH 时的目标架构或可移植判定；
+- 用户选择的全局 CLI PATH 策略、精确 PATH 入口、顺序、manager owner，以及官方原生目录与统一 `~/.local/bin` 的简短利弊；
 - 将保留的现有内容、计划修改的逻辑区域，以及是否从官方安装工具联网取得最新 Oh My Zsh 模板、隔离临时 HOME 和清理范围；
 - 候选与临时文件范围、验证命令、敏感信息风险和失败停止点；
 - 是否会因 NVM、`PNPM_HOME`、`BUN_INSTALL` 或其他工具 PATH/initializer 的移除、替换或语义变化而让现有全局 CLI 失去解析；将只读检查的每个精确旧 owner/目录、npm/pnpm/Bun 直接全局安装项、明确移除 PATH 目录中的直接 CLI、本机迁移清单路径、public 声明路径和 Stage 1.1 的独立确认边界；
@@ -147,6 +161,7 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 - 不把 shared 仓库专属内容、本机绝对路径、账号、密钥、服务数据或未确认的软件选择写入 public 文件；只允许确定性迁移操作读取 local 文件，AI 和对话不得显示其内容。
 - 显式目标含疑似敏感赋值时，只保留并局部绕开，不在候选、日志或对话中显示值；修复计划要求改动该项时停止并先确认安全迁移方式。
 - 不创建没有实际内容的 shared 文件。
+- 生成或修改 runtime/global CLI PATH 时，完整执行全局 CLI 迁移协议中的 PATH ownership 策略。默认推荐使用 manager 官方原生目录：mise runtime 必须先于 pnpm/Bun global bin，npm global bin 由当前 mise Node prefix 通过 mise 激活暴露；不得硬编码版本化 mise Node prefix。只有用户选择统一 `~/.local/bin` 且每个 manager 的官方能力或明确 wrapper 方案都已确认时，才生成对应候选。
 
 ### 保全并迁移第三方功能块
 
@@ -190,7 +205,8 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 5. 对比原文件，确认 Oh My Zsh 模板和用户配置只发生必要变化。
 6. 运行功能块工具的 `compare`，逐块比较源 `.zprofile` + `.zshrc` 与目标 `zprofile` + `zshrc` + 私有 integrations 候选。只有 `preserved-target`、已校验阶段 loader 的 `migrated-local` 或精确获准的 `approved-retired` 通过；`missing`、`content-changed`、`phase-changed`、`order-changed`、`missing-loader` 均阻止展示可写 diff。
 7. 验证失去解析影响集逐一覆盖 npm、pnpm、Bun 和每个明确移除 PATH 目录；迁移清单只含本次变更影响的直接安装项，稳定排序、权限/schema/ownership marker 正确，public 候选不含源绝对路径、认证数据或环境值。任一被排除或无法安全盘点的范围必须与对应被阻止的 Zsh 退役变更精确关联。
-8. 展示每个仓库目标和每份实际采用的本机 `zsh-repair-plan.md` 状态迁移完整 diff，以及私有文件和本机迁移清单按变量名/块 ID/manager/package/binaries/impact/数量生成的脱敏结构 diff；不得显示私有正文、值、源绝对路径或内容摘要。一起展示目标类型、候选验证、模板保留摘要、功能块覆盖表、CLI 影响覆盖表和未解决缺口。
+8. 验证所选 PATH 策略：`node`、`bun`、`bunx`、`pnpm`、`npm` 的主要解析 owner 符合 mise/runtime 声明；pnpm/Bun/npm 全局 CLI 解析到各自已确认 owner；manager 原生 global bin、可选 `~/.local/bin` 和继承 PATH 的顺序符合协议且没有错误 owner 抢占。
+9. 展示每个仓库目标和每份实际采用的本机 `zsh-repair-plan.md` 状态迁移完整 diff，以及私有文件和本机迁移清单按变量名/块 ID/manager/package/binaries/impact/数量生成的脱敏结构 diff；不得显示私有正文、值、源绝对路径或内容摘要。一起展示目标类型、候选验证、模板保留摘要、功能块覆盖表、CLI 影响覆盖表、PATH owner/顺序表和未解决缺口。
 
 随后只给出以下选择并停止等待：
 
@@ -242,6 +258,7 @@ Stage 1.1 是 Stage 1 成功后的可选确认阶段，不改变 `> 状态：Sta
 - 只更新了显式目标或没有显式目标时的默认仓库目标；
 - 所有写入文件通过语法和边界检查；
 - 已从源与最终候选的可达性差集完整盘点本次 Zsh 变更影响的 npm、pnpm、Bun 直接全局 CLI 及明确移除 PATH 目录中的直接 CLI；存在受影响项时，本机迁移 TSV 已先于对应 Zsh 写入原子落盘，无法盘点或用户排除的旧 owner 未被静默退役；
+- 本轮涉及 runtime/global CLI PATH 时，用户已明确选择 manager 官方原生目录或统一 `~/.local/bin` 策略；最终 PATH 顺序、主要 runtime owner 和各 manager global CLI owner 均与该选择一致且验证通过；
 - 源 `.zprofile` + `.zshrc` 的每个功能块都由最终目标文件或正确阶段加载的 `integrations.zsh` 精确覆盖，或有用户明确批准的精确 retire 记录；
 - 修改过的既有 `integrations.zsh`/`parameters.zsh` 均已先完成 `0600` 同目录备份，且 local 父目录为 `0700`；
 - Oh My Zsh 模板来自本次获准运行的官方最新安装工具，官方 commit 已记录；用户配置已保留，所有偏离都有获准理由；
