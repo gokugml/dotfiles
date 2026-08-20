@@ -95,7 +95,7 @@ Stage 2 是独立部署阶段。不得读取或验证 Stage 0/1 状态、Stage 1
 
 ### 2. 可选全局 CLI 选择
 
-若 `my_setup/tooling/global-cli-migration.toml` 不存在，跳过本节。存在时先验证 schema、固定版本、binary 唯一性、target manager 和无本机路径/敏感内容，并确认根安装器能够在摘要、安装和 verify 中消费该声明。
+若 `my_setup/tooling/global-cli-migration.toml` 不存在，跳过本节。存在时先验证 schema、精确来源 `version`、与 `package` 对应的 `<package>@latest` 目标 spec、binary 唯一性、target manager 和无本机路径/敏感内容，并确认根安装器能够在摘要、安装和 verify 中消费该声明。
 
 展示每项 description、package、version、binaries、target manager 和 reason，然后只询问：
 

@@ -79,7 +79,7 @@ source_manager	package	version	binaries	source_runtime	source_prefix	source_bin_
 - `source_prefix`、`source_bin_dir`：仅在本机 TSV 中记录规范化绝对路径。
 - `impact`：`runtime-owner-replaced`、`global-home-changed`、`path-entry-removed` 或 `initializer-retired`。
 - `proposed_target_manager`：`bun`、`mise`、`npm`、`pnpm` 或 `manual`。
-- `proposed_target_spec`：目标管理器能够消费的固定版本 spec；尚未确认时为空。
+- `proposed_target_spec`：目标管理器能够消费的安装 spec；已确认自动迁移时使用 `<package>@latest`，尚未确认时为空。
 - `decision`：`pending`、`selected`、`skipped` 或 `manual`。
 - `status`：`detected`、`declared`、`installed`、`verified`、`failed` 或 `skipped`。
 - `verification`：只记录安全结果枚举或解析后的非敏感命令路径类别，不记录命令输出正文。
@@ -113,7 +113,7 @@ version = "1.2.3"
 binaries = ["example-cli"]
 source_manager = "npm"
 target_manager = "bun"
-target_spec = "@scope/package@1.2.3"
+target_spec = "@scope/package@latest"
 reason = "runtime-owner-replaced"
 ```
 
@@ -121,7 +121,7 @@ reason = "runtime-owner-replaced"
 
 - `schema_version` 必须为 `1`，`install_policy` 必须为 `prompt`。
 - `description`、`package`、`version`、`binaries`、`source_manager`、`target_manager`、`target_spec`、`reason` 都是必填字段。
-- `version` 和 `target_spec` 必须固定精确版本，禁止 `latest`、tag、范围或省略版本。
+- `version` 必须保留源机器检测到的精确版本，作为迁移来源快照；`target_spec` 必须使用与 `package` 对应的 `<package>@latest`。禁止其他 tag、semver 范围或省略版本。
 - `binaries` 必须非空、唯一并按字节序排序。
 - `source_manager` 只允许 `npm`、`pnpm`、`bun`、`path`；`target_manager` 只允许 `bun`、`mise`、`npm`、`pnpm`。
 - JS CLI 默认优先评估 `bun`；只有包元数据、安装布局、目标 bin 可达性或兼容性证据不支持 Bun 时，才选 `mise`、`npm` 或 `pnpm`，并把理由展示给用户。
