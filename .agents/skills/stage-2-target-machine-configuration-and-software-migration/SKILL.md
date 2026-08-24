@@ -1,6 +1,6 @@
 ---
 name: stage-2-target-machine-configuration-and-software-migration
-description: 编排 macOS 目标机器 Stage 2：只读取当前 checkout 的公开仓库与可选 shared 仓库声明，把已启用的 macOS、tooling 和可选 Zsh 配置安装到当前机器原生架构对应的精确目标，再运行 `install.sh verify` 验证安装完整性；若存在 `my_setup/tooling/global-cli-migration.toml`，先询问用户是否在本机迁移其中的可选全局 CLI，缺失或跳过都不阻断基础安装。支持只 checkout 根安装器及 `my_setup/macos/`、`my_setup/tooling/` 的目标机部署；不依赖 Stage 0、Stage 1、`zsh-repair-plan.md`、本机待迁移 TSV 或其状态。Apple Silicon 上若仍有 Intel 残留，verify 生成本机 `intel_to_be_retired.tsv` 供 Stage 3 重新核验。用于多台 macOS 机器应用仓库配置、建立受管 symlink、安装 Homebrew 软件、mise/uv runtime、用户选择的全局 CLI 或可选 Zsh/plugin；不生成或修复仓库配置，不读取 local 密钥值，不迁移服务数据、进入 Stage 3、commit 或 push。
+description: 编排 macOS 目标机器 Stage 2：只读取当前 checkout 的公开仓库与可选 shared 仓库声明，把已启用的 macOS、tooling 和可选 Zsh 配置安装到当前机器原生架构对应的精确目标；启用 Zsh 时，在软件和可选全局 CLI 安装前后比较 HOME 启动文件的脱敏功能签名，证明安装器新增功能已由受管 Zsh/shared/local integrations 覆盖后才备份并建立 symlink，最后运行 `install.sh verify` 验证安装完整性与保全回执。若存在 `my_setup/tooling/global-cli-migration.toml`，先询问用户是否在本机迁移其中的可选全局 CLI，缺失或跳过都不阻断基础安装。支持只 checkout 根安装器及 `my_setup/macos/`、`my_setup/tooling/` 的目标机部署；不依赖 Stage 0、Stage 1、`zsh-repair-plan.md`、本机待迁移 TSV 或其状态。Apple Silicon 上若仍有 Intel 残留，verify 生成本机 `intel_to_be_retired.tsv` 供 Stage 3 重新核验。用于多台 macOS 机器应用仓库配置、建立受管 symlink、安装 Homebrew 软件、mise/uv runtime、用户选择的全局 CLI 或可选 Zsh/plugin；不生成或修复仓库配置，不读取 local 密钥值，不迁移服务数据、进入 Stage 3、commit 或 push。
 ---
 
 # Stage 2：从仓库配置目标机器
@@ -9,7 +9,8 @@ description: 编排 macOS 目标机器 Stage 2：只读取当前 checkout 的公
 
 ```text
 仓库声明 + 可选全局 CLI 询问 + 原生架构 → ./install.sh → 脚本内 y/N
-  → ./install.sh verify → 安装完整性 + 可选 Intel 退役交接
+  → macOS → tooling + 本机已选 CLI → Zsh 功能保全门 → 可选 Zsh
+  → ./install.sh verify → 安装完整性 + 保全回执 + 可选 Intel 退役交接
 ```
 
 Stage 2 是独立部署阶段。不得读取或验证 Stage 0/1 状态、Stage 1 的本机 `global_cli_to_be_migrated.tsv`、`zsh-repair-plan.md`、历史 diff 或用户在其他机器上的确认记录。`my_setup/tooling/global-cli-migration.toml` 若存在，只因它是当前 checkout 的可分享 tooling 声明而参与本机可选询问，不构成对 Stage 1 的依赖。
@@ -25,6 +26,7 @@ Stage 2 是独立部署阶段。不得读取或验证 Stage 0/1 状态、Stage 1
 - Brewfile 软件、mise/uv runtime、可选 Zsh/plugin、网络与磁盘影响；
 - `my_setup/tooling/global-cli-migration.toml` 是否存在、schema/条目摘要、安装器是否支持，以及本机全部迁移、逐项选择或跳过都不会改变基础模块依赖的语义；
 - Apple Silicon 上 `intel_to_be_retired.tsv` 的路径、schema、权限和仅供 Stage 3 参考的语义；
+- 启用 Zsh 时，软件安装前后功能签名、symlink 前覆盖检查，以及 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/zsh_functional_guard.tsv` 的路径、无原文 schema、`0700/0600` 权限和最终 verify 语义；
 - 服务/数据人工事项、A/B 验证、失败停止点，以及不会执行的仓库开发初始化、配置生成、Stage 3、commit 和 push。
 
 展示后停止并等待用户明确确认。执行前重新检查 checkout、声明、目标和架构；实质变化时更新计划并再次确认。该确认只授权进入安装器，不替代 `install.sh` 内默认 `N` 的 `y/N`。
@@ -77,7 +79,7 @@ Brewfile 只允许 `tap`、`brew`、`cask`、`vscode` 的直接声明，不执�
 
 - 不生成、编辑或修复 checkout 中的 Zsh、Brewfile、tooling 或 plugin 声明；输入错误时报告精确文件。
 - 不直接编辑真实 `~/.zprofile`、`~/.zshrc`；仅允许获准后的根安装器备份并建立 symlink。
-- 不读取、显示、复制或持久化 local `parameters.zsh`、`integrations.zsh` 正文；只检查类型、owner、权限和无输出语法。
+- Agent 不读取、显示、复制或持久化 local `parameters.zsh`、`integrations.zsh` 正文；只检查类型、owner、权限和无输出语法。用户确认后，安装器可对固定标记的 `integrations.zsh` 中与 `zprofile-pre/post`、`zshrc-pre/post` 对应的功能块做确定性、无输出 token 化，只在 `0700` 临时目录保存逐 token SHA-256，且不得扫描 `parameters.zsh`、输出 token/原文/值或把正文写入回执。
 - 不覆盖与安装范围冲突的用户未确认修改或未知受管目标。
 - 不启停服务，不迁移数据库、Homebrew service 或 GUI 数据，不清理未知软件、项目 runtime 或另一架构目录。
 - 本机 Intel 盘点只写 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`；不写入仓库，也不构成删除授权。
@@ -122,7 +124,16 @@ Brewfile 只允许 `tap`、`brew`、`cask`、`vscode` 的直接声明，不执�
 
 不添加参数，不代替用户输入 `y`。确认安装器在任何写入前展示：架构与原生前缀、启用/跳过模块、每个精确 source/target/action、软件/runtime/plugin 版本、local 元数据和人工服务/数据事项。
 
-用户在默认 `N` 的集中确认中同意后，由根安装器按 `macOS → tooling（含本机已选全局 CLI）→ 可选 Zsh → verify` 执行。缺失或跳过模块不得被调用；已启用模块及本机已选全局 CLI 的任一声明目标必须全部安装，不能以旧软件已存在代替原生目标。
+用户在默认 `N` 的集中确认中同意后，由根安装器按以下顺序执行：
+
+1. 启用 Zsh 时，在首个软件写入前为当前 HOME `.zprofile`、`.zshrc` 建立脱敏功能 token 签名；注释、空白和仅分隔符变化不构成新功能。
+2. 执行 `macOS → tooling（含本机已选全局 CLI）`。
+3. 再次签名 HOME Zsh，并把新增的连续功能 token 与同一逻辑文件的 personal、可选 shared 和固定 phase 的 local integrations 候选比较。只比较哈希，不输出原文、token 或值。
+4. 没有新增功能，或每段新增功能均能证明被候选覆盖时，才允许备份 HOME Zsh、安装插件并建立 symlink；无法证明时在 symlink 前停止，保留软件安装结果和当前 HOME 入口，提示先通过 Stage 1/1.1 保全，不自动回滚或猜测等价实现。
+5. symlink 后原子写入 `zsh_functional_guard.tsv`，字段固定为 `logical_file`、`status`、`added_tokens`、`removed_tokens`、四个 SHA-256 与 `backup` basename；父目录 `0700`、文件 `0600`，不得含启动文件原文、token、环境值或完整 HOME 路径。
+6. 执行最终 verify。
+
+缺失或跳过模块不得被调用；已启用模块及本机已选全局 CLI 的任一声明目标必须全部安装，不能以旧软件已存在代替原生目标。
 
 ### 4. 验证
 
@@ -138,7 +149,7 @@ Brewfile 只允许 `tap`、`brew`、`cask`、`vscode` 的直接声明，不执�
 
 - 摘要中的每个配置 symlink、Brewfile 项、mise/uv runtime、插件和命令均存在于精确目标，来源、版本、revision 与架构正确；
 - 所有受管命令优先解析到当前机器原生 Homebrew/runtime；另一架构残留不得成为受管目标；
-- macOS+tooling 最小 checkout 不要求 Zsh；启用 Zsh 时才验证语法、HOME symlink、加载顺序、启动场景和插件；
+- macOS+tooling 最小 checkout 不要求 Zsh；启用 Zsh 时才验证语法、HOME symlink、加载顺序、启动场景、插件，以及功能保全回执的 marker/schema/owner/权限、当前候选签名和安装后备份签名；
 - local 为 `0700/0600`、未被 Git 跟踪且内容未泄露；
 - 再次安装不会重复备份或破坏正确 symlink；服务和数据仍只报告。
 - 本机选择迁移的全局 CLI 必须匹配 package/version/binaries，命令解析到声明的 target manager/原生 runtime；不得以旧 NVM、旧 `PNPM_HOME`、旧 Bun global home 或已移除 PATH 中的副本代替。用户跳过的条目不进入 A 的完成条件。
@@ -173,6 +184,7 @@ Stage 2 只有 A 通过，且 Apple Silicon 上 B 为“已生成”或“无残
 - 可选全局 CLI 声明不存在或用户跳过：继续基础 Stage 2；不把它报告为缺失。声明存在但 schema 错误时只阻断可选分支，用户明确跳过后可继续基础安装。
 - 用户拒绝摘要：报告安装未获确认，不产生写入。
 - 部分安装后失败：保留实际状态，报告失败模块和人工修复，不自动卸载。
+- macOS/tooling 后发现未覆盖 Zsh 新功能：报告软件步骤已执行但 Zsh symlink 尚未替换，指出受影响的逻辑启动文件和脱敏 token 数量，不输出其内容；Stage 2 未完成。
 - A 通过但 B 失败：报告安装目标已到位但 Stage 2 未完成，不删除 Intel 项。
 
 只有当前 checkout 的所有已启用基础声明目标和本机明确选择的可选全局 CLI 完成安装、用户已在安装器内确认、A 通过、B 在适用时通过，且服务/数据未被自动迁移，才报告 Stage 2 完成。可选声明缺失或本机跳过不影响完成；`zsh-repair-plan.md`、Stage 0/1 状态、本机 Stage 1 TSV 和仓库开发/CI 能力均不参与完成判定。

@@ -189,6 +189,13 @@ write_fake_tools() {
     print -r -- '      fi'
     print -r -- '    fi'
     print -r -- '  done'
+    print -r -- '  if [[ "$*" == *--no-upgrade* && ! -L "$HOME/.zshrc" ]]; then'
+    print -r -- '    case "${DOTFILES_TEST_APPEND_ZSHRC:-}" in'
+    print -r -- '      covered) print -r -- '\''export PATH="$HOME/.fixture-tool/bin:$PATH"'\'' >> "$HOME/.zshrc" ;;'
+    print -r -- '      uncovered) print -r -- '\''export DOTFILES_UNCOVERED_HOOK="functional-loss-value"'\'' >> "$HOME/.zshrc" ;;'
+    print -r -- '      comment) print -r -- '\''# installer-added formatting only'\'' >> "$HOME/.zshrc" ;;'
+    print -r -- '    esac'
+    print -r -- '  fi'
     print -r -- '  exit 0'
     print -r -- 'fi'
     print -r -- 'if [[ "$*" == "list --formula -1" ]]; then print -- ast-grep; exit 0; fi'
@@ -388,10 +395,12 @@ run_full_checks() {
   local test_root fixture_repo fixture_home fixture_bin shared_repo dump_repo dump_home intel_brew
   local plugin_remote
   local output default_output apply_output verify_output handoff_output retire_output retire_apply_output
+  local backup_verify_output tampered_backup_output rc_backup_copy
   local dotted_output ambiguous_output mixed_output profile_link_before rc_link_before
   local before_status after_status profile_backup_count rc_backup_count home_before home_after
   local plugin_revision handoff_file handoff_before handoff_after handoff_backup foreign_output cleanup_output
-  local repo_state_output symlink_state_output external_state_dir
+  local repo_state_output symlink_state_output external_state_dir guard_file
+  local uncovered_home uncovered_output comment_home comment_output
   local minimal_repo minimal_home minimal_bin minimal_output intel_home intel_bin intel_output
   local selective_home selective_prefix selective_output
   local invalid_skip_home invalid_skip_output declaration_backup
@@ -440,7 +449,10 @@ run_full_checks() {
   {
     print -r -- '# dotfiles: generated local integrations v1'
     print -r -- 'case "${DOTFILES_INTEGRATIONS_PHASE:-}" in'
-    print -r -- '  zshrc-post) return 0 ;;'
+    print -r -- '  zshrc-post)'
+    print -r -- '    export PATH="$HOME/.fixture-tool/bin:$PATH"'
+    print -r -- '    return 0'
+    print -r -- '    ;;'
     print -r -- 'esac'
   } > "$fixture_home/.config/dotfiles/local/integrations.zsh"
   chmod 755 "$fixture_home/.config/dotfiles/local"
@@ -481,6 +493,7 @@ run_full_checks() {
       DOTFILES_INSTALL_TEST_MODE=1 \
       DOTFILES_GLOBAL_CLI_SELECTION=all \
       DOTFILES_TEST_MISE_NODE_PREFIX="$fixture_home/.local/share/mise/installs/node/24.14.1" \
+      DOTFILES_TEST_APPEND_ZSHRC=covered \
       DOTFILES_SHARED_DIR="$shared_repo" \
       ./install.sh > "$apply_output" 2>&1
   ) || {
@@ -492,6 +505,18 @@ run_full_checks() {
   assert_contains "$apply_output" '[可选全局 CLI 迁移]'
   assert_contains "$apply_output" 'npm via mise node@24.14.1 → @google/gemini-cli@latest'
   assert_contains "$apply_output" '✓ 可选全局 CLI 已安装到 mise Node npm prefix'
+  assert_contains "$apply_output" 'macOS/tooling 引入的 Zsh 新功能均已覆盖'
+  guard_file="$fixture_home/.local/state/dotfiles/zsh_functional_guard.tsv"
+  [[ -f "$guard_file" && ! -L "$guard_file" ]] || fail '未生成 Zsh 功能保全回执'
+  [[ "$(stat -f '%Lp' "${guard_file:h}")" == 700 ]] || fail 'Zsh 功能回执父目录权限不是 0700'
+  [[ "$(stat -f '%Lp' "$guard_file")" == 600 ]] || fail 'Zsh 功能回执权限不是 0600'
+  [[ "$(sed -n '1p' "$guard_file")" == '# dotfiles-zsh-functional-guard-v1' ]] \
+    || fail 'Zsh 功能回执缺少固定标记'
+  grep -Eq $'^zshrc\tcovered\t[1-9][0-9]*\t' "$guard_file" \
+    || fail 'Zsh 功能回执未记录已覆盖的新增功能'
+  assert_absent "$guard_file" 'fixture-tool'
+  assert_absent "$guard_file" 'fixture-secret-value'
+  assert_absent "$guard_file" "$fixture_home"
   [[ -x "$fixture_home/.local/share/mise/installs/node/24.14.1/bin/gemini" ]] \
     || fail 'Gemini 未安装到 mise Node prefix'
   [[ -x "$fixture_home/.local/share/mise/installs/node/24.14.1/bin/codex" ]] \
@@ -506,6 +531,8 @@ run_full_checks() {
   [[ -L "$profile_backup_count[1]" \
     && "$(readlink "$profile_backup_count[1]")" == "$fixture_home/original-profile" ]] \
     || fail 'symlink 副本未保留目标'
+  grep -Eq $'^zshrc\tcovered\t[1-9][0-9]*\t[^\t]*\t([^\t]*\t){4}\.zshrc\.dotfiles-backup\.' \
+    "$guard_file" || fail 'Zsh 功能回执未关联软件安装后的 .zshrc 备份'
   [[ "$(stat -f '%Lp' "$fixture_home/.config/dotfiles/local")" == 700 ]] \
     || fail 'local 目录权限不是 0700'
   [[ "$(stat -f '%Lp' "$fixture_home/.config/dotfiles/local/parameters.zsh")" == 600 ]] \
@@ -522,6 +549,91 @@ run_full_checks() {
     == 'https://example.invalid/personal.git' ]] || fail '首次 clone 改写了声明 origin'
   [[ -z "$(git -C "$fixture_home/.local/share/dotfiles/plugins/fixture-plugin" status --porcelain)" ]] \
     || fail '首次 clone 固定 revision 后工作树不干净'
+
+  backup_verify_output="$test_root/backup-verify.out"
+  (
+    cd "$fixture_repo" || exit 1
+    HOME="$fixture_home" PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_SHARED_DIR="$shared_repo" \
+      ./install.sh verify > "$backup_verify_output" 2>&1
+  ) || {
+    sed -n '1,260p' "$backup_verify_output" >&2
+    fail '首次安装后的 Zsh 备份签名 verify 失败'
+  }
+  assert_contains "$backup_verify_output" 'Zsh 功能保全回执、候选签名与备份签名'
+  rc_backup_copy="$test_root/original-rc-backup"
+  command cp -- "$rc_backup_count[1]" "$rc_backup_copy"
+  print -r -- 'export TAMPERED_AFTER_GUARD=yes' >> "$rc_backup_count[1]"
+  tampered_backup_output="$test_root/tampered-backup.out"
+  if (
+    cd "$fixture_repo" || exit 1
+    HOME="$fixture_home" PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_SHARED_DIR="$shared_repo" \
+      ./install.sh verify > "$tampered_backup_output" 2>&1
+  ); then
+    fail '最终 verify 未发现 Zsh 备份功能签名变化'
+  fi
+  assert_contains "$tampered_backup_output" '备份不再匹配软件安装后的功能签名'
+  command mv -f -- "$rc_backup_copy" "$rc_backup_count[1]"
+
+  uncovered_home="$test_root/uncovered-home"
+  uncovered_output="$test_root/uncovered-zsh.out"
+  command mkdir -p -- "$uncovered_home/.config/dotfiles/local"
+  {
+    print -r -- '# dotfiles: generated local integrations v1'
+    print -r -- 'case "${DOTFILES_INTEGRATIONS_PHASE:-}" in'
+    print -r -- '  zshrc-post)'
+    print -r -- '    return 0'
+    print -r -- '    ;;'
+    print -r -- 'esac'
+  } > "$uncovered_home/.config/dotfiles/local/integrations.zsh"
+  print -r -- '# existing rc' > "$uncovered_home/.zshrc"
+  if (
+    cd "$fixture_repo" || exit 1
+    print -r -- y | HOME="$uncovered_home" PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_SHARED_DIR="$shared_repo" \
+      DOTFILES_GLOBAL_CLI_SELECTION=skip DOTFILES_TEST_APPEND_ZSHRC=uncovered \
+      ./install.sh > "$uncovered_output" 2>&1
+  ); then
+    fail '未覆盖的软件安装器 Zsh 功能未在 symlink 前阻断'
+  fi
+  assert_contains "$uncovered_output" '无法证明已由 managed/shared/local integrations 覆盖'
+  assert_contains "$uncovered_output" '保留当前 HOME Zsh 入口并停止'
+  assert_absent "$uncovered_output" 'functional-loss-value'
+  [[ -f "$uncovered_home/.zshrc" && ! -L "$uncovered_home/.zshrc" ]] \
+    || fail '未覆盖功能阻断后仍替换了 HOME .zshrc'
+  grep -Fq 'functional-loss-value' "$uncovered_home/.zshrc" \
+    || fail '未覆盖功能阻断后没有保留软件安装器写入'
+  local -a uncovered_backups
+  uncovered_backups=("$uncovered_home"/.zshrc.dotfiles-backup.*(N))
+  (( ${#uncovered_backups} == 0 )) || fail '未覆盖功能阻断前意外创建了 Zsh 备份'
+
+  comment_home="$test_root/comment-home"
+  comment_output="$test_root/comment-zsh.out"
+  command mkdir -p -- "$comment_home/.config/dotfiles/local"
+  {
+    print -r -- '# dotfiles: generated local integrations v1'
+    print -r -- 'case "${DOTFILES_INTEGRATIONS_PHASE:-}" in'
+    print -r -- '  zshrc-post)'
+    print -r -- '    return 0'
+    print -r -- '    ;;'
+    print -r -- 'esac'
+  } > "$comment_home/.config/dotfiles/local/integrations.zsh"
+  print -r -- 'export EXISTING_FUNCTION=enabled' > "$comment_home/.zshrc"
+  (
+    cd "$fixture_repo" || exit 1
+    print -r -- y | HOME="$comment_home" PATH="$fixture_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_SHARED_DIR="$shared_repo" \
+      DOTFILES_GLOBAL_CLI_SELECTION=skip DOTFILES_TEST_APPEND_ZSHRC=comment \
+      ./install.sh > "$comment_output" 2>&1
+  ) || {
+    sed -n '1,260p' "$comment_output" >&2
+    fail '仅注释变化被错误识别为 Zsh 功能丢失'
+  }
+  assert_contains "$comment_output" 'macOS/tooling 引入的 Zsh 新功能均已覆盖'
+  grep -Eq $'^zshrc\tunchanged\t0\t0\t' \
+    "$comment_home/.local/state/dotfiles/zsh_functional_guard.tsv" \
+    || fail '仅注释变化未记录为功能签名 unchanged'
 
   profile_backup_count=${#profile_backup_count}
   rc_backup_count=${#rc_backup_count}
@@ -639,6 +751,8 @@ run_full_checks() {
     print -r -- '# dotfiles-intel-retirement-handoff-v1'
     print -r -- $'kind\tmanager\tname\tversion\tpath\tarchitecture\treason'
   } > "$external_state_dir/intel_to_be_retired.tsv"
+  command cp -- "$guard_file" "$external_state_dir/zsh_functional_guard.tsv"
+  command rm -f -- "$guard_file"
   command rmdir -- "${handoff_file:h}"
   command ln -s -- "$external_state_dir" "${handoff_file:h}"
   symlink_state_output="$test_root/symlink-state.out"
@@ -655,6 +769,8 @@ run_full_checks() {
     || fail '安装器通过 symlink 状态目录删除了外部文件'
   command rm -f -- "${handoff_file:h}"
   command mkdir -p -- "${handoff_file:h}"
+  command cp -- "$external_state_dir/zsh_functional_guard.tsv" "$guard_file"
+  chmod 600 "$guard_file"
 
   before_status="$(git -C "$fixture_repo" status --short)"
   retire_output="$test_root/retire.out"
