@@ -178,10 +178,15 @@ write_fake_tools() {
     print -r -- "if [[ \"\$1\" == --prefix ]]; then print -- $brew_prefix; exit 0; fi"
     print -r -- 'if [[ "$1" == bundle ]]; then'
     print -r -- '  for arg in "$@"; do'
-    print -r -- '    if [[ "$arg" == --file=* && "$*" == *" dump "* ]]; then'
+    print -r -- '    if [[ "$arg" == --file=* ]]; then'
     print -r -- '      target="${arg#--file=}"'
-    print -r -- '      command mkdir -p -- "${target:h}"'
-    print -r -- '      print -r -- '\''brew "ast-grep"'\'' > "$target"'
+    print -r -- '      if [[ "$*" == *" dump "* ]]; then'
+    print -r -- '        command mkdir -p -- "${target:h}"'
+    print -r -- '        print -r -- '\''brew "ast-grep"'\'' > "$target"'
+    print -r -- '      elif [[ -f "$target" ]] && grep -Fq -- '\''#'\'' "$target"; then'
+    print -r -- '        print -u2 -- "effective Brewfile 不得保留说明注释"'
+    print -r -- '        exit 65'
+    print -r -- '      fi'
     print -r -- '    fi'
     print -r -- '  done'
     print -r -- '  exit 0'
@@ -390,6 +395,7 @@ run_full_checks() {
   local minimal_repo minimal_home minimal_bin minimal_output intel_home intel_bin intel_output
   local selective_home selective_prefix selective_output
   local invalid_skip_home invalid_skip_output declaration_backup
+  local invalid_brew_output invalid_brew_backup
   local rosetta_home rosetta_output
   local hook_repo hook_custom_repo hook_output hook_target hook_before hook_after hook_conflict_output
   local hook_custom_output
@@ -417,7 +423,7 @@ run_full_checks() {
   command rm -rf -- "$fixture_home/.local/share/dotfiles/plugins/fixture-plugin"
   write_fixture_zsh "$fixture_repo" "$plugin_revision" plain
   {
-    print -r -- 'brew "ast-grep"'
+    print -r -- 'brew "ast-grep" # 提供 AST 结构化代码搜索与重构'
   } > "$fixture_repo/my_setup/macos/Brewfile"
   git -C "$fixture_repo" init -q
   git -C "$fixture_repo" add .
@@ -764,9 +770,10 @@ run_full_checks() {
   chmod 700 "$minimal_repo/install.sh" \
     "$minimal_repo/my_setup/macos/install.sh" "$minimal_repo/my_setup/tooling/install.sh"
   {
-    print -r -- 'brew "ast-grep"'
-    print -r -- 'brew "mise"'
-    print -r -- 'brew "uv"'
+    print -r -- 'brew "ast-grep" # 提供 AST 结构化代码搜索与重构'
+    print -r -- 'brew "mise" # 管理固定版本 runtime'
+    print -r -- 'brew "uv" # 管理 Python runtime'
+    print -r -- 'cask "rectangle" # 使用快捷键管理窗口布局'
   } > "$minimal_repo/my_setup/macos/Brewfile"
   git -C "$minimal_repo" init -q
   git -C "$minimal_repo" add .
@@ -798,6 +805,23 @@ run_full_checks() {
     || fail '最小 Stage 2 意外配置了 core.hooksPath'
   [[ ! -e "$minimal_home/.local/state/dotfiles/intel_to_be_retired.tsv" ]] \
     || fail '无 Intel 残留的最小 checkout 生成了交接文件'
+
+  invalid_brew_output="$test_root/invalid-brew.out"
+  invalid_brew_backup="$test_root/minimal-Brewfile"
+  command cp -- "$minimal_repo/my_setup/macos/Brewfile" "$invalid_brew_backup"
+  print -r -- 'brew "tree", restart_service: true # 不得执行动态参数' \
+    >> "$minimal_repo/my_setup/macos/Brewfile"
+  if (
+    cd "$minimal_repo" || exit 1
+    HOME="$minimal_home" PATH="$minimal_bin:/usr/bin:/bin" \
+      DOTFILES_INSTALL_TEST_MODE=1 DOTFILES_TEST_NATIVE_ARCH=arm64 \
+      DOTFILES_TEST_PROCESS_ARCH=arm64 ./install.sh </dev/null > "$invalid_brew_output" 2>&1
+  ); then
+    fail '带参数的 Brewfile 声明未在写入前阻断'
+  fi
+  command mv -f -- "$invalid_brew_backup" "$minimal_repo/my_setup/macos/Brewfile"
+  assert_contains "$invalid_brew_output" 'Brewfile 不执行带参数或动态 Ruby 的声明'
+  assert_contains "$invalid_brew_output" '摘要包含阻断项，未请求确认，也未执行写入'
 
   selective_home="$test_root/selective-home"
   selective_prefix="$selective_home/.local/share/mise/installs/node/24.14.1"

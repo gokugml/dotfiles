@@ -26,7 +26,7 @@ macos_trim() {
 macos_parse_brewfile() {
   local file="$1"
   local owner="$2"
-  local line kind rest name key
+  local line kind rest name suffix comment key
 
   [[ -f "$file" && ! -L "$file" ]] || {
     print -u2 -- "macos: Brewfile 缺失或不是普通文件：$file"
@@ -44,14 +44,39 @@ macos_parse_brewfile() {
         ;;
     esac
     rest="$(macos_trim "${line#$kind}")"
-    if [[ "$rest" != \"*\" || "$rest" == *\",* || "$rest" == *[[:space:]]* ]]; then
-      print -u2 -- "macos: Brewfile 首版不执行带参数或动态 Ruby 的声明：$line"
+    if [[ "$rest" != \"* ]]; then
+      print -u2 -- "macos: Brewfile 只支持直接声明与可选行尾注释：$line"
       return 1
     fi
-    name="${rest[2,-2]}"
-    if [[ -z "$name" || "$name" == *\"* ]]; then
+    rest="${rest[2,-1]}"
+    if [[ "$rest" != *\"* ]]; then
+      print -u2 -- "macos: Brewfile 只支持直接声明与可选行尾注释：$line"
+      return 1
+    fi
+    name="${rest%%\"*}"
+    suffix="${rest#*\"}"
+    if [[ -z "$name" || "$name" == *[[:space:]\",\#]* ]]; then
       print -u2 -- "macos: Brewfile 项目名无效：$line"
       return 1
+    fi
+    if [[ -n "$suffix" ]]; then
+      if [[ "${suffix[1]}" == \# ]]; then
+        print -u2 -- "macos: Brewfile 声明与行尾注释之间必须有空白：$line"
+        return 1
+      elif [[ "${suffix[1]}" != [[:space:]] ]]; then
+        print -u2 -- "macos: Brewfile 不执行带参数或动态 Ruby 的声明：$line"
+        return 1
+      fi
+      suffix="$(macos_trim "$suffix")"
+      if [[ "$suffix" != \#* ]]; then
+        print -u2 -- "macos: Brewfile 不执行带参数或动态 Ruby 的声明：$line"
+        return 1
+      fi
+      comment="$(macos_trim "${suffix#\#}")"
+      if [[ -z "$comment" ]]; then
+        print -u2 -- "macos: Brewfile 行尾注释必须提供一句话说明：$line"
+        return 1
+      fi
     fi
     key="$kind:$name"
     MACOS_BREW_LINE[$key]="$kind \"$name\""

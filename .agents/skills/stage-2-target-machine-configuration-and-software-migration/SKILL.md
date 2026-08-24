@@ -39,6 +39,8 @@ Stage 2 是独立部署阶段。不得读取或验证 Stage 0/1 状态、Stage 1
 - Zsh（可选）：`my_setup/zsh/install.sh`、`plugins.toml`，以及 `zprofile` + `zshrc` 或 `.zprofile` + `.zshrc` 中恰好一套；
 - shared（可选）：显式 `DOTFILES_SHARED_DIR` 指向的现有 Git checkout 中与已启用模块对应的增量。
 
+Brewfile 只允许 `tap`、`brew`、`cask`、`vscode` 的直接声明，不执行参数或动态 Ruby。每个直接期望项目推荐使用同一行的一句话说明，例如 `brew "ripgrep" # 快速递归搜索文本`；行尾注释与声明之间必须有空白且内容非空。安装器解析 personal/shared Brewfile 时接受这种注释，但写入临时 effective Brewfile 时只保留规范化声明，不把注释当作参数或安装语义。独立整行注释仍可用于分组或 AI 审阅说明。
+
 按模块目录完整性启用能力：
 
 1. macOS 或 tooling 模块目录、内部入口、必需声明缺失或残缺时，在确认前阻断；不得静默降级。
@@ -88,7 +90,7 @@ Stage 2 是独立部署阶段。不得读取或验证 Stage 0/1 状态、Stage 1
 ### 1. 预检
 
 1. 检查 public/shared `git status --short`，记录已有用户变更和冲突。
-2. 发现模块并验证每个已启用模块的声明可解析、目标唯一、内部入口不可直接执行。
+2. 发现模块并验证每个已启用模块的声明可解析、目标唯一、内部入口不可直接执行；Brewfile 预检必须按安装器同一语法接受并推荐 `kind "name" # 一句话说明`，不得把合法行尾注释误判为参数。
 3. 让安装器能力能够列出每个精确 `source → target → action`。
 4. 判定原生架构、Rosetta、Homebrew 前缀与关键目标路径。
 5. 只检查 local 和既有目标的元数据，不读取 local 正文。
