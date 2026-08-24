@@ -1,0 +1,4 @@
+interface:
+  display_name: "Zsh 配置分析与修改建议"
+  short_description: "采集脱敏 Zsh 证据与功能块清单，生成可执行的分级修复建议"
+  default_prompt: "使用 $analyze-zsh-configuration 选择 Zsh 来源，采集脱敏证据与功能块保全清单，并生成候选修复计划。"

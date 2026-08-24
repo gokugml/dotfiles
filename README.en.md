@@ -1,0 +1,123 @@
+# Portable Apple Silicon Dotfiles
+
+[中文文档](README.md)
+
+<!-- section:overview -->
+
+## Overview
+
+This public repository stores shareable personal configuration and migration capabilities for moving reviewed Zsh, Homebrew, mise, uv, and Zsh plugins to an Apple Silicon Mac. Configuration used jointly with other people belongs in an optional separate shared repository, while machine secrets live only in a local file outside every repository.
+
+Stage 1 independently produces and reviews repository-owned Zsh files from an approved `zsh-repair-plan.md`. Stage 2 does not read that plan or any Stage 1 status: on every target machine it uses only the current checkout's macOS/tooling declarations and optional Zsh module. When Zsh is enabled, the installer resolves the one complete pair under `my_setup/zsh/` and creates the fixed HOME startup entries.
+
+<!-- section:stages -->
+
+## Four-stage workflow
+
+1. **Stage 0 — analyze and export.** `./dump.sh` exports software, tooling, and plugin candidates read-only. A separate Zsh Skill collects value-free structural evidence plus a preservation manifest for third-party blocks and writes a repair plan. The Export Review Skill reviews candidate configuration. Formal drafts are written only after user confirmation.
+2. **Stage 1 — apply the Zsh repair plan.** Update explicit user-provided targets when present. Otherwise, first confirm `zprofile`/`zshrc` or `.zprofile`/`.zshrc`, use the official installer in an isolated HOME to fetch the latest Oh My Zsh template, then apply the plan, compare source and target blocks, and review the complete diff. After all targets pass validation, each adopted plan is updated to the exact handoff field `> 状态：Stage 1 已应用`. It never changes real Zsh entries; only the fixed local parameters/integrations files may be backed up and updated after separate confirmation, and it does not install software.
+3. **Stage 2 — configure and install.** On a target machine, check out root `install.sh`, `my_setup/macos/`, `my_setup/tooling/`, and optional `my_setup/zsh/`, then run parameterless `./install.sh`; no Stage 0/1 handoff is required. The script shows every exact enabled target and one combined summary, asks once with a default-`N` `y/N` prompt, and uses `./install.sh verify` to check native installation. On Apple Silicon, residual Intel items are written to a machine-local `intel_to_be_retired.tsv`; their presence alone does not fail installation.
+4. **Stage 3 — retire Intel software.** Read `intel_to_be_retired.tsv` as a hint, then run `./install.sh retire` for a fresh read-only inventory and preview. Run `./install.sh retire --apply` only after another review and an explicit confirmation in a real TTY. Normal installation and `verify` never trigger retirement.
+
+<!-- section:layout -->
+
+## Repository and installer layout
+
+```text
+dotfiles/
+├── README.md                     # default Chinese documentation
+├── README.en.md                  # English documentation
+├── dump.sh
+├── install.sh                    # only public installation entry point
+├── my_setup/
+│   ├── zsh/install.sh            # internal Zsh/symlink/plugin module
+│   ├── zsh/{zprofile,zshrc}       # optional Stage 2 Zsh module
+│   │   or zsh/{.zprofile,.zshrc}  # dotted sources when selected
+│   ├── tooling/install.sh        # internal mise/uv module
+│   └── macos/install.sh          # internal Homebrew module
+├── tests/smoke.zsh
+├── .githooks/
+│   ├── install.sh               # one-time repository development setup
+│   └── pre-commit               # tracked check entry point
+└── .github/workflows/verify.yml
+```
+
+The three nested `install.sh` files are internal modules sourced by the root installer and fail safely when executed directly. The root installer owns argument parsing, cross-capability checks, the combined summary, the single confirmation, orchestration, and final verification.
+
+<!-- section:commands -->
+
+## Commands
+
+```zsh
+./dump.sh
+./install.sh
+./install.sh verify
+./install.sh retire
+./install.sh retire --apply
+```
+
+The parameterless install order is `macos → tooling → zsh → verify`. If Apple Silicon Homebrew is missing, the installer stops and asks the user to review and install official Homebrew first; it never runs an opaque `curl | shell` command. Stage 2 does not install Git hooks or run or report smoke, pre-commit, or CI.
+
+Repository developers run this once in each new checkout:
+
+```zsh
+./.githooks/install.sh
+```
+
+This command independently prepares pinned Gitleaks and installs a managed shim at Git's default `.git/hooks/pre-commit`; it never sets `core.hooksPath`. An unknown existing hook or a configured custom hooks path stops safely.
+
+Stage 2 must uniquely authorize the optional shared repository and pass its absolute path to the root installer:
+
+```zsh
+DOTFILES_SHARED_DIR=/absolute/path/to/shared-dotfiles ./install.sh
+```
+
+<!-- section:configuration -->
+
+## Configuration contract
+
+- Personal configuration always lives in this public repository under `my_setup/`.
+- Shared configuration is an optional, separate Git worktree containing only settings used jointly with other people.
+- Local configuration is fixed under `~/.config/dotfiles/local/`: `parameters.zsh` stores secrets, accounts, and machine paths, while optional `integrations.zsh` stores Zsh blocks added by third-party installers. Neither declares desired software or plugins.
+- If Intel software or paths remain on Apple Silicon, `verify` writes a deterministic mode-`0600` handoff at `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`. It is never tracked by Git and is not deletion authorization.
+- Personal Zsh sources must contain exactly one complete pair: `my_setup/zsh/zprofile` + `zshrc`, or `my_setup/zsh/.zprofile` + `.zshrc`. Two complete pairs, mixed names, or an incomplete pair stop before confirmation and writes; the installer never guesses a priority or creates an alias copy.
+- HOME always uses `~/.zprofile` and `~/.zshrc`, symlinked to the resolved repository files from the same pair.
+- `.zshrc` uses `dotfiles: shared → dotfiles: personal → dotfiles: local` for declarative override order, while `integrations.zsh` loads through `dotfiles: local-integrations <phase>` hooks at the pre/post phases of zprofile and zshrc.
+- Every enabled plugin has a `dotfiles: plugin <name>` marker in `.zshrc`, ordered by the merged `load_order` value.
+- Personal and shared configuration each have at most one `zsh/plugins.toml`. Plugins pin a 40-character commit, and personal wins same-name conflicts.
+- Personal and shared configuration declare their own Brewfiles and tooling; personal wins same-name Homebrew conflicts.
+
+Managed symlinks expose mise configuration under `~/.config/mise/conf.d/`, with a `10-` prefix for shared and `20-` for personal. The personal `uv.toml` becomes the user-level uv configuration through a managed symlink, and the installer explicitly passes approved `.python-versions` entries to `uv python install`.
+
+<!-- section:safety -->
+
+## Safety boundaries
+
+- Real installation runs only in a native macOS `arm64` session. Test mode accepts only an isolated HOME under `/private/tmp` or `/tmp`.
+- Before replacing an existing `.zprofile` or `.zshrc`, the installer creates a timestamped copy that preserves a file or symlink's type and target.
+- The local parent directory must be mode `0700`; existing `parameters.zsh` and `integrations.zsh` files must be mode `0600`. Scripts never display, copy, log, persist, or hash their contents; they only run a silent syntax check and normal shell loading.
+- Public output must not contain shared-repository-only information, secrets, or machine-specific absolute paths.
+- Services, databases, Homebrew services, and GUI application data are reported for manual handling and are never automatically started, stopped, migrated, or deleted.
+- Legacy Intel paths may remain, but no managed command or symlink may target them. Their exact paths and retention reasons are recorded in `intel_to_be_retired.tsv` for Stage 3 to revalidate.
+- Retirement accepts only exact Intel formulae with explicit ARM replacement path and architecture evidence and no service/data record. Unknown items, project dependencies, NVM, Python Frameworks, global runtimes, old plugins, and `/usr/local` as a whole are retained by default.
+
+<!-- section:verification -->
+
+## Tests and status reporting
+
+```zsh
+./tests/smoke.zsh
+./tests/smoke.zsh --quick
+./.githooks/install.sh
+.git/hooks/pre-commit
+```
+
+The full smoke test uses a temporary repository and HOME to verify both plain and dotted repository source names, ambiguity/mixed-name blocking, default `N`, backups, symlinks, idempotency, shared/personal merging, local-value non-disclosure, read-only retirement, and non-TTY blocking. Quick mode checks syntax, Markdown, section parity between the Chinese and English documentation, safety boundaries, and forbidden Intel runtime paths.
+
+`./.githooks/install.sh` is a one-time repository-development setup outside every Stage. It prepares Gitleaks `8.30.0` through mise and uses Git's default `.git/hooks/pre-commit`. The hook itself never installs dependencies and scans only the current public tree; CI uses the same pinned version to scan the current tree and complete Git history. Stage 2 does not collect, run, or report these repository-quality checks.
+
+<!-- section:manual -->
+
+## Manual work
+
+The current Brewfile does not migrate nginx or redis service configuration or data. It also does not take over GUI application data, global npm CLIs, project runtimes, or legacy Python Frameworks. Handle the relevant data and verify ARM replacements before moving any exact item into Stage 3.

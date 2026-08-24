@@ -1,0 +1,42 @@
+schema_version = 1
+install_policy = "prompt"
+
+[[tools]]
+description = "Google Gemini 的命令行 AI 助手。"
+package = "@google/gemini-cli"
+version = "0.52.0"
+binaries = ["gemini"]
+source_manager = "npm"
+target_manager = "npm"
+target_spec = "@google/gemini-cli@latest"
+reason = "runtime-owner-replaced"
+
+[[tools]]
+description = "OpenAI Codex 的命令行编码代理。"
+package = "@openai/codex"
+version = "0.144.4"
+binaries = ["codex"]
+source_manager = "npm"
+target_manager = "npm"
+target_spec = "@openai/codex@latest"
+reason = "runtime-owner-replaced"
+
+[[tools]]
+description = "供自动化代理操作浏览器的命令行工具。"
+package = "agent-browser"
+version = "0.26.0"
+binaries = ["agent-browser"]
+source_manager = "npm"
+target_manager = "npm"
+target_spec = "agent-browser@latest"
+reason = "runtime-owner-replaced"
+
+[[tools]]
+description = "Playwright 浏览器自动化与测试命令行工具。"
+package = "playwright"
+version = "1.60.0"
+binaries = ["playwright"]
+source_manager = "npm"
+target_manager = "npm"
+target_spec = "playwright@latest"
+reason = "runtime-owner-replaced"

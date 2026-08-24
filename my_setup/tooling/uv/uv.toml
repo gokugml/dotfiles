@@ -1,0 +1,11 @@
+# AI-REVIEW: 功能=限制 Python 解释器所有权；最佳实践=只使用 uv-managed Python。
+# AI-REVIEW: 修改级别=一定要改；建议=避免 Python.org、Homebrew Python 和 uv Python 竞争 PATH。
+# AI-REVIEW: 归属=personal；验证=uv python find 命中 uv 管理目录。
+python-preference = "only-managed"
+
+# AI-REVIEW: 功能=控制 Python 自动下载；最佳实践=安装阶段显式应用已确认版本。
+# AI-REVIEW: 修改级别=建议修改；建议=保持 manual，避免普通命令隐式改变机器状态。
+# AI-REVIEW: 归属=personal；验证=缺失 Python 时 uv 只报告而不自动下载。
+python-downloads = "manual"
+
+# AI-MANUAL: 当前检测到 claude-monitor 3.1.0 与 git-filter-repo 2.47.0 两个 uv tool；是否作为可分享期望状态尚未确认，本轮不自动声明或移除。

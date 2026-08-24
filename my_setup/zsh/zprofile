@@ -1,0 +1,44 @@
+# dotfiles: local-integrations zprofile-pre
+if [[ -r "$HOME/.config/dotfiles/local/integrations.zsh" ]]; then
+  DOTFILES_INTEGRATIONS_PHASE=zprofile-pre
+  source "$HOME/.config/dotfiles/local/integrations.zsh" ||
+    print -u2 -- "dotfiles: integrations.zsh zprofile-pre 加载失败"
+  unset DOTFILES_INTEGRATIONS_PHASE
+fi
+
+# Native macOS login environment. Hardware capability selects the Homebrew
+# prefix so a Rosetta process never falls back to Intel Homebrew.
+typeset -U path PATH
+
+typeset dotfiles_brew_prefix=''
+if [[ "$(/usr/sbin/sysctl -in hw.optional.arm64 2>/dev/null)" == 1 ]]; then
+  dotfiles_brew_prefix=/opt/homebrew
+elif [[ "$(/usr/bin/uname -s 2>/dev/null)" == Darwin ]]; then
+  dotfiles_brew_prefix=/usr/local
+fi
+
+if [[ -n "$dotfiles_brew_prefix" && -x "$dotfiles_brew_prefix/bin/brew" ]]; then
+  eval "$("$dotfiles_brew_prefix/bin/brew" shellenv)"
+fi
+
+export PNPM_HOME="$HOME/Library/pnpm"
+export BUN_INSTALL="$HOME/.bun"
+path=(
+  ${dotfiles_brew_prefix:+"$dotfiles_brew_prefix/bin"}
+  ${dotfiles_brew_prefix:+"$dotfiles_brew_prefix/sbin"}
+  "$HOME/.local/share/mise/shims"
+  "$BUN_INSTALL/bin"
+  "$PNPM_HOME"
+  "$HOME/.local/bin"
+  "${path[@]}"
+)
+export PATH
+unset dotfiles_brew_prefix
+
+# dotfiles: local-integrations zprofile-post
+if [[ -r "$HOME/.config/dotfiles/local/integrations.zsh" ]]; then
+  DOTFILES_INTEGRATIONS_PHASE=zprofile-post
+  source "$HOME/.config/dotfiles/local/integrations.zsh" ||
+    print -u2 -- "dotfiles: integrations.zsh zprofile-post 加载失败"
+  unset DOTFILES_INTEGRATIONS_PHASE
+fi

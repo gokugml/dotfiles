@@ -1,0 +1,26 @@
+brew "ast-grep" # 提供 AST 结构化代码搜索与重构
+brew "gh" # 提供 GitHub 命令行客户端
+brew "git-lfs" # 提供 Git 大文件存储支持
+brew "graphviz" # 提供图形布局与 dot 图渲染
+brew "mise" # 统一管理项目运行时和 CLI 工具版本
+brew "poppler" # 提供 PDF 检查、转换与渲染工具
+brew "ripgrep" # 提供快速递归文本搜索
+brew "rsync" # 提供文件与目录同步
+brew "silicon" # 将源代码渲染为图片
+brew "tmux" # 提供终端复用
+brew "tree" # 以树形展示目录结构
+brew "uv" # 管理 Python 版本、虚拟环境和 Python CLI 工具
+brew "vhs" # 录制与回放终端演示
+brew "zoxide" # 提供智能目录跳转，替代 autojump
+
+cask "typeless" # AI 语音听写并整理为润色后的文本
+cask "warp" # 提供面向开发者的智能终端
+cask "cursor" # 提供带 AI 能力的代码编辑器
+cask "obsidian" # 基于本地 Markdown 文件的知识库
+cask "vlc" # 播放音视频媒体
+cask "rectangle" # 通过快捷键移动和调整窗口大小
+cask "hiddenbar" # 隐藏菜单栏图标
+cask "betterdisplay" # 管理显示器、分辨率和显示布局
+cask "baidunetdisk" # 提供百度网盘文件存储与同步
+cask "wechat" # 提供微信消息和通话
+cask "google-chrome" # 提供 Google Chrome 网页浏览器

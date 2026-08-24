@@ -1,0 +1,6 @@
+# AI-REVIEW: 功能=提供 Python 3.14 当前开发基线；最佳实践=把 Python.org 安装迁移为 uv-managed 精确版本。
+# AI-REVIEW: 修改级别=一定要改；建议=由 uv 安装 3.14.5，验证后再处理 Python.org Framework。
+# AI-REVIEW: 归属=personal；验证=uv python list --only-installed 显示 3.14.5 managed arm64。
+3.14.5
+
+# AI-RETIRE: Python.org Framework 3.13/3.14 只在对应 uv-managed 版本验证完成后进入 Stage 3；macOS 自带 Python 不退役。

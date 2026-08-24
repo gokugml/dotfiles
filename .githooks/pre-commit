@@ -1,0 +1,32 @@
+#!/bin/zsh
+
+emulate -LR zsh
+setopt NO_UNSET PIPE_FAIL
+
+readonly hook_dir="${0:A:h}"
+readonly repo_root="${hook_dir:h}"
+readonly gitleaks_spec='ubi:gitleaks/gitleaks@8.30.0'
+
+"$repo_root/tests/smoke.zsh" --quick || exit 1
+
+readonly mise_command="${commands[mise]:-}"
+if [[ -z "$mise_command" || ! -x "$mise_command" ]]; then
+  print -u2 -- 'pre-commit: 缺少 mise；请先运行 ./.githooks/install.sh'
+  exit 1
+fi
+
+readonly gitleaks_root="$("$mise_command" --no-config where "$gitleaks_spec" 2>/dev/null || true)"
+readonly gitleaks_command="$gitleaks_root/gitleaks"
+if [[ -z "$gitleaks_root" || ! -x "$gitleaks_command" ]]; then
+  print -u2 -- 'pre-commit: 缺少一次性初始化所需的 Gitleaks 8.30.0；请运行 ./.githooks/install.sh'
+  exit 1
+fi
+
+readonly gitleaks_version="$("$gitleaks_command" version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)"
+if [[ "$gitleaks_version" != 8.30.0 ]]; then
+  print -u2 -- "pre-commit: 要求 gitleaks 8.30.0，当前为 ${gitleaks_version:-unknown}"
+  exit 1
+fi
+
+"$gitleaks_command" dir --redact --no-banner "$repo_root" || exit 1
+print -- 'pre-commit: 通过'

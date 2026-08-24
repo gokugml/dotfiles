@@ -1,0 +1,4 @@
+interface:
+  display_name: "导出配置 AI Review"
+  short_description: "先描述每个工具，再审阅候选配置并补齐结构化 AI 评论"
+  default_prompt: "使用 $review-exported-dotfiles 先为每个工具写一句话描述，再审阅 tmp/ 中的导出候选配置。"

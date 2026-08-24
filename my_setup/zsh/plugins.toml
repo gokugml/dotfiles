@@ -1,0 +1,22 @@
+# AI-MANUAL: Oh My Zsh 与内置 git plugin 复用本机 ~/.oh-my-zsh；Stage 2 只验证所需文件可读，
+# 不 clone、checkout、固定 revision 或修改该外部工作树。
+
+# AI-REVIEW: 功能=提供历史命令自动建议；最佳实践=固定独立上游 commit 并在 OMZ 后加载。
+# AI-REVIEW: 修改级别=建议修改；建议=保留当前插件选择，由安装器验证 revision。
+# AI-REVIEW: 归属=personal；验证=输入历史前缀时出现建议，Git HEAD 匹配 revision。
+[[plugins]]
+name = "zsh-autosuggestions"
+source = "https://github.com/zsh-users/zsh-autosuggestions.git"
+revision = "e52ee8ca55bcc56a17c828767a3f98f22a68d4eb"
+enabled = true
+load_order = 900
+
+# AI-REVIEW: 功能=提供交互命令语法高亮；最佳实践=在所有 ZLE 插件之后最后加载。
+# AI-REVIEW: 修改级别=建议修改；建议=固定上游 commit，并保持最高 load_order。
+# AI-REVIEW: 归属=personal；验证=有效/无效命令高亮正常，Git HEAD 匹配 revision。
+[[plugins]]
+name = "zsh-syntax-highlighting"
+source = "https://github.com/zsh-users/zsh-syntax-highlighting.git"
+revision = "db085e4661f6aafd24e5acb5b2e17e4dd5dddf3e"
+enabled = true
+load_order = 999

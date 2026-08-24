@@ -1,0 +1,19 @@
+[tools]
+
+# AI-REVIEW: 功能=提供 JavaScript/TypeScript runtime；最佳实践=由 mise 固定精确版本。
+# AI-REVIEW: 修改级别=一定要改；建议=以当前 ARM Bun 1.3.5 为迁移基线，移除直接安装器 PATH。
+# AI-REVIEW: 归属=personal；验证=mise exec -- bun --version 输出 1.3.5 且 file 显示 arm64。
+bun = "1.3.5"
+
+# AI-REVIEW: 功能=提供 Node.js runtime；最佳实践=由 mise 替代 NVM 并固定精确版本。
+# AI-REVIEW: 修改级别=一定要改；建议=首版保留当前默认 Node 24.14.1；其他 NVM 版本按项目需求人工确认。
+# AI-REVIEW: 归属=personal；验证=mise exec -- node --version 输出 v24.14.1，PATH 不再加载 NVM。
+node = "24.14.1"
+
+# AI-REVIEW: 功能=提供 JavaScript 包管理器；最佳实践=与 Node 一起由 mise 管理精确版本。
+# AI-REVIEW: 修改级别=一定要改；建议=保留 10.33.0，删除错误指向可执行文件的 PNPM_HOME。
+# AI-REVIEW: 归属=personal；验证=mise exec -- pnpm --version 输出 10.33.0。
+pnpm = "10.33.0"
+
+# AI-RETIRE: Intel NVM、直接 Bun 安装和 Intel yarn 仅在上述 runtime 与项目验证通过后进入 Stage 3。
+# AI-MANUAL: npm 原生清单中的全局 CLI 不自动迁移到 mise；逐项确认是否应由项目依赖、uv tool、Brewfile 或 local 安装器管理。
