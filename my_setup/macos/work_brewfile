@@ -1,0 +1,14 @@
+# Standalone work application Brewfile.
+# Install with: brew bundle --file=./my_setup/macos/work_brewfile
+
+brew "cmake" # 提供跨平台原生构建系统
+brew "temporal" # 提供 Temporal 工作流开发 CLI
+
+cask "chatgpt" # 提供 OpenAI ChatGPT 桌面应用
+cask "linear" # 管理软件项目、需求和缺陷
+cask "figma" # 提供协作式界面设计与原型工具
+cask "feishu" # 提供企业协作、办公和即时通讯
+cask "discord" # 提供语音和文字聊天
+cask "rustdesk" # 提供开源远程桌面控制
+cask "cc-switch" # 管理 AI 编程代理配置
+cask "termius" # 提供 SSH 远程连接客户端
