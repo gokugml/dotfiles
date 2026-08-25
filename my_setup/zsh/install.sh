@@ -17,6 +17,21 @@ typeset -gA ZSH_PLUGIN_SEEN
 typeset -g ZSH_PERSONAL_PROFILE=''
 typeset -g ZSH_PERSONAL_RC=''
 typeset -g ZSH_PERSONAL_NAMING=''
+typeset -gr ZSH_FUNCTIONAL_GUARD_MARKER='# dotfiles-zsh-functional-guard-v1'
+typeset -g ZSH_FUNCTIONAL_GUARD_DIR=''
+typeset -g ZSH_LAST_PROFILE_BACKUP='none'
+typeset -g ZSH_LAST_RC_BACKUP='none'
+typeset -gA ZSH_GUARD_STATUS
+typeset -gA ZSH_GUARD_ADDED_COUNT
+typeset -gA ZSH_GUARD_REMOVED_COUNT
+typeset -gA ZSH_GUARD_BEFORE_SHA
+typeset -gA ZSH_GUARD_POST_SHA
+typeset -gA ZSH_GUARD_ADDED_SHA
+typeset -gA ZSH_GUARD_CANDIDATE_SHA
+typeset -ga ZSH_GUARD_CANDIDATE_FILES
+typeset -gi ZSH_GUARD_EXTRACT_ADDED=0
+typeset -gi ZSH_GUARD_EXTRACT_REMOVED=0
+typeset -g ZSH_SEMICOLON_DIGEST=''
 
 zsh_trim() {
   local value="$1"
@@ -303,6 +318,8 @@ zsh_plan() {
       fi
     done
     print -- "- 启用插件：$enabled_count 个；同名冲突由 personal 决定"
+    print -- '- Zsh 功能保全：macOS/tooling 前后比较脱敏语义 token；未覆盖新增功能时在替换 HOME 入口前停止'
+    print -- "  receipt：$DOTFILES_ZSH_GUARD_FILE；action：最终 verify 重验候选与备份签名"
   else
     blocked=1
   fi
@@ -310,13 +327,451 @@ zsh_plan() {
   (( blocked == 0 ))
 }
 
+zsh_token_digest() {
+  local value="$1" output
+  output="$(print -rn -- "$value" | /usr/bin/shasum -a 256)" || return 1
+  print -r -- "${output%% *}"
+}
+
+zsh_digest_file() {
+  local file="$1" output
+  output="$(/usr/bin/shasum -a 256 "$file" 2>/dev/null)" || return 1
+  print -r -- "${output%% *}"
+}
+
+zsh_prepare_functional_guard_runtime() {
+  if [[ -z "$ZSH_FUNCTIONAL_GUARD_DIR" ]]; then
+    ZSH_FUNCTIONAL_GUARD_DIR="$DOTFILES_RUNTIME_DIR/zsh-functional-guard"
+  fi
+  if [[ -L "$ZSH_FUNCTIONAL_GUARD_DIR" \
+    || ( -e "$ZSH_FUNCTIONAL_GUARD_DIR" && ! -d "$ZSH_FUNCTIONAL_GUARD_DIR" ) ]]; then
+    print -u2 -- 'zsh: 功能保全临时目录类型错误或不得是 symlink'
+    return 1
+  fi
+  command mkdir -p -- "$ZSH_FUNCTIONAL_GUARD_DIR" || return 1
+  chmod 700 "$ZSH_FUNCTIONAL_GUARD_DIR" || return 1
+}
+
+zsh_write_semantic_tokens_from_content() {
+  local content="$1"
+  local output="$2"
+  local token normalized digest previous=''
+  local -a parsed canonical
+
+  parsed=("${(@Z:C:)content}")
+  for token in "${parsed[@]}"; do
+    normalized="$token"
+    if [[ "$normalized" == \"*\" || "$normalized" == \'*\' ]]; then
+      normalized="${(Q)normalized}"
+    fi
+    [[ "$normalized" == . ]] && normalized=source
+    normalized="${normalized//\$\{HOME\}/\$HOME}"
+    if [[ "$normalized" == ';' ]]; then
+      (( ${#canonical[@]} == 0 )) && continue
+      [[ "$previous" == ';' ]] && continue
+    fi
+    canonical+=("$normalized")
+    previous="$normalized"
+  done
+  if (( ${#canonical[@]} > 0 )) && [[ "${canonical[-1]}" == ';' ]]; then
+    canonical[-1]=()
+  fi
+
+  : > "$output" || return 1
+  chmod 600 "$output" || return 1
+  for token in "${canonical[@]}"; do
+    digest="$(zsh_token_digest "$token")" || return 1
+    print -r -- "$digest" >> "$output" || return 1
+  done
+}
+
+zsh_write_semantic_tokens() {
+  local file="$1"
+  local output="$2"
+  local content=''
+
+  if [[ ! -e "$file" && ! -L "$file" ]]; then
+    zsh_write_semantic_tokens_from_content '' "$output"
+    return
+  fi
+  if [[ -L "$file" && ! -e "$file" ]]; then
+    zsh_write_semantic_tokens_from_content '' "$output"
+    return
+  fi
+  if [[ ! -f "$file" ]]; then
+    print -u2 -- "zsh: 功能签名只支持普通文件或指向普通文件的 symlink：${file:t}"
+    return 1
+  fi
+  /bin/zsh -n "$file" >/dev/null 2>&1 || {
+    print -u2 -- "zsh: 无法为语法错误的启动文件建立功能签名：${file:t}"
+    return 1
+  }
+  content="$(<"$file")" || return 1
+  zsh_write_semantic_tokens_from_content "$content" "$output"
+}
+
+zsh_write_integration_phase_tokens() {
+  local logical="$1"
+  local output="$2"
+  local first_phase second_phase content=''
+
+  case "$logical" in
+    zprofile) first_phase=zprofile-pre; second_phase=zprofile-post ;;
+    zshrc) first_phase=zshrc-pre; second_phase=zshrc-post ;;
+    *) return 1 ;;
+  esac
+  if [[ ! -f "$DOTFILES_LOCAL_INTEGRATIONS_FILE" \
+    || -L "$DOTFILES_LOCAL_INTEGRATIONS_FILE" ]]; then
+    zsh_write_semantic_tokens_from_content '' "$output"
+    return
+  fi
+  if [[ "$(sed -n '1p' "$DOTFILES_LOCAL_INTEGRATIONS_FILE" 2>/dev/null)" \
+    != '# dotfiles: generated local integrations v1' ]]; then
+    zsh_write_semantic_tokens_from_content '' "$output"
+    return
+  fi
+  content="$(/usr/bin/awk -v first="$first_phase" -v second="$second_phase" '
+    $0 ~ "^[[:space:]]*" first "[)][[:space:]]*$" \
+      || $0 ~ "^[[:space:]]*" second "[)][[:space:]]*$" { active=1; next }
+    active && $0 ~ "^[[:space:]]*;;[[:space:]]*$" { active=0; next }
+    active { print }
+  ' "$DOTFILES_LOCAL_INTEGRATIONS_FILE")" || return 1
+  zsh_write_semantic_tokens_from_content "$content" "$output"
+}
+
+zsh_extract_added_tokens() {
+  local before_file="$1"
+  local after_file="$2"
+  local output="$3"
+  local line
+  local -a before=() after=()
+  typeset -i prefix=0 suffix=0 start end before_count after_count
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] && before+=("$line")
+  done < "$before_file"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] && after+=("$line")
+  done < "$after_file"
+  before_count=${#before[@]}
+  after_count=${#after[@]}
+  while (( prefix < before_count && prefix < after_count )); do
+    [[ "${before[prefix + 1]}" == "${after[prefix + 1]}" ]] || break
+    (( prefix += 1 ))
+  done
+  while (( suffix < before_count - prefix && suffix < after_count - prefix )); do
+    [[ "${before[before_count - suffix]}" == "${after[after_count - suffix]}" ]] \
+      || break
+    (( suffix += 1 ))
+  done
+
+  start=$(( prefix + 1 ))
+  end=$(( after_count - suffix ))
+  [[ -n "$ZSH_SEMICOLON_DIGEST" ]] \
+    || ZSH_SEMICOLON_DIGEST="$(zsh_token_digest ';')" || return 1
+  while (( start <= end )) && [[ "${after[start]}" == "$ZSH_SEMICOLON_DIGEST" ]]; do
+    (( start += 1 ))
+  done
+  while (( end >= start )) && [[ "${after[end]}" == "$ZSH_SEMICOLON_DIGEST" ]]; do
+    (( end -= 1 ))
+  done
+
+  : > "$output" || return 1
+  chmod 600 "$output" || return 1
+  if (( start <= end )); then
+    for (( ; start <= end; start++ )); do
+      print -r -- "${after[start]}" >> "$output" || return 1
+    done
+  fi
+  ZSH_GUARD_EXTRACT_ADDED="$(/usr/bin/awk 'END { print NR + 0 }' "$output")" || return 1
+  ZSH_GUARD_EXTRACT_REMOVED=$(( before_count - prefix - suffix ))
+}
+
+zsh_tokens_contain_sequence() {
+  local candidate_file="$1"
+  local sequence_file="$2"
+  local line
+  local -a candidate sequence
+  typeset -i start offset candidate_count sequence_count matched
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] && candidate+=("$line")
+  done < "$candidate_file"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] && sequence+=("$line")
+  done < "$sequence_file"
+  candidate_count=${#candidate[@]}
+  sequence_count=${#sequence[@]}
+  (( sequence_count > 0 && candidate_count >= sequence_count )) || return 1
+
+  for (( start = 1; start <= candidate_count - sequence_count + 1; start++ )); do
+    matched=1
+    for (( offset = 1; offset <= sequence_count; offset++ )); do
+      if [[ "${candidate[start + offset - 1]}" != "${sequence[offset]}" ]]; then
+        matched=0
+        break
+      fi
+    done
+    (( matched )) && return 0
+  done
+  return 1
+}
+
+zsh_prepare_candidate_tokens() {
+  local logical="$1"
+  local combined="$ZSH_FUNCTIONAL_GUARD_DIR/candidate-$logical.tokens"
+  local file component
+  local -a sources
+
+  zsh_resolve_personal_entries || return 1
+  case "$logical" in
+    zprofile)
+      sources+=("$ZSH_PERSONAL_PROFILE")
+      ;;
+    zshrc)
+      sources+=("$ZSH_PERSONAL_RC")
+      if [[ -n "$DOTFILES_SHARED_DIR_RESOLVED" \
+        && -f "$DOTFILES_SHARED_DIR_RESOLVED/zsh/shared.zsh" \
+        && ! -L "$DOTFILES_SHARED_DIR_RESOLVED/zsh/shared.zsh" ]]; then
+        sources+=("$DOTFILES_SHARED_DIR_RESOLVED/zsh/shared.zsh")
+      fi
+      ;;
+    *) return 1 ;;
+  esac
+
+  ZSH_GUARD_CANDIDATE_FILES=()
+  for file in "${sources[@]}"; do
+    component="$ZSH_FUNCTIONAL_GUARD_DIR/candidate-$logical-${#ZSH_GUARD_CANDIDATE_FILES}.tokens"
+    zsh_write_semantic_tokens "$file" "$component" || return 1
+    ZSH_GUARD_CANDIDATE_FILES+=("$component")
+  done
+  component="$ZSH_FUNCTIONAL_GUARD_DIR/candidate-$logical-integrations.tokens"
+  zsh_write_integration_phase_tokens "$logical" "$component" || return 1
+  ZSH_GUARD_CANDIDATE_FILES+=("$component")
+
+  : > "$combined" || return 1
+  chmod 600 "$combined" || return 1
+  for component in "${ZSH_GUARD_CANDIDATE_FILES[@]}"; do
+    print -r -- "component:${component:t}" >> "$combined" || return 1
+    command cat -- "$component" >> "$combined" || return 1
+  done
+}
+
+zsh_capture_pre_software_state() {
+  local logical target
+
+  zsh_resolve_personal_entries || return 1
+  zsh_prepare_functional_guard_runtime || return 1
+  ZSH_GUARD_STATUS=()
+  ZSH_GUARD_ADDED_COUNT=()
+  ZSH_GUARD_REMOVED_COUNT=()
+  ZSH_GUARD_BEFORE_SHA=()
+  ZSH_GUARD_POST_SHA=()
+  ZSH_GUARD_ADDED_SHA=()
+  ZSH_GUARD_CANDIDATE_SHA=()
+  for logical target in \
+    zprofile "$DOTFILES_TARGET_HOME/.zprofile" \
+    zshrc "$DOTFILES_TARGET_HOME/.zshrc"; do
+    zsh_write_semantic_tokens "$target" "$ZSH_FUNCTIONAL_GUARD_DIR/pre-$logical.tokens" \
+      || return 1
+  done
+  print -- '✓ 已在软件安装前采集 HOME Zsh 脱敏功能签名'
+}
+
+zsh_guard_prepare_state_target() {
+  if [[ -L "$DOTFILES_STATE_DIR" \
+    || ( -e "$DOTFILES_STATE_DIR" && ! -d "$DOTFILES_STATE_DIR" ) ]]; then
+    print -u2 -- 'zsh: 状态目录类型错误或不得是 symlink'
+    return 1
+  fi
+  command mkdir -p -- "$DOTFILES_STATE_DIR" || return 1
+  [[ -O "$DOTFILES_STATE_DIR" ]] || {
+    print -u2 -- 'zsh: 状态目录必须属于当前用户'
+    return 1
+  }
+  chmod 700 "$DOTFILES_STATE_DIR" || return 1
+  if [[ -e "$DOTFILES_ZSH_GUARD_FILE" || -L "$DOTFILES_ZSH_GUARD_FILE" ]]; then
+    if [[ -L "$DOTFILES_ZSH_GUARD_FILE" || ! -f "$DOTFILES_ZSH_GUARD_FILE" \
+      || ! -O "$DOTFILES_ZSH_GUARD_FILE" \
+      || "$(sed -n '1p' "$DOTFILES_ZSH_GUARD_FILE" 2>/dev/null)" \
+        != "$ZSH_FUNCTIONAL_GUARD_MARKER" ]]; then
+      print -u2 -- 'zsh: 未知或不安全的 Zsh 功能保全回执，拒绝覆盖'
+      return 1
+    fi
+  fi
+}
+
+zsh_verify_post_software_functional_coverage() {
+  local logical target before_file post_file added_file candidate_file component
+  typeset -i covered
+
+  [[ -n "$ZSH_FUNCTIONAL_GUARD_DIR" \
+    && -d "$ZSH_FUNCTIONAL_GUARD_DIR" ]] || {
+    print -u2 -- 'zsh: 缺少软件安装前功能签名'
+    return 1
+  }
+  for logical target in \
+    zprofile "$DOTFILES_TARGET_HOME/.zprofile" \
+    zshrc "$DOTFILES_TARGET_HOME/.zshrc"; do
+    before_file="$ZSH_FUNCTIONAL_GUARD_DIR/pre-$logical.tokens"
+    post_file="$ZSH_FUNCTIONAL_GUARD_DIR/post-$logical.tokens"
+    added_file="$ZSH_FUNCTIONAL_GUARD_DIR/added-$logical.tokens"
+    candidate_file="$ZSH_FUNCTIONAL_GUARD_DIR/candidate-$logical.tokens"
+    zsh_write_semantic_tokens "$target" "$post_file" || return 1
+    zsh_extract_added_tokens "$before_file" "$post_file" "$added_file" || return 1
+    ZSH_GUARD_ADDED_COUNT[$logical]="$ZSH_GUARD_EXTRACT_ADDED"
+    ZSH_GUARD_REMOVED_COUNT[$logical]="$ZSH_GUARD_EXTRACT_REMOVED"
+    zsh_prepare_candidate_tokens "$logical" || return 1
+    ZSH_GUARD_BEFORE_SHA[$logical]="$(zsh_digest_file "$before_file")" || return 1
+    ZSH_GUARD_POST_SHA[$logical]="$(zsh_digest_file "$post_file")" || return 1
+    ZSH_GUARD_ADDED_SHA[$logical]="$(zsh_digest_file "$added_file")" || return 1
+    ZSH_GUARD_CANDIDATE_SHA[$logical]="$(zsh_digest_file "$candidate_file")" || return 1
+
+    if (( ZSH_GUARD_EXTRACT_ADDED == 0 )); then
+      if [[ "${ZSH_GUARD_BEFORE_SHA[$logical]}" == "${ZSH_GUARD_POST_SHA[$logical]}" ]]; then
+        ZSH_GUARD_STATUS[$logical]=unchanged
+      else
+        ZSH_GUARD_STATUS[$logical]=no-new-function
+      fi
+      continue
+    fi
+    covered=0
+    for component in "${ZSH_GUARD_CANDIDATE_FILES[@]}"; do
+      if zsh_tokens_contain_sequence "$component" "$added_file"; then
+        covered=1
+        break
+      fi
+    done
+    if (( ! covered )); then
+      print -u2 -- "zsh: $logical 在 macOS/tooling 后新增 ${ZSH_GUARD_EXTRACT_ADDED} 个功能 token，无法证明已由 managed/shared/local integrations 覆盖"
+      print -u2 -- 'zsh: 为避免 symlink 后失去功能，保留当前 HOME Zsh 入口并停止；请先通过 Stage 1/1.1 保全该功能'
+      return 1
+    fi
+    ZSH_GUARD_STATUS[$logical]=covered
+  done
+  zsh_guard_prepare_state_target || return 1
+  print -- '✓ macOS/tooling 引入的 Zsh 新功能均已覆盖；允许备份并建立 symlink'
+}
+
+zsh_write_functional_guard_receipt() {
+  local temp logical backup backup_path backup_tokens backup_sha line
+  local -a lines
+
+  zsh_guard_prepare_state_target || return 1
+  for logical in zprofile zshrc; do
+    if [[ "$logical" == zprofile ]]; then
+      backup="$ZSH_LAST_PROFILE_BACKUP"
+    else
+      backup="$ZSH_LAST_RC_BACKUP"
+    fi
+    if [[ "$backup" != none ]]; then
+      backup_path="$DOTFILES_TARGET_HOME/$backup"
+      backup_tokens="$ZSH_FUNCTIONAL_GUARD_DIR/backup-$logical.tokens"
+      zsh_write_semantic_tokens "$backup_path" "$backup_tokens" || return 1
+      backup_sha="$(zsh_digest_file "$backup_tokens")" || return 1
+      if [[ "$backup_sha" != "${ZSH_GUARD_POST_SHA[$logical]}" ]]; then
+        print -u2 -- "zsh: $logical 备份与软件安装后的功能签名不一致"
+        return 1
+      fi
+    fi
+    line="$logical"$'\t'"${ZSH_GUARD_STATUS[$logical]}"$'\t'"${ZSH_GUARD_ADDED_COUNT[$logical]}"$'\t'"${ZSH_GUARD_REMOVED_COUNT[$logical]}"$'\t'"${ZSH_GUARD_BEFORE_SHA[$logical]}"$'\t'"${ZSH_GUARD_POST_SHA[$logical]}"$'\t'"${ZSH_GUARD_ADDED_SHA[$logical]}"$'\t'"${ZSH_GUARD_CANDIDATE_SHA[$logical]}"$'\t'"$backup"
+    lines+=("$line")
+  done
+
+  temp="$(mktemp "$DOTFILES_STATE_DIR/.zsh-functional-guard.XXXXXX")" || return 1
+  chmod 600 "$temp" || {
+    command rm -f -- "$temp"
+    return 1
+  }
+  {
+    print -r -- "$ZSH_FUNCTIONAL_GUARD_MARKER"
+    print -r -- $'logical_file\tstatus\tadded_tokens\tremoved_tokens\tbefore_sha256\tpost_sha256\tadded_sha256\tcandidate_sha256\tbackup'
+    print -rl -- "${lines[@]}"
+  } > "$temp" || {
+    command rm -f -- "$temp"
+    return 1
+  }
+  command mv -f -- "$temp" "$DOTFILES_ZSH_GUARD_FILE" || {
+    command rm -f -- "$temp"
+    return 1
+  }
+  chmod 600 "$DOTFILES_ZSH_GUARD_FILE" || return 1
+  print -- "✓ Zsh 功能保全回执：$DOTFILES_ZSH_GUARD_FILE"
+}
+
+zsh_verify_functional_guard_receipt() {
+  local marker header logical receipt_status added removed before_sha post_sha added_sha candidate_sha backup digest
+  local backup_path backup_tokens backup_digest candidate_file candidate_digest
+  local -A seen
+
+  zsh_prepare_functional_guard_runtime || return 1
+  if [[ ! -d "$DOTFILES_STATE_DIR" || -L "$DOTFILES_STATE_DIR" \
+    || ! -O "$DOTFILES_STATE_DIR" \
+    || "$(stat -f '%Lp' "$DOTFILES_STATE_DIR" 2>/dev/null)" != 700 \
+    || ! -f "$DOTFILES_ZSH_GUARD_FILE" || -L "$DOTFILES_ZSH_GUARD_FILE" \
+    || ! -O "$DOTFILES_ZSH_GUARD_FILE" \
+    || "$(stat -f '%Lp' "$DOTFILES_ZSH_GUARD_FILE" 2>/dev/null)" != 600 ]]; then
+    print -u2 -- 'verify: Zsh 功能保全状态目录/回执缺失，或类型、owner、0700/0600 权限错误'
+    return 1
+  fi
+  {
+    IFS= read -r marker
+    IFS= read -r header
+  } < "$DOTFILES_ZSH_GUARD_FILE"
+  [[ "$marker" == "$ZSH_FUNCTIONAL_GUARD_MARKER" \
+    && "$header" == $'logical_file\tstatus\tadded_tokens\tremoved_tokens\tbefore_sha256\tpost_sha256\tadded_sha256\tcandidate_sha256\tbackup' ]] || {
+      print -u2 -- 'verify: Zsh 功能保全回执 marker 或 schema 错误'
+      return 1
+    }
+
+  while IFS=$'\t' read -r logical receipt_status added removed before_sha post_sha added_sha candidate_sha backup; do
+    [[ "$logical" == zprofile || "$logical" == zshrc ]] || return 1
+    [[ -z "${seen[$logical]:-}" ]] || return 1
+    seen[$logical]=1
+    [[ "$receipt_status" == unchanged || "$receipt_status" == no-new-function \
+      || "$receipt_status" == covered ]] || return 1
+    [[ "$added" == <-> && "$removed" == <-> ]] || return 1
+    for digest in "$before_sha" "$post_sha" "$added_sha" "$candidate_sha"; do
+      [[ "$digest" == [0-9a-f]## && ${#digest} == 64 ]] || return 1
+    done
+    zsh_prepare_candidate_tokens "$logical" || return 1
+    candidate_file="$ZSH_FUNCTIONAL_GUARD_DIR/candidate-$logical.tokens"
+    candidate_digest="$(zsh_digest_file "$candidate_file")" || return 1
+    if [[ "$candidate_digest" != "$candidate_sha" ]]; then
+      print -u2 -- "verify: $logical managed/shared/local integrations 候选已在功能保全后变化"
+      return 1
+    fi
+    if [[ "$backup" != none ]]; then
+      [[ "$backup" == ".${logical}.dotfiles-backup."* \
+        && "$backup" != *[[:space:]/]* ]] || return 1
+      backup_path="$DOTFILES_TARGET_HOME/$backup"
+      backup_tokens="$ZSH_FUNCTIONAL_GUARD_DIR/verify-backup-$logical.tokens"
+      zsh_write_semantic_tokens "$backup_path" "$backup_tokens" || return 1
+      backup_digest="$(zsh_digest_file "$backup_tokens")" || return 1
+      if [[ "$backup_digest" != "$post_sha" ]]; then
+        print -u2 -- "verify: $logical 备份不再匹配软件安装后的功能签名"
+        return 1
+      fi
+    fi
+  done < <(sed -n '3,$p' "$DOTFILES_ZSH_GUARD_FILE")
+  [[ -n "${seen[zprofile]:-}" && -n "${seen[zshrc]:-}" \
+    && ${#seen[@]} == 2 ]] || return 1
+  print -- '✓ Zsh 功能保全回执、候选签名与备份签名'
+}
+
 zsh_backup_and_link() {
   local target="$1"
   local source="$2"
+  local logical="$3"
   local stamp backup
   typeset -i suffix=0
 
   if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
+    if [[ "$logical" == zprofile ]]; then
+      ZSH_LAST_PROFILE_BACKUP=none
+    else
+      ZSH_LAST_RC_BACKUP=none
+    fi
     return 0
   fi
   if [[ -e "$target" || -L "$target" ]]; then
@@ -341,6 +796,15 @@ zsh_backup_and_link() {
     }
     command rm -f -- "$target" || return 1
     print -- "zsh: 已创建副本 $backup"
+    if [[ "$logical" == zprofile ]]; then
+      ZSH_LAST_PROFILE_BACKUP="${backup:t}"
+    else
+      ZSH_LAST_RC_BACKUP="${backup:t}"
+    fi
+  elif [[ "$logical" == zprofile ]]; then
+    ZSH_LAST_PROFILE_BACKUP=none
+  else
+    ZSH_LAST_RC_BACKUP=none
   fi
   command ln -s -- "$source" "$target"
 }
@@ -403,8 +867,8 @@ zsh_apply() {
     fi
   done
 
-  zsh_backup_and_link "$DOTFILES_TARGET_HOME/.zprofile" "$ZSH_PERSONAL_PROFILE" || return 1
-  zsh_backup_and_link "$DOTFILES_TARGET_HOME/.zshrc" "$ZSH_PERSONAL_RC"
+  zsh_backup_and_link "$DOTFILES_TARGET_HOME/.zprofile" "$ZSH_PERSONAL_PROFILE" zprofile || return 1
+  zsh_backup_and_link "$DOTFILES_TARGET_HOME/.zshrc" "$ZSH_PERSONAL_RC" zshrc
 }
 
 zsh_verify_load_order() {
@@ -570,6 +1034,8 @@ zsh_verify() {
       failed=1
     }
   fi
+
+  zsh_verify_functional_guard_receipt || failed=1
 
   if (( failed == 0 )); then
     print -- '✓ Zsh 语法、入口 symlink、加载顺序、启动场景与固定插件'

@@ -64,7 +64,7 @@ tmp/.runtime/**
 
 逐项处理：
 
-- Brewfile 只保留希望安装或继续保留的直接期望项目；移除传递依赖、一次性工具和无法确认的机器快照项。
+- Brewfile 只保留希望安装或继续保留的直接期望项目；移除传递依赖、一次性工具和无法确认的机器快照项。每个有效声明推荐在同一行使用 `kind "name" # 一句话说明`，注释与声明之间保留空白，`#` 前不得出现参数或动态 Ruby。
 - tooling 使用明确版本；禁止 `latest`、浮动 tag 和无法复现的版本范围。
 - personal/shared 各自最多一份 `plugins.toml`；每个插件写明 source、固定 tag/commit、enabled 和加载顺序。
 - 完全相同的 personal/shared 项去重；shared 只保存共享增量，local 不参与软件、版本或插件选择。
@@ -83,6 +83,8 @@ tmp/.runtime/**
 归属：personal 或 shared
 验证方式：Stage 2 可执行的最小验证
 ```
+
+Brewfile 的“一句话描述”优先作为有效声明的行尾注释，例如 `brew "ripgrep" # 快速递归搜索文本`；其余 `AI-REVIEW` 字段使用相邻的独立注释行。安装器会忽略行尾说明并只消费直接声明；不要把 Ruby 参数、选项或动态表达式混入 `#` 前的有效部分。
 
 对退役项使用单条结构化评论，不保留活动配置行：
 

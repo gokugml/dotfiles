@@ -116,6 +116,7 @@ typeset -gr DOTFILES_LOCAL_INTEGRATIONS_FILE="$HOME/.config/dotfiles/local/integ
 typeset -gr DOTFILES_PLUGIN_DIR="$HOME/.local/share/dotfiles/plugins"
 typeset -gr DOTFILES_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles"
 typeset -gr DOTFILES_INTEL_HANDOFF_FILE="$DOTFILES_STATE_DIR/intel_to_be_retired.tsv"
+typeset -gr DOTFILES_ZSH_GUARD_FILE="$DOTFILES_STATE_DIR/zsh_functional_guard.tsv"
 typeset -gr DOTFILES_TEST_MODE="$test_mode"
 typeset -gi DOTFILES_MACOS_ENABLED=0
 typeset -gi DOTFILES_TOOLING_ENABLED=0
@@ -248,11 +249,15 @@ local_plan() {
         print -u2 -- "install.sh: $local_name 必须是当前用户拥有的普通文件，且不得是 symlink"
         return 1
       fi
+      /bin/zsh -n "$local_file" >/dev/null 2>&1 || {
+        print -u2 -- "install.sh: $local_name 语法错误（内容未输出）"
+        return 1
+      }
       present+=("$local_name")
     fi
   done
   if (( ${#present[@]} > 0 )); then
-    print -- "- local Zsh：${(j:、:)present} 存在；目录权限 ${mode}，安装时收敛为 0700/0600（不读取内容）"
+    print -- "- local Zsh：${(j:、:)present} 存在；目录权限 ${mode}，安装时收敛为 0700/0600（摘要不读正文；确认后 integrations 仅做无输出脱敏签名）"
   else
     print -- '- local Zsh：文件均不存在；安装时只创建 0700 local 目录'
   fi
@@ -393,11 +398,16 @@ run_install() {
     return 0
   fi
 
+  if (( DOTFILES_ZSH_ENABLED )); then
+    zsh_capture_pre_software_state || return 1
+  fi
   macos_apply || return 1
   tooling_apply || return 1
   if (( DOTFILES_ZSH_ENABLED )); then
+    zsh_verify_post_software_functional_coverage || return 1
     local_apply || return 1
     zsh_apply || return 1
+    zsh_write_functional_guard_receipt || return 1
   fi
   run_verify
 }
