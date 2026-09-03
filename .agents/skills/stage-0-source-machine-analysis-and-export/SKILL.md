@@ -1,6 +1,6 @@
 ---
 name: stage-0-source-machine-analysis-and-export
-description: 编排源机器 Stage 0：运行 dump.sh 导出软件/tooling/plugin 候选，调用独立 Zsh 分析 Skill 生成含第三方功能块保全清单的修改建议，再调用独立导出 Review Skill 为每个工具先给出一句话描述并完成 AI 审阅、自检和一次用户确认；确认后把 Zsh 修复计划写入本机 `~/.config/dotfiles/zsh-repair/`，其他获准草稿写入对应仓库。用于用户要求分析当前 Zsh、保全软件安装器追加块、dump 本地配置、盘点源 Mac 或为 macOS dotfiles 迁移准备候选配置时；不直接承担 Zsh 诊断或导出文件逐项 Review，也不安装、退役、commit 或 push。
+description: 编排源机器 Stage 0：运行 dump.sh 导出软件/tooling/plugin 候选，调用独立 Zsh 分析 Skill 生成含第三方功能块保全清单与应用自有 CLI PATH 交接的修改建议，再调用独立导出 Review Skill 为每个工具先给出一句话描述并完成 AI 审阅、自检和一次用户确认；确认后把 Zsh 修复计划写入本机 `~/.config/dotfiles/zsh-repair/`，其他获准草稿写入对应仓库。用于用户要求分析当前 Zsh、保全软件安装器追加块、dump 本地配置、盘点源 Mac 或为 macOS dotfiles 迁移准备候选配置时；不直接承担 Zsh 诊断或导出文件逐项 Review，也不安装、退役、commit 或 push。
 ---
 
 # Stage 0：源机器分析与配置导出编排
@@ -113,6 +113,8 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 - public 输出不含本机绝对路径、邮箱、账号、敏感值或私有/内部/带凭证的远程地址；允许配置所需且已审阅的公开插件 source。
 - Zsh Skill 只生成修复计划，Review Skill 只修改导出候选，均未越权。
 - Zsh 证据中的每个功能块在修复计划中恰有一个处置；源文件、出现序号、相对顺序和加载阶段一致，`retire` 均能追溯到用户明确决定。
+- 若 Zsh 证据表明 Docker Desktop 用户级 CLI 位于 `$HOME/.docker/bin`，personal 修复计划必须把该可移植目录交给 Stage 1 的 `zprofile` PATH，并明确要求 Stage 2 用全新 login Zsh 验证 `docker`；不得把 Docker CLI 路径误归入本机 integrations 或 JS 全局 CLI 迁移。Docker completion 功能块仍按原保全清单独立处置。
+- Docker Desktop/CLI 已存在但 `dump.sh` 的 Brewfile 候选没有 `cask "docker"` 时，分别报告“当前机器 CLI 连通性需要保全”和“目标机软件安装未声明”。后者保持 manual 或交给用户审阅，不得因软件声明缺失而丢弃前者，也不得擅自把当前机器快照变成安装期望。
 - tooling 版本、插件 revision 和每个直接期望项目的六字段 `AI-REVIEW` 完整，首字段是一句话工具描述。
 - 未经审阅的机器快照没有直接成为正式配置；未知项均标记 `manual`。
 - 正式目录、真实 HOME、软件、服务和 Git 历史尚未被本次流程修改。
@@ -123,7 +125,7 @@ tmp/.runtime/      # 只应在 dump.sh 运行期间存在
 
 展示：
 
-1. Zsh 修改建议摘要、功能块保全清单、证据缺口，以及将写入固定本机目录的精确计划文件；
+1. Zsh 修改建议摘要、功能块保全清单、Docker 等应用自有 CLI 的 PATH/验收交接、证据缺口，以及将写入固定本机目录的精确计划文件；
 2. 导出配置的逐项调整摘要和 manual 项；每个工具先显示一句话描述，再显示修改级别和建议；
 3. public/shared 正式目标与本机 Zsh 修复计划目标；
 4. 仓库正式目录到候选目录的全部新增、修改和删除 diff，以及本机修复计划的完整安全 diff；

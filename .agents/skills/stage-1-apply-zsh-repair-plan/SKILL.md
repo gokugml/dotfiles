@@ -1,6 +1,6 @@
 ---
 name: stage-1-apply-zsh-repair-plan
-description: 从 Stage 0 固定本机目录 `~/.config/dotfiles/zsh-repair/` 或用户显式路径读取已确认 Zsh 修复计划，应用为可审查的 `zprofile`、`zshrc`、可选 `shared.zsh` 和本机 `integrations.zsh`；优先更新用户显式目标，否则先确认无前置点或有前置点命名。以最小修改保留 Oh My Zsh 模板，并用确定性清单逐块比较源 `.zprofile`/`.zshrc` 与目标及本机 integrations；在替换 NVM、PNPM_HOME、BUN_INSTALL 或其他工具 PATH/initializer 前，完整盘点会因此失去解析的 npm、pnpm、Bun 及明确移除目录中的直接全局 CLI。用于应用 zsh-repair-plan、保全 Kiro/Docker/gcloud/kimi 等软件追加块、生成或修复目标 Zsh 文件、盘点受 runtime/PATH 迁移影响的直接全局 CLI，或进入 Dotfiles Stage 1/1.1 时；不用于重新诊断源 Zsh、建立 HOME symlink、安装软件、运行 Stage 2/3、commit 或 push。
+description: 从 Stage 0 固定本机目录 `~/.config/dotfiles/zsh-repair/` 或用户显式路径读取已确认 Zsh 修复计划，应用为可审查的 `zprofile`、`zshrc`、可选 `shared.zsh` 和本机 `integrations.zsh`；优先更新用户显式目标，否则先确认无前置点或有前置点命名。以最小修改保留 Oh My Zsh 模板，并用确定性清单逐块比较源 `.zprofile`/`.zshrc` 与目标及本机 integrations；保全 Docker Desktop 等应用自有 CLI 的可移植 PATH，并在替换 runtime/PATH owner 前完整盘点会失去解析的直接全局 CLI。用于应用 zsh-repair-plan、保全 Kiro/Docker/gcloud/kimi 等软件追加块、生成或修复目标 Zsh 文件、盘点受 runtime/PATH 迁移影响的直接全局 CLI，或进入 Dotfiles Stage 1/1.1 时；不用于重新诊断源 Zsh、建立 HOME symlink、安装软件、运行 Stage 2/3、commit 或 push。
 ---
 
 # Stage 1：应用 Zsh 修复计划
@@ -51,6 +51,7 @@ description: 从 Stage 0 固定本机目录 `~/.config/dotfiles/zsh-repair/` 或
 - 是否创建或修改固定本机文件 `~/.config/dotfiles/local/integrations.zsh`、`parameters.zsh`，已有文件的备份路径规则和只展示脱敏结构 diff 的原因；
 - 修复计划涉及 Homebrew/PATH 时的目标架构或可移植判定；
 - 用户选择的全局 CLI PATH 策略、精确 PATH 入口、顺序、manager owner，以及官方原生目录与统一 `~/.local/bin` 的简短利弊；
+- Docker Desktop 等应用自有 CLI 的 user/system 暴露模式、将进入 personal `zprofile` 的可移植 PATH、与 completion 功能块及全局 CLI 迁移的所有权边界；
 - 将保留的现有内容、计划修改的逻辑区域，以及是否从官方安装工具联网取得最新 Oh My Zsh 模板、隔离临时 HOME 和清理范围；
 - 候选与临时文件范围、验证命令、敏感信息风险和失败停止点；
 - 是否会因 NVM、`PNPM_HOME`、`BUN_INSTALL` 或其他工具 PATH/initializer 的移除、替换或语义变化而让现有全局 CLI 失去解析；将只读检查的每个精确旧 owner/目录、npm/pnpm/Bun 直接全局安装项、明确移除 PATH 目录中的直接 CLI、本机迁移清单路径、public 声明路径和 Stage 1.1 的独立确认边界；
@@ -65,6 +66,7 @@ description: 从 Stage 0 固定本机目录 `~/.config/dotfiles/zsh-repair/` 或
 允许的查询包括：
 
 - `command -v <tool>`、`type -a <tool>`、`file <resolved-command>` 等命令来源与架构检查；
+- 对 Docker Desktop 只检查 `/Applications/Docker.app`、`$HOME/.docker/bin/docker`、`/usr/local/bin/docker` 的类型、symlink 目标类别和 `file -L` 架构；不得为盘点而执行 `docker`、启动 Docker Desktop 或修改其设置；
 - `<tool> --version`、`<tool> version` 和 `<tool> --help` 等版本或命令面检查；
 - 工具明确声明为只读的 `config get`、`bin`、`root`、`prefix`、`env` 或等价查询；
 - 针对 pnpm 的 `pnpm --version`、`pnpm config get global-bin-dir`、`pnpm bin -g`、`pnpm root -g` 等必要检查；
@@ -148,6 +150,18 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 
 本机 TSV 属于 Stage 1 获准写入范围并先于会使 CLI 失去解析的 Zsh 目标原子落盘；对话只展示脱敏结构摘要。可分享的 `my_setup/tooling/global-cli-migration.toml` 不在 Stage 1 主写入中自动生成，只能在 Stage 1 全部验证通过后的 Stage 1.1 由用户确认完整 diff 后写入。
 
+## 保全应用自有 CLI PATH
+
+应用包拥有的 CLI 入口与 npm/pnpm/Bun 全局包是不同所有权。修复计划或 Stage 0 证据表明 Docker Desktop 使用用户级 CLI（`$HOME/.docker/bin/docker` 存在、源 PATH 含该目录，或 `docker` 原先从该目录解析）时：
+
+1. 在 personal `zprofile`/`.zprofile` 的受管 `path` 数组中只加入一次 `"$HOME/.docker/bin"`，放在继承 PATH 之前；不得硬编码源用户名或把它降级为本机 `integrations.zsh`。
+2. Docker completion 仍是独立的交互功能块，按功能块协议保全到正确 `zshrc` 阶段；CLI PATH 不得与 completion 合并成同一块。
+3. 不把 Docker CLI 写入 `global_cli_to_be_migrated.tsv` 或 `global-cli-migration.toml`，不尝试用 npm、pnpm、Bun、mise 替代，也不创建 `/usr/local/bin/docker`。软件安装和 Docker Desktop user/system 模式切换仍由 Stage 2 声明或人工设置负责。
+4. 若证据确认仅使用 system 模式 `/usr/local/bin/docker`，且 symlink 最终解析到 Docker Desktop 的当前原生应用二进制，则保留 system 模式，不强制追加用户目录；路径位于 `/usr/local` 本身不能证明它是 Intel 二进制。
+5. Docker 未安装、两种 CLI 入口均不存在且源文件也没有 Docker PATH 信号时，不凭空新增该目录。
+
+为避免候选只在当前继承环境中偶然成功，使用 `/private/tmp` 下隔离 HOME 建立可执行的 `.docker/bin/docker` fixture，以候选作为该 HOME 的 `.zprofile`，并从不含 Docker 目录的最小初始 PATH 启动 `/bin/zsh -l -c`；只有 `command -v docker` 精确解析到 fixture 的 `$HOME/.docker/bin/docker` 才通过。该测试不得执行 fixture 或真实 `docker`。
+
 ## 生成最小候选
 
 根据修复计划分别更新目标，遵守：
@@ -162,6 +176,7 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 - 显式目标含疑似敏感赋值时，只保留并局部绕开，不在候选、日志或对话中显示值；修复计划要求改动该项时停止并先确认安全迁移方式。
 - 不创建没有实际内容的 shared 文件。
 - 生成或修改 runtime/global CLI PATH 时，完整执行全局 CLI 迁移协议中的 PATH ownership 策略。默认推荐使用 manager 官方原生目录：mise runtime 必须先于 pnpm/Bun global bin，npm global bin 由当前 mise Node prefix 通过 mise 激活暴露；不得硬编码版本化 mise Node prefix。只有用户选择统一 `~/.local/bin` 且每个 manager 的官方能力或明确 wrapper 方案都已确认时，才生成对应候选。
+- 生成应用自有 CLI PATH 时执行上一节的独立所有权规则；`$HOME/.docker/bin` 必须位于继承 PATH 之前，不能因为当前父进程恰好包含它而从候选中省略。
 
 ### 保全并迁移第三方功能块
 
@@ -206,7 +221,8 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 6. 运行功能块工具的 `compare`，逐块比较源 `.zprofile` + `.zshrc` 与目标 `zprofile` + `zshrc` + 私有 integrations 候选。只有 `preserved-target`、已校验阶段 loader 的 `migrated-local` 或精确获准的 `approved-retired` 通过；`missing`、`content-changed`、`phase-changed`、`order-changed`、`missing-loader` 均阻止展示可写 diff。
 7. 验证失去解析影响集逐一覆盖 npm、pnpm、Bun 和每个明确移除 PATH 目录；迁移清单只含本次变更影响的直接安装项，稳定排序、权限/schema/ownership marker 正确，public 候选不含源绝对路径、认证数据或环境值。任一被排除或无法安全盘点的范围必须与对应被阻止的 Zsh 退役变更精确关联。
 8. 验证所选 PATH 策略：`node`、`bun`、`bunx`、`pnpm`、`npm` 的主要解析 owner 符合 mise/runtime 声明；pnpm/Bun/npm 全局 CLI 解析到各自已确认 owner；manager 原生 global bin、可选 `~/.local/bin` 和继承 PATH 的顺序符合协议且没有错误 owner 抢占。
-9. 展示每个仓库目标和每份实际采用的本机 `zsh-repair-plan.md` 状态迁移完整 diff，以及私有文件和本机迁移清单按变量名/块 ID/manager/package/binaries/impact/数量生成的脱敏结构 diff；不得显示私有正文、值、源绝对路径或内容摘要。一起展示目标类型、候选验证、模板保留摘要、功能块覆盖表、CLI 影响覆盖表、PATH owner/顺序表和未解决缺口。
+9. 若 Docker 用户级 CLI 属于本次保全范围，验证 public 候选恰有一个可移植 `$HOME/.docker/bin` 入口、隔离 login Zsh 能解析 fixture，且 Docker CLI 没有进入 local integrations 或全局 CLI 声明；system 模式则验证其 symlink 目标与原生架构，不因 `/usr/local` 前缀误判为 Intel。
+10. 展示每个仓库目标和每份实际采用的本机 `zsh-repair-plan.md` 状态迁移完整 diff，以及私有文件和本机迁移清单按变量名/块 ID/manager/package/binaries/impact/数量生成的脱敏结构 diff；不得显示私有正文、值、源绝对路径或内容摘要。一起展示目标类型、候选验证、模板保留摘要、功能块覆盖表、CLI 影响覆盖表、应用 CLI 暴露表、PATH owner/顺序表和未解决缺口。
 
 随后只给出以下选择并停止等待：
 
@@ -226,6 +242,7 @@ Stage 0 未提供功能块清单的旧计划不能直接完成 Stage 1。先对�
 
 - 先确认本机全局 CLI 迁移 TSV 已按获准结构原子落盘；若它失败，不得继续写入会让对应 CLI 失去解析的 Zsh 变更；
 - 再次运行 `zsh -n` 和全部静态边界检查；
+- 若本轮保全 Docker 用户级 CLI，再次对实际落盘的 personal profile 运行同一隔离 login Zsh fixture 验证；结果不精确时不得更新修复计划状态；
 - 针对实际落盘文件再次运行同一源/目标/local 功能块 `compare`；任一块缺失、变化、错序或 loader 阶段错误都报告失败，不得标为完成；
 - 只有上述验证通过后，才把每份实际采用的 `zsh-repair-plan.md` 原子更新为唯一的 `> 状态：Stage 1 已应用`；旧标题同时按已确认 diff 去掉 Stage 0 候选字样；
 - 确认实际 diff 与获准 diff 完全一致；
@@ -259,6 +276,7 @@ Stage 1.1 是 Stage 1 成功后的可选确认阶段，不改变 `> 状态：Sta
 - 所有写入文件通过语法和边界检查；
 - 已从源与最终候选的可达性差集完整盘点本次 Zsh 变更影响的 npm、pnpm、Bun 直接全局 CLI 及明确移除 PATH 目录中的直接 CLI；存在受影响项时，本机迁移 TSV 已先于对应 Zsh 写入原子落盘，无法盘点或用户排除的旧 owner 未被静默退役；
 - 本轮涉及 runtime/global CLI PATH 时，用户已明确选择 manager 官方原生目录或统一 `~/.local/bin` 策略；最终 PATH 顺序、主要 runtime owner 和各 manager global CLI owner 均与该选择一致且验证通过；
+- 修复计划或源证据包含 Docker 用户级 CLI 时，最终 personal profile 恰有一个 `$HOME/.docker/bin` 入口，隔离的新 login Zsh 能从不含该目录的父 PATH 解析 `docker`；Docker CLI 与 completion、local integrations 和 JS 全局 CLI 迁移的所有权没有混淆；
 - 源 `.zprofile` + `.zshrc` 的每个功能块都由最终目标文件或正确阶段加载的 `integrations.zsh` 精确覆盖，或有用户明确批准的精确 retire 记录；
 - 修改过的既有 `integrations.zsh`/`parameters.zsh` 均已先完成 `0600` 同目录备份，且 local 父目录为 `0700`；
 - Oh My Zsh 模板来自本次获准运行的官方最新安装工具，官方 commit 已记录；用户配置已保留，所有偏离都有获准理由；

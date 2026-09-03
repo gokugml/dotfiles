@@ -206,6 +206,23 @@ whence -va example-cli
 
 公开配置应使用 `$HOME`、工具自身的查询命令或稳定的系统前缀，不应硬编码任何具体用户名的主目录。
 
+### 5.1 应用自有 CLI：Docker Desktop
+
+GUI 应用已安装、CLI symlink 已创建、目录已进入 `PATH` 是三个独立事实。Docker Desktop 用户模式把 CLI 暴露在 `$HOME/.docker/bin`；如果源机器依赖该模式，迁移后的 personal `.zprofile` 应显式、唯一地把这个可移植目录放在继承 PATH 之前：
+
+```zsh
+typeset -U path PATH
+path=(
+  "$HOME/.docker/bin"
+  "${path[@]}"
+)
+export PATH
+```
+
+这条 PATH 属于公开 personal 环境，不属于本机私有 integrations，也不是 npm/pnpm/Bun 全局 CLI。Docker 的 completion 是另一项交互功能，应在 `.zshrc` 的补全初始化边界内单独保全。
+
+Docker system 模式可以通过 `/usr/local/bin/docker` 暴露 CLI。Apple Silicon 上不能只根据 `/usr/local` 前缀认定它是 Intel 残留；应先检查 symlink 最终目标和 `file -L` 架构。验收必须从不额外注入 Docker 目录的全新 login Zsh 查询 `command -v docker`，不能用“Docker Desktop 正在运行”或“symlink 文件存在”代替，也不需要执行可能初始化状态的 `docker` 业务命令。
+
 ## 6. 功能正确性与防御式加载
 
 ### 6.1 `*_HOME` 通常应该是目录

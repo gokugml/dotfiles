@@ -1,6 +1,6 @@
 ---
 name: stage-2-target-machine-configuration-and-software-migration
-description: 编排 macOS 目标机器 Stage 2：只读取当前 checkout 的公开仓库与可选 shared 仓库声明，把已启用的 macOS、tooling 和可选 Zsh 配置安装到当前机器原生架构对应的精确目标；启用 Zsh 时，在软件和可选全局 CLI 安装前后比较 HOME 启动文件的脱敏功能签名，证明安装器新增功能已由受管 Zsh/shared/local integrations 覆盖后才备份并建立 symlink，最后运行 `install.sh verify` 验证安装完整性与保全回执。若存在 `my_setup/tooling/global-cli-migration.toml`，先询问用户是否在本机迁移其中的可选全局 CLI，缺失或跳过都不阻断基础安装。支持只 checkout 根安装器及 `my_setup/macos/`、`my_setup/tooling/` 的目标机部署；不依赖 Stage 0、Stage 1、`zsh-repair-plan.md`、本机待迁移 TSV 或其状态。Apple Silicon 上若仍有 Intel 残留，verify 生成本机 `intel_to_be_retired.tsv` 供 Stage 3 重新核验。用于多台 macOS 机器应用仓库配置、建立受管 symlink、安装 Homebrew 软件、mise/uv runtime、用户选择的全局 CLI 或可选 Zsh/plugin；不生成或修复仓库配置，不读取 local 密钥值，不迁移服务数据、进入 Stage 3、commit 或 push。
+description: 编排 macOS 目标机器 Stage 2：只读取当前 checkout 的公开仓库与可选 shared 仓库声明，把已启用的 macOS、tooling 和可选 Zsh 配置安装到当前机器原生架构对应的精确目标；启用 Zsh 时，在软件和可选全局 CLI 安装前后比较 HOME 启动文件的脱敏功能签名，证明安装器新增功能已由受管 Zsh/shared/local integrations 覆盖后才备份并建立 symlink，最后运行 `install.sh verify` 验证安装完整性、保全回执与应用自有 CLI 的新登录 Zsh 可达性。若存在 `my_setup/tooling/global-cli-migration.toml`，先询问用户是否在本机迁移其中的可选全局 CLI，缺失或跳过都不阻断基础安装。支持只 checkout 根安装器及 `my_setup/macos/`、`my_setup/tooling/` 的目标机部署；不依赖 Stage 0、Stage 1、`zsh-repair-plan.md`、本机待迁移 TSV 或其状态。Apple Silicon 上若仍有 Intel 残留，verify 生成本机 `intel_to_be_retired.tsv` 供 Stage 3 重新核验。用于多台 macOS 机器应用仓库配置、建立受管 symlink、安装 Homebrew 软件、mise/uv runtime、用户选择的全局 CLI 或可选 Zsh/plugin；不生成或修复仓库配置，不读取 local 密钥值，不迁移服务数据、进入 Stage 3、commit 或 push。
 ---
 
 # Stage 2：从仓库配置目标机器
@@ -24,6 +24,7 @@ Stage 2 是独立部署阶段。不得读取或验证 Stage 0/1 状态、Stage 1
 - 当前 checkout 的 commit、diff、public/shared 来源和启用/跳过模块；
 - 每个仓库 source、本机 target、安装动作及原生 Homebrew 前缀；
 - Brewfile 软件、mise/uv runtime、可选 Zsh/plugin、网络与磁盘影响；
+- Docker Desktop 等应用自有 CLI 在本机的 user/system 暴露模式，以及启用 Zsh 时将执行的新 login shell 可达性验收；
 - `my_setup/tooling/global-cli-migration.toml` 是否存在、schema/条目摘要、安装器是否支持，以及本机全部迁移、逐项选择或跳过都不会改变基础模块依赖的语义；
 - Apple Silicon 上 `intel_to_be_retired.tsv` 的路径、schema、权限和仅供 Stage 3 参考的语义；
 - 启用 Zsh 时，软件安装前后功能签名、symlink 前覆盖检查，以及 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/zsh_functional_guard.tsv` 的路径、无原文 schema、`0700/0600` 权限和最终 verify 语义；
@@ -58,6 +59,7 @@ Brewfile 只允许 `tap`、`brew`、`cask`、`vscode` 的直接声明，不执�
 为解析精确目标允许执行最小只读查询：
 
 - `command -v`、`type -a`、`file`、版本和帮助命令；
+- `/Applications/Docker.app`、`$HOME/.docker/bin/docker`、`/usr/local/bin/docker` 的类型、symlink 与 `file -L` 架构，以及不执行 `docker` 的新 login Zsh `command -v` 检查；
 - 管理器明确只读的 `config get`、`bin`、`root`、`prefix`、`env`、`list`；
 - `pnpm --version`、`pnpm config get global-bin-dir`、`pnpm bin -g`、`pnpm root -g`；
 - `uname`、`arch`、`sysctl`、原生 `brew --prefix`。
@@ -82,6 +84,7 @@ Brewfile 只允许 `tap`、`brew`、`cask`、`vscode` 的直接声明，不执�
 - Agent 不读取、显示、复制或持久化 local `parameters.zsh`、`integrations.zsh` 正文；只检查类型、owner、权限和无输出语法。用户确认后，安装器可对固定标记的 `integrations.zsh` 中与 `zprofile-pre/post`、`zshrc-pre/post` 对应的功能块做确定性、无输出 token 化，只在 `0700` 临时目录保存逐 token SHA-256，且不得扫描 `parameters.zsh`、输出 token/原文/值或把正文写入回执。
 - 不覆盖与安装范围冲突的用户未确认修改或未知受管目标。
 - 不启停服务，不迁移数据库、Homebrew service 或 GUI 数据，不清理未知软件、项目 runtime 或另一架构目录。
+- 不启动 Docker Desktop、不修改其 Advanced 设置，也不自行创建、删除或改写 `$HOME/.docker/bin`、`/usr/local/bin/docker`；CLI symlink 缺失时只报告 Docker 初始化/模式配置缺口。
 - 本机 Intel 盘点只写 `${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/intel_to_be_retired.tsv`；不写入仓库，也不构成删除授权。
 - 不调用 `install.sh retire` 或 `retire --apply`，不进入 Stage 3，不 commit 或 push。
 - 不安装 Git hook，不设置 `core.hooksPath`，不运行或报告 smoke、pre-commit、CI；这些仓库开发能力独立于多机 Stage 2。
@@ -95,7 +98,8 @@ Brewfile 只允许 `tap`、`brew`、`cask`、`vscode` 的直接声明，不执�
 2. 发现模块并验证每个已启用模块的声明可解析、目标唯一、内部入口不可直接执行；Brewfile 预检必须按安装器同一语法接受并推荐 `kind "name" # 一句话说明`，不得把合法行尾注释误判为参数。
 3. 让安装器能力能够列出每个精确 `source → target → action`。
 4. 判定原生架构、Rosetta、Homebrew 前缀与关键目标路径。
-5. 只检查 local 和既有目标的元数据，不读取 local 正文。
+5. 若启用 Zsh，判定 Docker CLI 验收是否适用：有效 Brewfile 声明 `cask "docker"`、`/Applications/Docker.app` 存在，或 user/system 任一 Docker CLI 入口存在时适用；三者都不存在时标为不适用，不凭空要求 Docker。
+6. 只检查 local 和既有目标的元数据，不读取 local 正文。
 
 ### 2. 可选全局 CLI 选择
 
@@ -154,7 +158,16 @@ Brewfile 只允许 `tap`、`brew`、`cask`、`vscode` 的直接声明，不执�
 - 再次安装不会重复备份或破坏正确 symlink；服务和数据仍只报告。
 - 本机选择迁移的全局 CLI 必须匹配 package/version/binaries，命令解析到声明的 target manager/原生 runtime；不得以旧 NVM、旧 `PNPM_HOME`、旧 Bun global home 或已移除 PATH 中的副本代替。用户跳过的条目不进入 A 的完成条件。
 
-任一已启用声明项未到位则 A 失败。未 checkout 的可选模块不计为缺失。
+启用 Zsh 且 Docker CLI 验收适用时，额外执行以下确定性检查；它属于 A，不得只写在人工提示中：
+
+1. 先以实际 symlink 判定模式。用户模式要求 `$HOME/.docker/bin/docker` 可执行，personal profile 含且仅含一个可移植 `$HOME/.docker/bin` PATH 入口；系统模式要求 `/usr/local/bin/docker` 可执行。两者都不存在但 Docker 已声明或应用存在时，报告“Docker Desktop 尚未完成 CLI 初始化/模式配置”，A 失败但不自动启动应用或改设置。
+2. 从不额外注入 Docker 目录的父环境运行 `env -u ZDOTDIR HOME="$DOTFILES_TARGET_HOME" /bin/zsh -l -c`，只读取 `commands[docker]`/`command -v docker`。用户模式必须解析到 `$HOME/.docker/bin/docker`；系统模式必须解析到 `/usr/local/bin/docker`。不得执行 `docker --version`、`docker info` 或其他可能初始化、联网或触发更新的业务命令。
+3. 对解析结果执行 `file -L` 并检查最终 symlink 目标属于 Docker Desktop 应用 CLI、架构为当前原生架构或 universal。Apple Silicon 上的 `/usr/local/bin/docker` 若只是指向原生 Docker.app 的 system-mode symlink，不得仅因路径前缀把它判为 Intel Homebrew 残留，也不得交给 Stage 3 删除。
+4. 用户模式的 PATH 责任属于 personal profile，不属于 `integrations.zsh` 或 `global-cli-migration.toml`；Docker completion 可继续由 local integrations 在交互 shell 阶段加载，但 completion 存在不能代替 CLI 可达性。
+
+若 Zsh 模块未 checkout，明确报告“本次 Stage 2 未接管 Zsh，因此未保证 Docker CLI 的 Zsh 可达性”；这不把可选 Zsh 变成最小 checkout 的强制模块，但不得声称已完成该项保证。
+
+任一已启用声明项未到位，或启用 Zsh 后适用的 Docker CLI 验收失败，则 A 失败。未 checkout 的可选模块不计为缺失。
 
 #### B. Intel 退役交接
 
@@ -187,4 +200,4 @@ Stage 2 只有 A 通过，且 Apple Silicon 上 B 为“已生成”或“无残
 - macOS/tooling 后发现未覆盖 Zsh 新功能：报告软件步骤已执行但 Zsh symlink 尚未替换，指出受影响的逻辑启动文件和脱敏 token 数量，不输出其内容；Stage 2 未完成。
 - A 通过但 B 失败：报告安装目标已到位但 Stage 2 未完成，不删除 Intel 项。
 
-只有当前 checkout 的所有已启用基础声明目标和本机明确选择的可选全局 CLI 完成安装、用户已在安装器内确认、A 通过、B 在适用时通过，且服务/数据未被自动迁移，才报告 Stage 2 完成。可选声明缺失或本机跳过不影响完成；`zsh-repair-plan.md`、Stage 0/1 状态、本机 Stage 1 TSV 和仓库开发/CI 能力均不参与完成判定。
+只有当前 checkout 的所有已启用基础声明目标和本机明确选择的可选全局 CLI 完成安装、用户已在安装器内确认、A 通过、B 在适用时通过，且服务/数据未被自动迁移，才报告 Stage 2 完成。启用 Zsh 且 Docker CLI 验收适用时，A 必须包含“全新 login Zsh 可解析 `docker` 且 owner/架构正确”；Docker 应用已存在但 CLI symlink 尚未初始化时不得报告完成。可选声明缺失或本机跳过不影响完成；`zsh-repair-plan.md`、Stage 0/1 状态、本机 Stage 1 TSV 和仓库开发/CI 能力均不参与完成判定。
