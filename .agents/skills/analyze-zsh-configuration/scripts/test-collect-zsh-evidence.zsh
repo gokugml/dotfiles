@@ -52,6 +52,7 @@ assert_text_contains() {
 
 mkdir -p -- \
   "$fixture_home/bin" \
+  "$fixture_home/.docker/bin" \
   "$fixture_home/.nvm" \
   "$fixture_home/.oh-my-zsh" \
   "$fixture_repository_source" \
@@ -64,6 +65,12 @@ touch -- \
 chmod 700 "$fixture_home/bin/pnpm"
 
 {
+  print -r -- '#!/bin/sh'
+  print -r -- 'exit 0'
+} > "$fixture_home/.docker/bin/docker"
+chmod 700 "$fixture_home/.docker/bin/docker"
+
+{
   print -r -- 'export PATH="$HOME/bin:$PATH"'
 } > "$fixture_home/.zprofile"
 
@@ -72,6 +79,7 @@ chmod 700 "$fixture_home/bin/pnpm"
   print -r -- '[[ -r "$HOME/.kiro/shell/zshrc.pre.zsh" ]] && source "$HOME/.kiro/shell/zshrc.pre.zsh"'
   print
   print -r -- 'export PATH="/usr/local/bin:$PATH"'
+  print -r -- 'export PATH="$HOME/.docker/bin:$PATH"'
   print -r -- 'export PNPM_HOME="$HOME/bin/pnpm"'
   print -r -- 'export NVM_DIR="$HOME/.nvm"'
   print -r -- '[[ -s "$NVM_DIR/nvm.sh" ]] && \. "$NVM_DIR/nvm.sh"'
@@ -137,7 +145,7 @@ assert_text_contains "$preflight_output" '- report-written: no'
 
 (
   cd "$fixture_repo" || exit 1
-  PATH='/usr/local/bin:/usr/local/bin:/usr/bin:/bin' \
+  PATH="$fixture_home/.docker/bin:/usr/local/bin:/usr/local/bin:/usr/bin:/bin" \
     ZSH_ANALYSIS_TEST_HOME="$fixture_home" \
     "$collector" --source live-home --files zprofile,zshrc >/dev/null
 ) || fail '采集器执行失败'
@@ -147,6 +155,9 @@ assert_contains '- source-root-category: live-home'
 assert_contains '- selected-files: zprofile,zshrc'
 assert_contains '- source-input-name: .zprofile'
 assert_contains '- collector-process-architecture:'
+assert_contains '- command: docker source=$HOME/.docker/bin/docker architecture=script-or-text'
+assert_contains '- docker-cli-exposure: user-bin=present'
+assert_contains 'resolved=user-bin'
 assert_contains '- startup-performance: not-measured'
 assert_contains '- startup-files-sourced: no'
 assert_contains '- intel-markers-active: 1'
@@ -156,10 +167,12 @@ assert_contains '- compinit-calls-active: 1'
 assert_contains 'name=ACTIVE_API_KEY scope=exported secret-like=yes'
 assert_contains 'name=OLD_ACCESS_TOKEN scope=exported secret-like=yes'
 assert_contains 'name=PNPM_HOME path-category=$HOME/<redacted> target-kind=file'
-assert_count 1 'source-category: line 7 nvm-runtime'
+assert_contains 'application-cli-path: line 5 owner=docker-desktop directory=$HOME/.docker/bin'
+assert_count 1 'source-category: line 8 nvm-runtime'
 assert_count 2 'nvm-completion'
-assert_contains '- hardcoded-home: line 16 active=yes'
+assert_contains '- hardcoded-home: line 17 active=yes'
 assert_contains '- duplicate-excess: 1'
+assert_contains '- path: $HOME/.docker/bin'
 assert_contains '- functional-block-count: 6'
 assert_contains 'id=kiro-cli-pre occurrence=1 order=1 phase=zshrc-pre relocation=local-integrations'
 assert_contains 'id=docker-desktop-completion occurrence=1 order=2 phase=zshrc-post relocation=local-integrations'

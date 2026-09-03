@@ -152,6 +152,18 @@ quick_checks() {
   grep -Fq '不依赖 Stage 0、Stage 1、`zsh-repair-plan.md`' \
     "$repo_root/.agents/skills/stage-2-target-machine-configuration-and-software-migration/SKILL.md" \
     || fail 'Stage 2 Skill 仍未声明独立 checkout 输入'
+  grep -Fq '`$HOME/.docker/bin`' \
+    "$repo_root/.agents/skills/stage-0-source-machine-analysis-and-export/SKILL.md" \
+    || fail 'Stage 0 Skill 缺少 Docker 用户级 CLI PATH 交接'
+  grep -Fq '隔离 login Zsh fixture' \
+    "$repo_root/.agents/skills/stage-1-apply-zsh-repair-plan/SKILL.md" \
+    || fail 'Stage 1 Skill 缺少 Docker PATH 的隔离 login Zsh 验证'
+  grep -Fq '全新 login Zsh 可解析 `docker`' \
+    "$repo_root/.agents/skills/stage-2-target-machine-configuration-and-software-migration/SKILL.md" \
+    || fail 'Stage 2 Skill 缺少目标机 Docker CLI 验收'
+  grep -Fq '应用自有 CLI 与包管理器全局 CLI 分开建模' \
+    "$repo_root/.agents/skills/stage-common-contract.md" \
+    || fail '共用契约缺少应用自有 CLI 所有权边界'
 
   grep -Fq 'tmp/' "$repo_root/.gitignore" || fail 'tmp/ 未被 Git ignore'
   grep -Fq '不读取或分析 Zsh 启动文件' "$repo_root/.agents/skills/install-sh-plan.md" \

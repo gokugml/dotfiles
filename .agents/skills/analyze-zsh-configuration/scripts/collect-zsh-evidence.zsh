@@ -246,7 +246,7 @@ prepare_output() {
 classify_path() {
   local value="$1"
   case "$value" in
-    "$semantic_home/.local/bin"|"$semantic_home/.cargo/bin")
+    "$semantic_home/.local/bin"|"$semantic_home/.cargo/bin"|"$semantic_home/.docker/bin"|"$semantic_home/.docker/bin"/*)
       print -r -- "${value/#$semantic_home/\$HOME}"
       ;;
     "$semantic_home"/*|/Users/*)
@@ -293,6 +293,27 @@ command_architecture() {
   print -r -- "- command: $command_name source=$path_category architecture=$architecture"
 }
 
+docker_cli_exposure() {
+  local user_command="$semantic_home/.docker/bin/docker"
+  local system_command='/usr/local/bin/docker'
+  local resolved='missing'
+  local user_status='missing'
+  local system_status='missing'
+  local command_path=''
+
+  [[ -x "$user_command" ]] && user_status='present'
+  [[ -x "$system_command" ]] && system_status='present'
+  command_path="$(command -v docker 2>/dev/null || true)"
+  case "$command_path" in
+    "$user_command") resolved='user-bin' ;;
+    "$system_command") resolved='system-bin' ;;
+    '') resolved='missing' ;;
+    *) resolved='other' ;;
+  esac
+
+  print -r -- "- docker-cli-exposure: user-bin=$user_status system-bin=$system_status resolved=$resolved"
+}
+
 print_runtime_facts() {
   local process_arch='unknown'
   local hardware_arm64='unavailable'
@@ -325,6 +346,7 @@ print_runtime_facts() {
   for command_name in zsh brew node npm pnpm bun python3 uv docker rg gh; do
     command_architecture "$command_name"
   done
+  docker_cli_exposure
   print
   print -r -- '- startup-performance: not-measured'
   print -r -- '- startup-files-sourced: no'
@@ -548,6 +570,11 @@ zsh_file_signals() {
 
       if (line ~ /\/Users\//) {
         emit("hardcoded-home", "active=yes")
+      }
+
+      lower_line = tolower(line)
+      if (lower_line ~ /\.docker\/bin/ && lower_line ~ /(^|[^[:alnum:]_])(path)([^[:alnum:]_]|$)/) {
+        emit("application-cli-path", "owner=docker-desktop directory=$HOME/.docker/bin")
       }
     }
   ' "$file"

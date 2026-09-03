@@ -1,6 +1,6 @@
 ---
 name: analyze-zsh-configuration
-description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件来源（当前 live HOME 或当前仓库目录及文件子集）的脱敏结构、第三方安装器功能块清单与运行时事实，依据 Skill 内置手册生成含证据来源、顶部结论、一览表、功能块保全清单和逐项建议的 zsh-repair-plan.md 候选。用于用户要求诊断或优化 .zshenv、.zprofile、.zshrc、.zlogin，保全 Kiro/Docker/gcloud/kimi 等软件追加块，或排查架构、PATH、补全、source、变量、敏感项和启动性能时；不用于导出软件配置、审阅 Brewfile/tooling、生成最终 Zsh 文件或修改真实 HOME。
+description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件来源（当前 live HOME 或当前仓库目录及文件子集）的脱敏结构、第三方安装器功能块、应用自有 CLI 暴露方式与运行时事实，依据 Skill 内置手册生成含证据来源、顶部结论、一览表、功能块保全清单和逐项建议的 zsh-repair-plan.md 候选。用于用户要求诊断或优化 .zshenv、.zprofile、.zshrc、.zlogin，保全 Kiro/Docker/gcloud/kimi 等软件追加块，或排查架构、PATH、补全、source、变量、敏感项和启动性能时；不用于导出软件配置、审阅 Brewfile/tooling、生成最终 Zsh 文件或修改真实 HOME。
 ---
 
 # Zsh 配置分析与修改建议
@@ -28,7 +28,7 @@ description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件�
 
 ## 遵守边界
 
-- AI 分析层不直接读取、输出或 source 用户选定的 Zsh 文件；只有内置确定性脚本可以扫描结构，并采集架构、Rosetta、Homebrew 前缀、命令来源类别和二进制架构等只读事实。AI 只读取脚本生成的 `tmp/zsh-evidence.md`。
+- AI 分析层不直接读取、输出或 source 用户选定的 Zsh 文件；只有内置确定性脚本可以扫描结构，并采集架构、Rosetta、Homebrew 前缀、命令来源类别、应用自有 CLI 暴露模式和二进制架构等只读事实。AI 只读取脚本生成的 `tmp/zsh-evidence.md`。
 - 采集脚本不得启动会加载真实配置的交互/登录 shell，不得执行 `brew doctor`、包清单导出、工具健康检查、网络请求或性能 profiling；未测量的运行时效果必须保留为证据缺口。
 - 不读取 Keychain、shell 历史、完整环境或 `~/.config/dotfiles/local/parameters.zsh`、`integrations.zsh` 内容。
 - 不修改真实 Zsh、symlink、软件或服务，不调用 `install.sh`，不安装或退役项目。
@@ -67,7 +67,7 @@ description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件�
 - 采集失败时停止，不绕过脚本安全检查，不回读真实 Zsh 文件补证据。
 - 确认唯一证据文件为 `tmp/zsh-evidence.md`，且 Git 未跟踪它。
 - 确认报告顶部的 `source-origin`、`source-root-category`、`selected-files` 与预检及用户选择一致，且每个启动文件章节的 `source-input-name` 与 `input-map` 一致。不一致时删除本次证据并停止，不生成修复计划。
-- 确认报告只包含以下白名单证据：文件类型/权限/symlink 类别、语法结果、活动与注释标记计数、变量名与导出作用域、source 类别、`*_HOME` 目标类别与文件类型、脱敏 PATH/fpath 及其精确重复计数、第三方功能块的稳定分类 ID/出现序号/相对顺序/行范围/加载阶段/迁移资格、硬件 ARM 能力、采集进程架构、Rosetta、Homebrew 前缀、白名单命令的来源类别与二进制架构。
+- 确认报告只包含以下白名单证据：文件类型/权限/symlink 类别、语法结果、活动与注释标记计数、变量名与导出作用域、source 类别、`*_HOME` 目标类别与文件类型、脱敏 PATH/fpath 及其精确重复计数、第三方功能块的稳定分类 ID/出现序号/相对顺序/行范围/加载阶段/迁移资格、硬件 ARM 能力、采集进程架构、Rosetta、Homebrew 前缀、白名单命令的来源类别与二进制架构，以及 Docker Desktop 用户级 `$HOME/.docker/bin`/系统级 `/usr/local/bin` CLI 入口是否存在和当前解析模式；不得输出 symlink 的本机绝对目标。
 - 确认报告不包含变量值、alias/function body、功能块正文或内容摘要、原始 source 路径、完整命令输出、账号或本机绝对路径。活动行只表示“非注释结构信号”，不自动证明该分支在启动时执行。
 - 继承 PATH/fpath 和命令来源只代表采集进程环境，不代表新登录 shell 的完整启动结果；不得把它们自动归因于 `.zshrc`。
 
@@ -81,6 +81,7 @@ description: 只读采集并分析用户显式选择的 macOS Zsh 启动文件�
 | `/usr/local`、x86_64、Rosetta | 2、4、5 |
 | 硬件 ARM 能力、采集进程架构、Homebrew 前缀、命令架构 | 4、11、14 |
 | PATH/fpath 重复或硬编码 | 5、12 |
+| Docker Desktop user/system CLI 暴露或 `.docker/bin` | 5、6、11、14 |
 | compinit、补全、插件重复 | 7、8 |
 | `*_HOME` 指向文件、缺失目录或动态表达式 | 6、11 |
 | 活动/注释变量、导出作用域或疑似敏感项 | 9、10、12 |
@@ -165,6 +166,7 @@ tmp/shared/zsh/zsh-repair-plan.md    # 仅存在明确共享增量时
 | 第三方块 | 每个功能块的 ID、出现序号、顺序、加载阶段和迁移资格；没有正文证据时只给保全处置，不猜实现 |
 | 补全 | 活动/注释的 `compinit` 引用与调用、fpath 与框架顺序、重复 source 类别；`autoload` 引用不是调用，结构重复不等于已测量执行次数 |
 | PATH | 多点赋值、硬编码 HOME、继承 PATH/fpath 精确重复数；脱敏标签相同不等于真实路径相同，继承重复也不能自动归因于启动文件 |
+| 应用自有 CLI | Docker Desktop 的 `docker-cli-exposure`、`command: docker source=...` 与 `application-cli-path`；应用已安装、CLI symlink 存在、PATH 可达是三个独立事实 |
 | 作用域 | `scope=exported/shell` 与配置归属；只根据标识符不能判断子进程需求 |
 | 工具职责 | 同一运行时出现多个明确所有者才写争用；NVM 与 Bun 并存本身不是冲突证据 |
 | 性能 | 只有计时或 profiling 数据才量化；默认采集未 source 启动文件，必须写“未测量” |
@@ -178,6 +180,9 @@ tmp/shared/zsh/zsh-repair-plan.md    # 仅存在明确共享增量时
 - source 类别重复时指出重复初始化候选；只有脚本提供内容指纹或运行证据时，才能声称两个文件内容相同或运行了两次。
 - 把第三方安装器块视为功能资产而不是模板噪声。即使其实现需要另行整改，也必须先在保全清单中建立 `source block → target/local/retire` 映射；未建立映射不得建议整段替换目标文件。
 - PATH/fpath 只有精确重复计数才能写“已确认重复”；多次赋值、相同脱敏标签或硬编码信号只能支持结构性整改建议。
+- 对 `live-home` 来源，当 `docker-cli-exposure` 表明用户级 `$HOME/.docker/bin/docker` 存在，或源启动文件含 `application-cli-path owner=docker-desktop` 时，把 `$HOME/.docker/bin` 视为可公开、跨机器可移植的应用自有 CLI 入口：建议 Stage 1 在 personal `zprofile`/`.zprofile` 中只加入一次，并放在继承 PATH 之前。对 `repository` 来源，当前采集机器的 `docker-cli-exposure` 只属于运行时旁证；除非所选仓库文件也有 Docker PATH 结构信号或用户明确说明目标就是当前机器，否则不得据此给仓库新增 Docker 配置。不要把 Docker PATH 迁入本机 `integrations.zsh`、全局 CLI 迁移 TSV 或 npm/Bun/pnpm 声明；Docker completion 仍作为独立第三方功能块保全。
+- 若 Docker 仅通过 `/usr/local/bin/docker` 解析且该 symlink 指向 Docker Desktop 的原生应用二进制，记录为 system 模式并保留，不额外要求 `$HOME/.docker/bin`。若用户级 CLI 存在但 `docker` 未解析或解析到其他 owner，列为 P1 正确性问题；验证要求是全新 login Zsh 的 `command -v docker` 解析到相应 user/system 入口，不执行可能初始化或更新状态的 `docker` 业务命令。
+- Docker Desktop、用户级 CLI 和系统级 CLI 都不存在时，不凭工具名生成 Docker PATH 或软件安装建议；只在已有结构信号与运行时事实矛盾时保留证据缺口。
 - 不把 NVM 与 Bun 并存自动升级为多版本管理器争用；必须确认它们竞争同一命令、版本选择或 PATH 所有权。
 - 对敏感信息只写“疑似敏感变量需要迁移/轮换”，不写值；local 只记录参数类别。
 - 只给修改方向和必要的最小片段，不拼装最终完整 Zsh 文件；最终文件由 `$stage-1-apply-zsh-repair-plan` 根据获准计划生成或更新。

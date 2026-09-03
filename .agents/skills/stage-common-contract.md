@@ -166,6 +166,7 @@ Stage 1 默认从 `~/.config/dotfiles/zsh-repair/` 读取已确认修复计划�
 - Stage 0 必须为源 `.zprofile`/`.zshrc` 中识别到的第三方功能块生成脱敏保全清单；Stage 1 写入前后都必须用同一确定性工具比较源文件与目标文件加 `integrations.zsh`，缺块、正文变化、阶段错误或同阶段错序时失败。
 - Stage 1 全部目标验证通过后，必须把每份实际采用的本机修复计划状态更新为唯一 `> 状态：Stage 1 已应用`；计划目录/文件保持 `0700/0600` 并使用同目录备份与原子替换，失败、取消或存在被排除的旧 owner 时不得更新。该状态不被 Stage 2 读取。
 - 日常配置必须优先激活当前机器原生 Homebrew：Intel 使用 `/usr/local`，Apple Silicon 使用 `/opt/homebrew`；受管命令和 symlink 不得最终解析到另一架构，也不得包含 Rosetta fallback 或 ARM→Intel wrapper。继承环境中的另一架构路径或旧软件可以暂时存在，但只能进入 Stage 2 的 Intel 交接清单，不能替代原生安装目标。
+- 应用自有 CLI 与包管理器全局 CLI 分开建模。Docker Desktop 用户模式的公开、可移植入口固定为 `$HOME/.docker/bin`，由 personal `zprofile` 在继承 PATH 之前声明；Docker completion 是独立交互功能块。它不进入 local integrations、全局 CLI 迁移 TSV 或 npm/pnpm/Bun/mise 声明。系统模式 `/usr/local/bin/docker` 只有在 symlink 最终解析到 Docker.app 的当前原生或 universal CLI 时才有效；不能仅凭 `/usr/local` 前缀把应用 symlink 判为 Intel Homebrew 软件。
 
 `parameters.zsh` 可以直接保存密钥值和其他不可公开参数。默认安全要求：
 
@@ -187,6 +188,7 @@ Stage 1 默认从 `~/.config/dotfiles/zsh-repair/` 读取已确认修复计划�
 - personal 与 shared 各自最多使用一份 `plugins.toml`，同一条目内记录来源、固定 revision、启用状态和加载顺序。
 - local 不定义软件、版本或插件期望状态；`integrations.zsh` 只保留安装器已经追加的机器级加载块。
 - Stage 1 本机全局 CLI TSV 只保存迁移证据与决定；可分享安装意图只进入 `my_setup/tooling/global-cli-migration.toml`。Stage 2 不要求该 TOML 存在，存在时必须按目标机重新询问，只有用户选择的条目进入该次安装与验证条件。
+- Stage 0 若发现 Docker Desktop 用户级 CLI，只负责把 PATH 连通性写入 Zsh 修复交接；Docker 是否成为 Brewfile 安装期望仍由导出 Review 和用户决定。Stage 2 启用 Zsh 且 Docker 已声明、应用已存在或任一 CLI symlink 已存在时，必须用不额外注入 Docker 目录的全新 login Zsh 验证 `command -v docker`，不能以 GUI 正在运行、completion 存在或 symlink 文件单独存在代替。
 
 ## 7. 命令契约
 
@@ -238,6 +240,7 @@ Stage 1 默认从 `~/.config/dotfiles/zsh-repair/` 读取已确认修复计划�
 - Brewfile、mise/uv 和 `plugins.toml` 可解析；
 - 导出配置 Review Skill 范围内的每个直接期望项目都有一句话描述、最佳实践、修改级别、建议、归属和验证评论；Stage 0 摘要先显示该描述再显示建议；
 - Stage 1 改变 runtime/global home/PATH owner 时，失去解析影响集完整覆盖 npm、pnpm、Bun 和明确移除 PATH 目录中的直接 CLI，本机全局 CLI 清单 schema、权限、稳定排序和影响覆盖正确；被用户排除或无法安全盘点的 owner 对应退役必须被阻止。Stage 1.1 public 声明只含用户选择的固定 package/version/binaries/target manager，且不含本机路径；
+- Stage 1 的 Docker 用户模式候选恰有一个 `$HOME/.docker/bin` 入口，并在隔离 HOME、最小父 PATH 的 login Zsh fixture 中解析到该目录；Stage 2 在真实目标 HOME 重复验证 user/system owner 与最终二进制架构。Docker 未安装且未声明时该检查不适用，Zsh 未启用时必须明确报告未提供这项保证；
 - 已安装命令的实际路径、版本和架构符合期望；
 - `install.sh` 再次执行不会重复破坏已有配置；
 - `intel_to_be_retired.tsv` 可确定性解析、权限正确、没有误把未知路径或 service/data 标为可删除；Stage 3 会重新盘点而不直接信任该快照；
